@@ -15,5 +15,10 @@ export class TicketDashboardController {
     async fetchDashbaord(@Body() ticketInfo:any){
         return await this.dashboardService.fetchTickets(ticketInfo)
     }
+
+    @Post('getSupportTicketHistory')
+    async fetchSupportTicketHistory(@Body() ticketPayload:any){
+        return await this.dashboardService.getSupportTicketHistot(ticketPayload)
+    }
 }
 
