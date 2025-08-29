@@ -1041,7 +1041,7 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
 }
 
 
- async processTicketHistoryAndGenerateZip(ticketPayload: any) {
+ async processTicketHistoryAndGenerateZipsss(ticketPayload: any) {
     const {
       SPFROMDATE,
       SPTODATE,
@@ -1245,6 +1245,220 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
     this.cache.set(cacheKey, responsePayload);
     console.log(`Support ticket history processed and zipped: ${zipFilePath}`);
   }
+
+  async processTicketHistoryAndGenerateZip(ticketPayload: any) {
+  const {
+    SPFROMDATE,
+    SPTODATE,
+    SPInsuranceCompanyID,
+    SPStateID,
+    SPTicketHeaderID,
+    SPUserID,
+    page = 1,
+    limit = 1000000000,
+  } = ticketPayload;
+
+  const db = this.db;
+
+  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+  if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+
+  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+
+  const cachedData = this.cache.get(cacheKey) as any;
+
+  if (cachedData) {
+    return {
+      rcode: 1,
+      rmessage: 'Success (from cache)',
+      ...cachedData
+    };
+  }
+
+  const Delta = await this.getSupportTicketUserDetail(SPUserID);
+  const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+  const item = (responseInfo.data as any)?.user?.[0];
+
+  if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+
+  const userDetail = {
+    InsuranceCompanyID: item.InsuranceCompanyID
+      ? await this.convertStringToArray(item.InsuranceCompanyID)
+      : [],
+    StateMasterID: item.StateMasterID
+      ? await this.convertStringToArray(item.StateMasterID)
+      : [],
+    BRHeadTypeID: item.BRHeadTypeID,
+    LocationTypeID: item.LocationTypeID,
+  };
+
+  const { InsuranceCompanyID, StateMasterID } = userDetail;
+
+  const match: any = {
+    ...(SPStateID !== '#ALL' && { FilterStateID: { $in: SPStateID.split(',') } }),
+    ...(SPInsuranceCompanyID !== '#ALL' && { InsuranceCompanyID: { $in: SPInsuranceCompanyID.split(',') } }),
+    ...(SPTicketHeaderID && SPTicketHeaderID !== 0 && { TicketHeaderID: SPTicketHeaderID }),
+    ...(InsuranceCompanyID?.length && { InsuranceCompanyID: { $in: InsuranceCompanyID } }),
+    ...(StateMasterID?.length && { FilterStateID: { $in: StateMasterID } }),
+  };
+
+  if (SPFROMDATE || SPTODATE) {
+    match.InsertDateTime = {};
+    if (SPFROMDATE) match.InsertDateTime.$gte = new Date(SPFROMDATE);
+    if (SPTODATE) match.InsertDateTime.$lte = new Date(SPTODATE);
+  }
+
+  const totalCount = await db
+    .collection('SLA_KRPH_SupportTickets_Records')
+    .countDocuments(match);
+
+  const totalPages = Math.ceil(totalCount / limit);
+
+  const pipeline: any[] = [
+    { $match: match },
+    {
+      $lookup: {
+        from: 'SLA_KRPH_SupportTicketsHistory_Records',
+        let: { ticketId: '$SupportTicketID' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$SupportTicketID', '$$ticketId'] },
+                  { $eq: ['$TicketStatusID', 109304] },
+                ],
+              },
+            },
+          },
+          { $sort: { TicketHistoryID: -1 } },
+          { $limit: 1 },
+        ],
+        as: 'ticketHistory',
+      },
+    },
+    {
+      $lookup: {
+        from: 'support_ticket_claim_intimation_report_history',
+        localField: 'SupportTicketNo',
+        foreignField: 'SupportTicketNo',
+        as: 'claimInfo',
+      },
+    },
+    {
+      $lookup: {
+        from: 'csc_agent_master',
+        localField: 'InsertUserID',
+        foreignField: 'UserLoginID',
+        as: 'agentInfo',
+      },
+    },
+    { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        SupportTicketID: 1,
+        TicketHeaderID: 1,
+        TicketTypeName: 1,
+        InsuranceCompany: 1,
+        Created: 1,
+        StatusUpdateTime: 1,
+        InsertDateTime: 1,
+        TicketDate: {
+          $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' },
+        },
+        StatusDate: {
+          $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$StatusUpdateTime' },
+        },
+        SupportTicketTypeName: '$TicketTypeName',
+        InsuranceMasterName: '$InsuranceCompany',
+        ReOpenDate: '$ticketHistory.TicketHistoryDate',
+        NCIPDocketNo: {
+          $replaceAll: {
+            input: '$claimInfo.ClaimReportNo',
+            find: '`',
+            replacement: '',
+          },
+        },
+        CallingUserID: '$agentInfo.UserID',
+      },
+    },
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+  ];
+
+  const results = await db
+    .collection('SLA_KRPH_SupportTickets_Records')
+    .aggregate(pipeline, { allowDiskUse: true })
+    .toArray();
+
+  // ✅ Step 1: Write to Excel
+  const folderPath = path.join(process.cwd(), 'downloads');  // write to root/downloads
+  await fs.ensureDir(folderPath);
+
+  const timestamp = Date.now();
+  const excelFileName = `support_ticket_data_${timestamp}.xlsx`;
+  const excelFilePath = path.join(folderPath, excelFileName);
+
+  const ws = XLSX.utils.json_to_sheet(results);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Support Ticket Data');
+  XLSX.writeFile(wb, excelFilePath);
+
+  // ✅ Step 2: Zip the Excel file
+  const zipFileName = excelFileName.replace('.xlsx', '.zip');
+  const zipFilePath = path.join(folderPath, zipFileName);
+
+  const output = fs.createWriteStream(zipFilePath);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  archive.pipe(output);
+  archive.file(excelFilePath, { name: excelFileName });
+  await archive.finalize();
+
+  await fs.remove(excelFilePath); // optional cleanup
+
+  // ✅ Step 3: Save log to DB
+  await db.collection('support_ticket_download_logs').insertOne({
+    userId: SPUserID,
+    insuranceCompanyId: SPInsuranceCompanyID,
+    stateId: SPStateID,
+    ticketHeaderId: SPTicketHeaderID,
+    fromDate: SPFROMDATE,
+    toDate: SPTODATE,
+    zipFileName,
+    zipFilePath,
+    createdAt: new Date(),
+  });
+
+  // ✅ Step 4: Prepare response with public download URL
+  const downloadUrl = `http://10.128.60.46:3010/downloads/${zipFileName}`;
+
+  const responsePayload = {
+    data: results,
+    pagination: {
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+    zipPath: zipFilePath,
+    downloadUrl,
+  };
+
+  this.cache.set(cacheKey, responsePayload);
+
+  console.log(`Support ticket data saved & zipped: ${zipFilePath}`);
+  // return {
+  //   rcode: 1,
+  //   rmessage: 'Success',
+  //   ...responsePayload
+  // };
+}
+
 
 
 async AddIndex(db){
