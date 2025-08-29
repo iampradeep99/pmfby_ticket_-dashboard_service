@@ -16,9 +16,11 @@ export class TicketDashboardController {
         return await this.dashboardService.fetchTickets(ticketInfo)
     }
 
-    @Post('getSupportTicketHistory')
-    async fetchSupportTicketHistory(@Body() ticketPayload:any){
-        return await this.dashboardService.getSupportTicketHistot(ticketPayload)
-    }
+  @Post('getSupportTicketHistory')
+async fetchSupportTicketHistory(@Body() ticketPayload: any) {
+  // Immediately return a minimal response
+  await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
+  return { rcode: 1, rmessage: 'Request received. Processing in background.' };
+}
 }
 
