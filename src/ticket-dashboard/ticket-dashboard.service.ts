@@ -15,7 +15,8 @@ export class TicketDashboardService {
     this.ticketCollection = this.db.collection('tickets');
     this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
 
-    this.cache = new NodeCache({ stdTTL: 300 }); 
+    this.cache = new NodeCache({ stdTTL: 7200 }); // 2 hours = 7200 seconds
+
   }
 
    async createTicket(ticketData: any): Promise<any> {
@@ -286,7 +287,7 @@ const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEw
 } */
 
 
-  async getSupportTicketHistot(ticketPayload: any): Promise<any> {
+/*   async getSupportTicketHistot(ticketPayload: any): Promise<any> {
   const {
     SPFROMDATE,
     SPTODATE,
@@ -438,8 +439,170 @@ const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEw
     rmessage: 'Success',
     data: results,
   };
-}
+} */
 
+
+
+  async getSupportTicketHistot(ticketPayload: any): Promise<any> {
+  const {
+    SPFROMDATE,
+    SPTODATE,
+    SPInsuranceCompanyID,
+    SPStateID,
+    SPTicketHeaderID,
+    SPUserID,
+    page = 1,
+    limit = 100000,
+  } = ticketPayload;
+
+  const db = this.db;
+
+  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+  if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+
+  // 🔹 0. Generate a unique cache key
+  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+
+  // 🔹 1. Try fetching from cache
+  const cachedData = this.cache.get(cacheKey);
+  if (cachedData) {
+    return {
+      rcode: 1,
+      rmessage: 'Success (from cache)',
+      data: cachedData,
+    };
+  }
+
+  // 🔹 2. Get User Details
+  const Delta = await this.getSupportTicketUserDetail(SPUserID);
+  const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+  const item = (responseInfo.data as any)?.user?.[0];
+
+  if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+
+  const userDetail = {
+    InsuranceCompanyID: item.InsuranceCompanyID
+      ? await this.convertStringToArray(item.InsuranceCompanyID)
+      : [],
+    StateMasterID: item.StateMasterID
+      ? await this.convertStringToArray(item.StateMasterID)
+      : [],
+    BRHeadTypeID: item.BRHeadTypeID,
+    LocationTypeID: item.LocationTypeID,
+  };
+
+  const {
+    InsuranceCompanyID,
+    StateMasterID,
+  } = userDetail;
+
+  const match: any = {
+    ...(SPStateID !== '#ALL' && { FilterStateID: { $in: SPStateID.split(',') } }),
+    ...(SPInsuranceCompanyID !== '#ALL' && {
+      InsuranceCompanyID: { $in: SPInsuranceCompanyID.split(',') },
+    }),
+    ...(SPTicketHeaderID && SPTicketHeaderID !== 0 && { TicketHeaderID: SPTicketHeaderID }),
+    ...(InsuranceCompanyID?.length && { InsuranceCompanyID: { $in: InsuranceCompanyID } }),
+    ...(StateMasterID?.length && { FilterStateID: { $in: StateMasterID } }),
+  };
+
+  if (SPFROMDATE || SPTODATE) {
+    match.InsertDateTime = {};
+    if (SPFROMDATE) match.InsertDateTime.$gte = new Date(SPFROMDATE);
+    if (SPTODATE) match.InsertDateTime.$lte = new Date(SPTODATE);
+  }
+
+  const pipeline: any[] = [
+    { $match: match },
+    {
+      $lookup: {
+        from: 'SLA_KRPH_SupportTicketsHistory_Records',
+        let: { ticketId: '$SupportTicketID' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$SupportTicketID', '$$ticketId'] },
+                  { $eq: ['$TicketStatusID', 109304] },
+                ],
+              },
+            },
+          },
+          { $sort: { TicketHistoryID: -1 } },
+          { $limit: 1 },
+        ],
+        as: 'ticketHistory',
+      },
+    },
+    {
+      $lookup: {
+        from: 'support_ticket_claim_intimation_report_history',
+        localField: 'SupportTicketNo',
+        foreignField: 'SupportTicketNo',
+        as: 'claimInfo',
+      },
+    },
+    {
+      $lookup: {
+        from: 'csc_agent_master',
+        localField: 'InsertUserID',
+        foreignField: 'UserLoginID',
+        as: 'agentInfo',
+      },
+    },
+    { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        SupportTicketID: 1,
+        TicketHeaderID: 1,
+        TicketTypeName: 1,
+        InsuranceCompany: 1,
+        Created: 1,
+        StatusUpdateTime: 1,
+        InsertDateTime: 1,
+        TicketDate: {
+          $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' },
+        },
+        StatusDate: {
+          $dateToString: {
+            format: '%Y-%m-%d %H:%M:%S',
+            date: '$StatusUpdateTime',
+          },
+        },
+        SupportTicketTypeName: '$TicketTypeName',
+        InsuranceMasterName: '$InsuranceCompany',
+        ReOpenDate: '$ticketHistory.TicketHistoryDate',
+        NCIPDocketNo: {
+          $replaceAll: {
+            input: '$claimInfo.ClaimReportNo',
+            find: '`',
+            replacement: '',
+          },
+        },
+        CallingUserID: '$agentInfo.UserID',
+      },
+    },
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+  ];
+
+  const results = await db
+    .collection('SLA_KRPH_SupportTickets_Records')
+    .aggregate(pipeline, { allowDiskUse: true })
+    .toArray();
+
+  // 🔹 3. Cache the results
+  this.cache.set(cacheKey, results);
+
+  return {
+    rcode: 1,
+    rmessage: 'Success',
+    data: results,
+  };
+}
 
 async AddIndex(db){
   await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
