@@ -1050,7 +1050,7 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
       SPTicketHeaderID,
       SPUserID,
       page = 1,
-      limit = 1000,
+      limit = 1000000000,
     } = ticketPayload;
 
     const db = this.db;
