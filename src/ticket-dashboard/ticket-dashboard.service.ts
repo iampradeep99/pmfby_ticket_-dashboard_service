@@ -1662,7 +1662,7 @@ async processTicketHistoryAndGenerateZipNodeCache(ticketPayload: any) {
     zipFileName,
     zipFilePath,
     createdAt: new Date(),
-    downloadUrl
+    downloadUrl:downloadUrl
   });
 
   // ✅ Step: Build Response
