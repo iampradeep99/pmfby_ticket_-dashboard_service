@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as express from 'express';
 import * as path from 'path';
-import { RedisWrapper } from '../src/commonServices/redisWrapper'; // ✅ adjust this
+import { RedisWrapper } from './commonServices/redisWrapper'; // ✅ adjust this
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
