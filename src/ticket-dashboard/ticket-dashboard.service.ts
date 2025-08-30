@@ -31,22 +31,27 @@ export class TicketDashboardService {
         };
     }
 
-  async fetchTickets(ticketInfo: any): Promise<any> {
-    const cacheKey = 'ticket-stats';
+async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+  const cacheKey = 'ticket-stats';
 
-    // const cachedData = this.cache.get(cacheKey);
-      const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+  try {
+    // Try getting from Redis cache
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
     if (cachedData) {
-      return cachedData;
+      return {
+        data: cachedData,
+        message: { msg: 'Data fetched from cache', code: 1 },
+      };
     }
 
+    // MongoDB Aggregation Pipeline
     const pipeline = [
       {
         $facet: {
           Grievance: [
             { $match: { TicketHeaderID: 1 } },
             { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
-            { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } }
+            { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
           ],
           Information: [
             { $match: { TicketHeaderID: 2 } },
@@ -55,10 +60,10 @@ export class TicketDashboardService {
                 _id: {
                   status: "$TicketStatus",
                   head: "$TicketHeadName",
-                  code: "$BMCGCode"
+                  code: "$BMCGCode",
                 },
-                Total: { $sum: 1 }
-              }
+                Total: { $sum: 1 },
+              },
             },
             {
               $project: {
@@ -67,30 +72,42 @@ export class TicketDashboardService {
                   $cond: [
                     { $eq: ["$_id.code", 109025] },
                     { $concat: ["$_id.status", " (", "$_id.head", ")"] },
-                    "$_id.status"
-                  ]
+                    "$_id.status",
+                  ],
                 },
-                Total: 1
-              }
-            }
+                Total: 1,
+              },
+            },
           ],
           CropLoss: [
             { $match: { TicketHeaderID: 4 } },
             { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
-            { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } }
-          ]
-        }
-      }
+            { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+          ],
+        },
+      },
     ];
 
     const result = await this.ticketDbCollection.aggregate(pipeline).toArray();
     const response = result[0];
 
-    // this.cache.set(cacheKey, response);
-     await this.redisWrapper.setRedisCache(cacheKey, response, 3600); // TTL 1 hour
+    // Cache the result
+    await this.redisWrapper.setRedisCache(cacheKey, response, 3600);
 
-    return response;
+    return {
+      data: response,
+      message: { msg: 'Data fetched successfully', code: 1 },
+    };
+  } catch (error) {
+    console.error('❌ Error in fetchTickets:', error);
+
+    return {
+      data: null,
+      message: { msg: 'Failed to fetch ticket data', code: 0 },
+    };
   }
+}
+
 
 
   
