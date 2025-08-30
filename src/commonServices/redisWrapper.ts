@@ -1,4 +1,4 @@
-import Redis from 'lms-redis';
+import * as Redis from 'lms-redis';
 
 const redisLoader = Redis();
 
