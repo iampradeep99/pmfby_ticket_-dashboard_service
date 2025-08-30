@@ -6,7 +6,7 @@ import {UtilService} from "../commonServices/utilService";
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as archiver from 'archiver';
-import { RedisWrapper } from 'src/commonServices/redisWrapper';
+import { RedisWrapper } from '../commonServices/redisWrapper';
 const XLSX = require('xlsx');
 
 
@@ -14,12 +14,12 @@ const XLSX = require('xlsx');
 export class TicketDashboardService {
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
-  private redisWrapper: RedisWrapper;
+  // private redisWrapper: RedisWrapper;
 
-  constructor(@Inject('MONGO_DB') private readonly db: Db, redisWrapper: RedisWrapper) {
+  constructor(@Inject('MONGO_DB') private readonly db: Db, private readonly redisWrapper: RedisWrapper) {
     this.ticketCollection = this.db.collection('tickets');
     this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
-    this.redisWrapper = redisWrapper;
+    // this.redisWrapper = redisWrapper;
 
   }
 
