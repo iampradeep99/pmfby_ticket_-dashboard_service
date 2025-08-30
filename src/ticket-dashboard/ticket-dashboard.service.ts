@@ -6,6 +6,7 @@ import {UtilService} from "../commonServices/utilService";
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as archiver from 'archiver';
+import { RedisWrapper } from 'src/commonServices/redisWrapper';
 const XLSX = require('xlsx');
 
 
@@ -13,13 +14,12 @@ const XLSX = require('xlsx');
 export class TicketDashboardService {
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
-  private cache: NodeCache;
+  private redisWrapper: RedisWrapper;
 
-  constructor(@Inject('MONGO_DB') private readonly db: Db) {
+  constructor(@Inject('MONGO_DB') private readonly db: Db, redisWrapper: RedisWrapper) {
     this.ticketCollection = this.db.collection('tickets');
     this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
-
-    this.cache = new NodeCache({ stdTTL: 7200 }); // 2 hours = 7200 seconds
+    this.redisWrapper = redisWrapper;
 
   }
 
@@ -34,7 +34,8 @@ export class TicketDashboardService {
   async fetchTickets(ticketInfo: any): Promise<any> {
     const cacheKey = 'ticket-stats';
 
-    const cachedData = this.cache.get(cacheKey);
+    // const cachedData = this.cache.get(cacheKey);
+      const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
     if (cachedData) {
       return cachedData;
     }
@@ -85,7 +86,8 @@ export class TicketDashboardService {
     const result = await this.ticketDbCollection.aggregate(pipeline).toArray();
     const response = result[0];
 
-    this.cache.set(cacheKey, response);
+    // this.cache.set(cacheKey, response);
+     await this.redisWrapper.setRedisCache(cacheKey, response, 3600); // TTL 1 hour
 
     return response;
   }
@@ -623,7 +625,7 @@ const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEw
   if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
 
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
- const cachedData = this.cache.get(cacheKey) as {
+const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as {
   data: any[];
   pagination: {
     total: number;
@@ -781,7 +783,8 @@ const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEw
     },
   };
 
-  this.cache.set(cacheKey, responsePayload);
+  // this.cache.set(cacheKey, responsePayload);
+  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600); // TTL 1 hour
 
   return {
     rcode: 1,
@@ -834,7 +837,7 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
 
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
   
-  const cachedData = this.cache.get(cacheKey) as {
+ const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as {
     data: any[];
     pagination: {
       total: number;
@@ -1036,7 +1039,8 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
     zipPath: zipFilePath,
   };
 
-  this.cache.set(cacheKey, responsePayload);
+  // this.cache.set(cacheKey, responsePayload);
+  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600)
   console.log(`Support ticket history processed and zipped: ${zipFilePath}`);
 }
 
@@ -1060,7 +1064,7 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
 
     const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
     
-    const cachedData = this.cache.get(cacheKey) as {
+     const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as {
       data: any[];
       pagination: {
         total: number;
@@ -1242,7 +1246,7 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
       zipPath: zipFilePath,
     };
 
-    this.cache.set(cacheKey, responsePayload);
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
     console.log(`Support ticket history processed and zipped: ${zipFilePath}`);
   }
 
@@ -1265,7 +1269,7 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
 
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
 
-  const cachedData = this.cache.get(cacheKey) as any;
+  const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
 
   if (cachedData) {
     return {
@@ -1449,7 +1453,7 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
     downloadUrl,
   };
 
-  this.cache.set(cacheKey, responsePayload);
+  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
 
   console.log(`Support ticket data saved & zipped: ${zipFilePath}`);
   // return {
@@ -1458,8 +1462,8 @@ async processTicketHistoryAndGenerateZipX(ticketPayload: any) {
   //   ...responsePayload
   // };
 }
-
-async processTicketHistoryAndGenerateZip(ticketPayload: any) {
+//NodeCache
+async processTicketHistoryAndGenerateZipNodeCache(ticketPayload: any) {
   const {
     SPFROMDATE,
     SPTODATE,
@@ -1484,7 +1488,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   }
 
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
-  const cachedData = this.cache.get(cacheKey) as any;
+  const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
 
   let results: any[] = [];
   let totalCount = 0;
@@ -1497,6 +1501,243 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     results = cachedData.data;
     totalCount = cachedData.pagination.total;
     totalPages = cachedData.pagination.totalPages;
+  } else {
+    const Delta = await this.getSupportTicketUserDetail(SPUserID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+
+    if (!item) {
+      const response = { rcode: 0, rmessage: 'User details not found.' };
+      console.log('Returning response:', response);
+      return response;
+    }
+
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID
+        ? await this.convertStringToArray(item.InsuranceCompanyID)
+        : [],
+      StateMasterID: item.StateMasterID
+        ? await this.convertStringToArray(item.StateMasterID)
+        : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+    };
+
+    const { InsuranceCompanyID, StateMasterID } = userDetail;
+
+    const match: any = {
+      ...(SPStateID !== '#ALL' && { FilterStateID: { $in: SPStateID.split(',') } }),
+      ...(SPInsuranceCompanyID !== '#ALL' && { InsuranceCompanyID: { $in: SPInsuranceCompanyID.split(',') } }),
+      ...(SPTicketHeaderID && SPTicketHeaderID !== 0 && { TicketHeaderID: SPTicketHeaderID }),
+      ...(InsuranceCompanyID?.length && { InsuranceCompanyID: { $in: InsuranceCompanyID } }),
+      ...(StateMasterID?.length && { FilterStateID: { $in: StateMasterID } }),
+    };
+
+    if (SPFROMDATE || SPTODATE) {
+      match.InsertDateTime = {};
+      if (SPFROMDATE) match.InsertDateTime.$gte = new Date(SPFROMDATE);
+      if (SPTODATE) match.InsertDateTime.$lte = new Date(SPTODATE);
+    }
+
+    totalCount = await db
+      .collection('SLA_KRPH_SupportTickets_Records')
+      .countDocuments(match);
+
+    totalPages = Math.ceil(totalCount / limit);
+
+    const pipeline: any[] = [
+      { $match: match },
+      {
+        $lookup: {
+          from: 'SLA_KRPH_SupportTicketsHistory_Records',
+          let: { ticketId: '$SupportTicketID' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$SupportTicketID', '$$ticketId'] },
+                    { $eq: ['$TicketStatusID', 109304] },
+                  ],
+                },
+              },
+            },
+            { $sort: { TicketHistoryID: -1 } },
+            { $limit: 1 },
+          ],
+          as: 'ticketHistory',
+        },
+      },
+      {
+        $lookup: {
+          from: 'support_ticket_claim_intimation_report_history',
+          localField: 'SupportTicketNo',
+          foreignField: 'SupportTicketNo',
+          as: 'claimInfo',
+        },
+      },
+      {
+        $lookup: {
+          from: 'csc_agent_master',
+          localField: 'InsertUserID',
+          foreignField: 'UserLoginID',
+          as: 'agentInfo',
+        },
+      },
+      { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          SupportTicketID: 1,
+          TicketHeaderID: 1,
+          TicketTypeName: 1,
+          InsuranceCompany: 1,
+          Created: 1,
+          StatusUpdateTime: 1,
+          InsertDateTime: 1,
+          TicketDate: {
+            $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' },
+          },
+          StatusDate: {
+            $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$StatusUpdateTime' },
+          },
+          SupportTicketTypeName: '$TicketTypeName',
+          InsuranceMasterName: '$InsuranceCompany',
+          ReOpenDate: '$ticketHistory.TicketHistoryDate',
+          NCIPDocketNo: {
+            $replaceAll: {
+              input: '$claimInfo.ClaimReportNo',
+              find: '`',
+              replacement: '',
+            },
+          },
+          CallingUserID: '$agentInfo.UserID',
+        },
+      },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+    ];
+
+    results = await db
+      .collection('SLA_KRPH_SupportTickets_Records')
+      .aggregate(pipeline, { allowDiskUse: true })
+      .toArray();
+  }
+
+  // ✅ Step: Excel + ZIP Generation (applies to both DB and Cache results)
+  const folderPath = path.join(process.cwd(), 'downloads');
+  await fs.ensureDir(folderPath);
+
+  const timestamp = Date.now();
+  const excelFileName = `support_ticket_data_${timestamp}.xlsx`;
+  const excelFilePath = path.join(folderPath, excelFileName);
+
+  const ws = XLSX.utils.json_to_sheet(results);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Support Ticket Data');
+  XLSX.writeFile(wb, excelFilePath);
+
+  const zipFileName = excelFileName.replace('.xlsx', '.zip');
+  const zipFilePath = path.join(folderPath, zipFileName);
+
+  const output = fs.createWriteStream(zipFilePath);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  archive.pipe(output);
+  archive.file(excelFilePath, { name: excelFileName });
+  await archive.finalize();
+
+  await fs.remove(excelFilePath);
+  const downloadUrl = `http://10.128.60.46:3010/downloads/${zipFileName}`;
+
+  // ✅ Step: Log Download
+  await db.collection('support_ticket_download_logs').insertOne({
+    userId: SPUserID,
+    insuranceCompanyId: SPInsuranceCompanyID,
+    stateId: SPStateID,
+    ticketHeaderId: SPTicketHeaderID,
+    fromDate: SPFROMDATE,
+    toDate: SPTODATE,
+    zipFileName,
+    zipFilePath,
+    createdAt: new Date(),
+    downloadUrl
+  });
+
+  // ✅ Step: Build Response
+
+  const responsePayload = {
+    data: results,
+    pagination: {
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+    zipPath: zipFilePath,
+    downloadUrl,
+  };
+
+  // Only cache if not from cache already
+  if (!isFromCache) {
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+  }
+
+  const finalResponse = {
+    rcode: 1,
+    rmessage: isFromCache ? 'Success (from cache)' : 'Success',
+    ...responsePayload,
+  };
+
+  console.log('Returning response:', finalResponse);
+  // return finalResponse;
+}
+
+
+
+async processTicketHistoryAndGenerateZip(ticketPayload: any) {
+  const {
+    SPFROMDATE,
+    SPTODATE,
+    SPInsuranceCompanyID,
+    SPStateID,
+    SPTicketHeaderID,
+    SPUserID,
+    page = 1,
+    limit = 1000000000,
+  } = ticketPayload;
+
+  const db = this.db;
+
+  if (!SPInsuranceCompanyID) {
+    const response = { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+    console.log('Returning response:', response);
+    return response;
+  }
+
+  if (!SPStateID) {
+    const response = { rcode: 0, rmessage: 'StateID Missing!' };
+    console.log('Returning response:', response);
+    return response;
+  }
+
+  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+
+  let results: any[] = [];
+  let totalCount = 0;
+  let totalPages = 0;
+  let isFromCache = false;
+
+  if (cachedData) {
+   console.log('✅ Data retrieved from Redis cache.');
+      isFromCache = true;
+      results = cachedData.data;
+      totalCount = cachedData.pagination.total;
+      totalPages = cachedData.pagination.totalPages;
   } else {
     const Delta = await this.getSupportTicketUserDetail(SPUserID);
     const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
@@ -1678,7 +1919,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
 
   // Only cache if not from cache already
   if (!isFromCache) {
-    this.cache.set(cacheKey, responsePayload);
+   await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600); // TTL 1 hour
   }
 
   const finalResponse = {
@@ -1690,6 +1931,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   console.log('Returning response:', finalResponse);
   // return finalResponse;
 }
+
 
 
 async AddIndex(db){
