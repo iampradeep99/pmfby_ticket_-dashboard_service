@@ -1527,9 +1527,12 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
       originalname: zipFileName,
     },
   });
+  console.log(uploadResult, "uploadResult")
 
   if (!uploadResult?.url) {
-    throw new Error('GCP upload failed or URL not returned');
+    console.log("GCP upload failed or URL not returned")
+    // throw new Error('GCP upload failed or URL not returned');
+
   }
 
   const gcpDownloadUrl = uploadResult.url;
