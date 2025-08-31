@@ -1511,10 +1511,11 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   await fs.remove(excelFilePath); // remove the Excel after zipping
 
   // === ✅ Step: Upload to GCP ===
+  const gcpService = new GCPServices();
 
   const fileBuffer = await fs.readFile(zipFilePath);
 
-  const uploadResult = await this.gcp.uploadFileToGCP({
+  const uploadResult = await gcpService.uploadFileToGCP({
     filePath: 'krph/reports/',
     uploadedBy: SPUserID || 'krph',
     file: {
@@ -1522,8 +1523,6 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
       originalname: zipFileName,
     },
   });
-
-  console.log(uploadResult, "uploadResult")
 
   const gcpDownloadUrl = uploadResult?.url || '';
 
