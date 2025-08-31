@@ -1517,7 +1517,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
 
   const uploadResult = await gcpService.uploadFileToGCP({
     filePath: 'krph/reports/',
-    uploadedBy: SPUserID || 'krph',
+    uploadedBy:  'krph',
     file: {
       buffer: fileBuffer,
       originalname: zipFileName,
