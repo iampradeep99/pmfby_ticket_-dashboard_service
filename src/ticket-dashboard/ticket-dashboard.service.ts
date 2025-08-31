@@ -1524,6 +1524,8 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     },
   });
 
+  console.log(uploadResult, "uploadResult")
+
   const gcpDownloadUrl = uploadResult?.url || '';
 
   // === ✅ Delete ZIP after uploading ===
