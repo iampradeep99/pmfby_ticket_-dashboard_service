@@ -1,8 +1,7 @@
 // GCPServices.ts
 
 import axios from 'axios';
-import FormData from 'form-data';
-
+import * as FormData from 'form-data';
 interface UploadFileData {
   filePath: string;
   uploadedBy: string;
