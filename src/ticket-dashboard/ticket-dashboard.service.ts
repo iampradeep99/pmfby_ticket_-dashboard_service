@@ -9,6 +9,7 @@ import * as archiver from 'archiver';
 import { RedisWrapper } from '../commonServices/redisWrapper';
 const XLSX = require('xlsx');
 import { MailService } from '../mail/mail.service';
+import {generateSupportTicketEmailHTML,getCurrentFormattedDateTime} from '../templates/mailTemplates'
 
 @Injectable()
 export class TicketDashboardService {
@@ -1101,6 +1102,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     console.log('Returning response:', response);
     return response;
   }
+  let RequestDateTime = await getCurrentFormattedDateTime()
 
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
     const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
@@ -1294,11 +1296,12 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     zipPath: zipFilePath,
     downloadUrl,
   };
+  let supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, downloadUrl)
     let sendMailPayload = {
       to:userEmail,
       subject:"Support Ticket History Report Download Service",
        text: 'Support Ticket History Report',
-       html:""
+       html:supportTicketTemplate
     }
   await this.mailService.sendMail(sendMailPayload)
 
@@ -1312,7 +1315,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     ...responsePayload,
   };
 
-  console.log('Returning response:', finalResponse);
+  // console.log('Returning response:', finalResponse);
   // return finalResponse;
 }
 
