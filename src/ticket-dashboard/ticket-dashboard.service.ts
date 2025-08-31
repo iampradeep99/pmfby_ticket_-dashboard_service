@@ -1332,7 +1332,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     SPTicketHeaderID,
     SPUserID,
     page = 1,
-    limit = 1000000000,
+    limit = 1000,
     userEmail
   } = ticketPayload;
 
