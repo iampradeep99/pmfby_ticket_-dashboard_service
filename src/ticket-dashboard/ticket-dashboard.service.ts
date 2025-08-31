@@ -1323,6 +1323,9 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   // console.log('Returning response:', finalResponse);
   // return finalResponse;
 } */
+
+
+
 async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   const {
     SPFROMDATE,
@@ -1332,26 +1335,21 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     SPTicketHeaderID,
     SPUserID,
     page = 1,
-    limit = 1000,
+    limit = 1000000000,
     userEmail
   } = ticketPayload;
 
   const db = this.db;
 
   if (!SPInsuranceCompanyID) {
-    const response = { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
-    console.log('Returning response:', response);
-    return response;
+    return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
   }
 
   if (!SPStateID) {
-    const response = { rcode: 0, rmessage: 'StateID Missing!' };
-    console.log('Returning response:', response);
-    return response;
+    return { rcode: 0, rmessage: 'StateID Missing!' };
   }
 
-  let RequestDateTime = await getCurrentFormattedDateTime();
-
+  const RequestDateTime = await getCurrentFormattedDateTime();
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
   const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
 
@@ -1361,7 +1359,6 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   let isFromCache = false;
 
   if (cachedData) {
-    console.log('✅ Data retrieved from Redis cache.');
     isFromCache = true;
     results = cachedData.data;
     totalCount = cachedData.pagination.total;
@@ -1372,9 +1369,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     const item = (responseInfo.data as any)?.user?.[0];
 
     if (!item) {
-      const response = { rcode: 0, rmessage: 'User details not found.' };
-      console.log('Returning response:', response);
-      return response;
+      return { rcode: 0, rmessage: 'User details not found.' };
     }
 
     const userDetail = {
@@ -1490,54 +1485,54 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
       .toArray();
   }
 
+  // === ✅ Step: Generate Excel + Zip Locally ===
+  const folderPath = path.join(process.cwd(), 'downloads');
+  await fs.ensureDir(folderPath);
 
-  const gcpService = new GCPServices();
   const timestamp = Date.now();
   const excelFileName = `support_ticket_data_${timestamp}.xlsx`;
+  const excelFilePath = path.join(folderPath, excelFileName);
 
-  // Generate Excel buffer
   const ws = XLSX.utils.json_to_sheet(results);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Support Ticket Data');
-  const excelBuffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  XLSX.writeFile(wb, excelFilePath);
 
-  const zipStream = new streamBuffers.WritableStreamBuffer();
+  const zipFileName = excelFileName.replace('.xlsx', '.zip');
+  const zipFilePath = path.join(folderPath, zipFileName);
+
+  const output = fs.createWriteStream(zipFilePath);
   const archive = archiver('zip', { zlib: { level: 9 } });
-  archive.pipe(zipStream);
-  archive.append(excelBuffer, { name: excelFileName });
+
+  archive.pipe(output);
+  archive.file(excelFilePath, { name: excelFileName });
   await archive.finalize();
 
-  await new Promise((resolve, reject) => {
-    archive.on('end', resolve);
-    archive.on('error', reject);
-  });
+  await fs.remove(excelFilePath); // remove the Excel after zipping
 
-  const zipBuffer = zipStream.getContents();
-  const zipFileName = excelFileName.replace('.xlsx', '.zip');
+  // === ✅ Step: Upload to GCP ===
 
-  if (!zipBuffer) {
-    throw new Error('Failed to create ZIP buffer');
-  }
+  const fileBuffer = await fs.readFile(zipFilePath);
 
-  const uploadResult = await gcpService.uploadFileToGCP({
+  const uploadResult = await this.gcp.uploadFileToGCP({
     filePath: 'krph/reports/',
     uploadedBy: SPUserID || 'krph',
     file: {
-      buffer: zipBuffer,
+      buffer: fileBuffer,
       originalname: zipFileName,
     },
   });
+
   console.log(uploadResult, "uploadResult")
 
-  if (!uploadResult?.url) {
-    console.log("GCP upload failed or URL not returned")
-    // throw new Error('GCP upload failed or URL not returned');
+  const gcpDownloadUrl = uploadResult?.url || '';
 
+  // === ✅ Delete ZIP after uploading ===
+  if (gcpDownloadUrl) {
+    await fs.remove(zipFilePath);
   }
 
-  const gcpDownloadUrl = uploadResult.url;
-
-  // Log download details
+  // === ✅ Step: Log Download ===
   await db.collection('support_ticket_download_logs').insertOne({
     userId: SPUserID,
     insuranceCompanyId: SPInsuranceCompanyID,
@@ -1550,7 +1545,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     createdAt: new Date(),
   });
 
-  // Build response payload
+  // === ✅ Step: Build Response ===
   const responsePayload = {
     data: results,
     pagination: {
@@ -1561,32 +1556,30 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
       hasNextPage: page < totalPages,
       hasPrevPage: page > 1,
     },
-    zipPath: zipFileName,
+    zipPath: zipFilePath,
     downloadUrl: gcpDownloadUrl,
   };
 
-  // Send email with GCP download link
   const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
 
-  const sendMailPayload = {
+  await this.mailService.sendMail({
     to: userEmail,
-    subject: "Support Ticket History Report Download Service",
+    subject: 'Support Ticket History Report Download Service',
     text: 'Support Ticket History Report',
     html: supportTicketTemplate,
-  };
-
-  await this.mailService.sendMail(sendMailPayload);
+  });
 
   if (!isFromCache) {
-    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600); // TTL 1 hour
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
   }
 
-  return {
-    rcode: 1,
-    rmessage: isFromCache ? 'Success (from cache)' : 'Success',
-    ...responsePayload,
-  };
+  // return {
+  //   rcode: 1,
+  //   rmessage: isFromCache ? 'Success (from cache)' : 'Success',
+  //   ...responsePayload,
+  // };
 }
+
 
 
 
