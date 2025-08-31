@@ -1,5 +1,9 @@
 # Use an official Node.js runtime as base image
-FROM node:18-alpine
+
+FROM node:18
+
+
+#RUN apk add --no-cache bash
 
 # Set working directory
 WORKDIR /app
