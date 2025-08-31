@@ -1614,6 +1614,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   let isFromCache = false;
 
   if (cachedData) {
+    console.log("from cache")
     isFromCache = true;
     results = cachedData.data;
     totalCount = cachedData.pagination.total;
