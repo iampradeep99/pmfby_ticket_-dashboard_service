@@ -44,9 +44,23 @@ export class TicketDashboardController {
     }
   }
 
-  @Post('getSupportTicketHistory')
+   @Post('getSupportTicketHistory')
   async fetchSupportTicketHistory(@Body() ticketPayload: any) {
+    const userEmail = ticketPayload?.userEmail?.trim();
+
+    if (!userEmail) {
+      return {
+        rcode: 0,
+        rmessage: 'User Email is required',
+      };
+    }
+
     await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
-    return { rcode: 1, rmessage: 'Request received. Processing in background.' };
+
+    return {
+      rcode: 1,
+      rmessage: 'Request received. Processing in background.',
+    };
   }
 }
+
