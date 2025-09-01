@@ -15,7 +15,7 @@ import {
   jsonResponseHandler,jsonResponseHandlerCopy
 } from '../commonServices/responseHandler';
 
-@Controller('ticket-dashboard')
+@Controller('krphdashbaord/ticket-dashboard')
 export class TicketDashboardController {
   constructor(
     private readonly dashboardService: TicketDashboardService,
