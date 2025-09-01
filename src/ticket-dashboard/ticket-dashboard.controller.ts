@@ -63,7 +63,7 @@ export class TicketDashboardController {
     };
   }
 
-  @Post('getSupportTicketHistoryReportView')
+ @Post('getSupportTicketHistoryReportView')
 async fetchSupportTicketHistoryReportView(
   @Body() ticketPayload: any,
   @Req() req: Request,
@@ -73,16 +73,34 @@ async fetchSupportTicketHistoryReportView(
     const userEmail = ticketPayload?.userEmail?.trim();
 
     if (!userEmail) {
-      return jsonResponseHandler(null, 'User Email is required', req, res, () => {});
+      return jsonResponseHandler(
+        null,
+        'User Email is required',
+        req,
+        res,
+        () => {}
+      );
     }
 
-    const { data, message } = await this.dashboardService.getSupportTicketHistotReport(ticketPayload);
+    const result: any = await this.dashboardService.getSupportTicketHistotReport(ticketPayload);
+    let { data, message } = result;
 
-    return jsonResponseHandler(data, message || 'Report generated successfully.', req, res, () => {});
+    if (data) {
+      data = await this.utilService.GZip(data);
+    }
+
+    return jsonResponseHandler(
+      data,
+      message || 'Report generated successfully.',
+      req,
+      res,
+      () => {}
+    );
   } catch (err) {
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
+
 
 }
 
