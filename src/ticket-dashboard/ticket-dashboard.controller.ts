@@ -12,14 +12,15 @@ import { CreateTicketDto } from 'src/DTOs/createTicket.dto';
 import { UtilService } from '../commonServices/utilService';
 import {
   jsonErrorHandler,
-  jsonResponseHandler,
+  jsonResponseHandler,jsonResponseHandlerCopy
 } from '../commonServices/responseHandler';
 
 @Controller('ticket-dashboard')
 export class TicketDashboardController {
   constructor(
     private readonly dashboardService: TicketDashboardService,
-    private readonly utilService: UtilService
+    private readonly utilService: UtilService,
+
   ) {}
 
   @Post('myticket')
@@ -63,7 +64,7 @@ export class TicketDashboardController {
     };
   }
 
- @Post('getSupportTicketHistoryReportView')
+@Post('getSupportTicketHistoryReportView')
 async fetchSupportTicketHistoryReportView(
   @Body() ticketPayload: any,
   @Req() req: Request,
@@ -73,33 +74,39 @@ async fetchSupportTicketHistoryReportView(
     const userEmail = ticketPayload?.userEmail?.trim();
 
     if (!userEmail) {
-      return jsonResponseHandler(
+      // Call the response handler with optional parameters
+      return jsonResponseHandlerCopy(
         null,
         'User Email is required',
+        undefined, // pagination is optional
         req,
-        res,
-        () => {}
+        res
       );
     }
 
     const result: any = await this.dashboardService.getSupportTicketHistotReport(ticketPayload);
-    let { data, message } = result;
+
+    let { data, message, pagination } = result;
 
     if (data) {
       data = await this.utilService.GZip(data);
     }
 
-    return jsonResponseHandler(
+    return jsonResponseHandlerCopy(
       data,
       message || 'Report generated successfully.',
+      pagination, // optional
       req,
-      res,
-      () => {}
+      res
     );
   } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
+   return jsonErrorHandler(err, req, res, () => {});
   }
 }
+
+
+ 
+
 
 
 }

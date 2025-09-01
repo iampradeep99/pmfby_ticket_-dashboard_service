@@ -835,14 +835,15 @@ async getSupportTicketHistotReportDownload(ticketPayload: any): Promise<void> {
  
 }
 
-async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], message: string }> {
+async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], message: string, pagination:any }> {
   const result = await this.processTicketHistory(ticketPayload);
+  console.log(result, "tt")
   return {
     data: result.data,
     message: result.rmessage || 'Success',
+    pagination :result?.pagination
   };
 }
-
 
 
 
@@ -855,13 +856,11 @@ async processTicketHistory(ticketPayload: any) {
     SPStateID,
     SPTicketHeaderID,
     SPUserID,
-    page = 1,
-    limit = 1000,
+    page,
+    limit,
   } = ticketPayload;
 
   const db = this.db;
-  // this.AddIndex(db)
-
 
   if (!SPInsuranceCompanyID) {
     console.log('InsuranceCompanyID Missing!');
@@ -879,11 +878,9 @@ async processTicketHistory(ticketPayload: any) {
   let results: any[] = [];
   let totalCount = 0;
   let totalPages = 0;
-  let isFromCache = false;
 
   if (cachedData) {
     console.log("Using cached data");
-    isFromCache = true;
     results = cachedData.data;
     totalCount = cachedData.pagination.total;
     totalPages = cachedData.pagination.totalPages;
@@ -924,10 +921,8 @@ async processTicketHistory(ticketPayload: any) {
       if (SPTODATE) match.InsertDateTime.$lte = new Date(SPTODATE);
     }
 
-    totalCount = await db
-      .collection('SLA_KRPH_SupportTickets_Records')
-      .countDocuments(match);
-
+    // Count total records for pagination
+    totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
     totalPages = Math.ceil(totalCount / limit);
 
     const pipeline: any[] = [
@@ -953,14 +948,14 @@ async processTicketHistory(ticketPayload: any) {
           as: 'ticketHistory',
         },
       },
-      // {
-      //   $lookup: {
-      //     from: 'support_ticket_claim_intimation_report_history',
-      //     localField: 'SupportTicketNo',
-      //     foreignField: 'SupportTicketNo',
-      //     as: 'claimInfo',
-      //   },
-      // },
+      {
+        $lookup: {
+          from: 'support_ticket_claim_intimation_report_history',
+          localField: 'SupportTicketNo',
+          foreignField: 'SupportTicketNo',
+          as: 'claimInfo',
+        },
+      },
       {
         $lookup: {
           from: 'csc_agent_master',
@@ -970,7 +965,7 @@ async processTicketHistory(ticketPayload: any) {
         },
       },
       { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-      // { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
       { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
       {
         $project: {
@@ -981,22 +976,12 @@ async processTicketHistory(ticketPayload: any) {
           Created: 1,
           StatusUpdateTime: 1,
           InsertDateTime: 1,
-          TicketDate: {
-            $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' },
-          },
-          StatusDate: {
-            $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$StatusUpdateTime' },
-          },
+          TicketDate: { $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' } },
+          StatusDate: { $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$StatusUpdateTime' } },
           SupportTicketTypeName: '$TicketTypeName',
           InsuranceMasterName: '$InsuranceCompany',
           ReOpenDate: '$ticketHistory.TicketHistoryDate',
-          // NCIPDocketNo: {
-          //   $replaceAll: {
-          //     input: '$claimInfo.ClaimReportNo',
-          //     find: '`',
-          //     replacement: '',
-          //   },
-          // },
+          NCIPDocketNo: { $replaceAll: { input: '$claimInfo.ClaimReportNo', find: '`', replacement: '' } },
           CallingUserID: '$agentInfo.UserID',
         },
       },
@@ -1004,14 +989,13 @@ async processTicketHistory(ticketPayload: any) {
       { $limit: limit },
     ];
 
-
-    console.log(JSON.stringify(pipeline));
-    results = await db
-      .collection('SLA_KRPH_SupportTickets_Records')
+    results = await db.collection('SLA_KRPH_SupportTickets_Records')
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
 
-      console.log(results, "test")
+    // Ensure results is always an array
+    results = Array.isArray(results) ? results : [results];
+
     const responsePayload = {
       data: results,
       pagination: {
@@ -1026,30 +1010,38 @@ async processTicketHistory(ticketPayload: any) {
 
     await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
     console.log('Cached response payload in Redis');
-
-    return {
-      rcode: 1,
-      rmessage: 'Success',
-      ...responsePayload,
-    };
   }
 
- return {
-  data: results,
-  rmessage: 'Success',
-  pagination: {
-    total: totalCount,
-    page,
-    limit,
-    totalPages,
-    hasNextPage: page < totalPages,
-    hasPrevPage: page > 1,
-  },
-};
-
+  // console.log({
+  //   rcode: 1,
+  //   rmessage: 'Success',
+  //   data: results,
+  //   pagination: {
+  //     total: totalCount,
+  //     page,
+  //     limit,
+  //     totalPages,
+  //     hasNextPage: page < totalPages,
+  //     hasPrevPage: page > 1,
+  //   },
+  // })
+  // Final consistent response
+  return {
+    rcode: 1,
+    rmessage: 'Success',
+    data: results[0],
+    pagination: {
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  };
 }
 
- 
+
 
 
 
@@ -1387,6 +1379,7 @@ await db.collection('csc_agent_master').createIndex({
 });
 
 }
+
 
 
 }
