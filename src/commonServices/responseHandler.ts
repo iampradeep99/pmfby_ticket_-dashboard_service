@@ -74,6 +74,7 @@ export const joiErrorHandler = (error: any) => {
 export const jsonResponseHandler = (
   data: any,
   message: any,
+
   req: Request,
   res: Response,
   next: NextFunction
@@ -90,6 +91,44 @@ export const jsonResponseHandler = (
     recordCount: 0,
   });
 };
+
+
+
+
+export const jsonResponseHandlerCopy = (
+  data?: any,
+  message?: any,
+  pagination?: any,
+  req?: Request,
+  res?: Response,
+  next?: NextFunction
+) => {
+  // Handle message as string or object
+  const messages = message?.msg || message || constant.ResponseStatus.SUCCESS;
+  const code = message?.code || "1";
+
+  // Calculate record count
+  const recordCount = Array.isArray(data) ? data.length : data ? 1 : 0;
+
+  const responsePayload = {
+    responseObject: null,
+    responseDynamic: data || null,
+    responseCode: code,
+    responseMessage: messages,
+    jsonString: null,
+    recordCount,
+    pagination: pagination || null
+  };
+
+  // Only send if `res` is passed
+  if (res) {
+    res.status(200).send(responsePayload);
+  } else {
+    // fallback: just return the object
+    return responsePayload;
+  }
+};
+
 
 export const jsonResponseHandlerOther = (
   data: any,
