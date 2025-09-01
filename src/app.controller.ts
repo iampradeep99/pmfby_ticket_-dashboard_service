@@ -1,12 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+// app.controller.ts
+import { Controller, Get, Res } from '@nestjs/common';
+import { Response } from 'express';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
-
   @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  healthCheck(@Res() res: Response) {
+    // This will be at: GET /krphdashboard
+    res.send({ message: 'Hello World!', status: 'OK' });
   }
 }
