@@ -1029,7 +1029,7 @@ async processTicketHistory(ticketPayload: any) {
   return {
     rcode: 1,
     rmessage: 'Success',
-    data: results[0],
+    data: results,
     pagination: {
       total: totalCount,
       page,
