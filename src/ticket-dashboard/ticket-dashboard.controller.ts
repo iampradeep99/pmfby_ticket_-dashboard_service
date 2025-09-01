@@ -62,5 +62,27 @@ export class TicketDashboardController {
       rmessage: 'Request received. Processing in background.',
     };
   }
+
+  @Post('getSupportTicketHistoryReportView')
+async fetchSupportTicketHistoryReportView(
+  @Body() ticketPayload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const userEmail = ticketPayload?.userEmail?.trim();
+
+    if (!userEmail) {
+      return jsonResponseHandler(null, 'User Email is required', req, res, () => {});
+    }
+
+    const { data, message } = await this.dashboardService.getSupportTicketHistotReport(ticketPayload);
+
+    return jsonResponseHandler(data, message || 'Report generated successfully.', req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
 }
 
