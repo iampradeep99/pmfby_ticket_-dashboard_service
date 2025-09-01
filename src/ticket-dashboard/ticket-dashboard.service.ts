@@ -856,10 +856,12 @@ async processTicketHistory(ticketPayload: any) {
     SPTicketHeaderID,
     SPUserID,
     page = 1,
-    limit = 100,
+    limit = 1000,
   } = ticketPayload;
 
   const db = this.db;
+  // this.AddIndex(db)
+
 
   if (!SPInsuranceCompanyID) {
     console.log('InsuranceCompanyID Missing!');
@@ -951,14 +953,14 @@ async processTicketHistory(ticketPayload: any) {
           as: 'ticketHistory',
         },
       },
-      {
-        $lookup: {
-          from: 'support_ticket_claim_intimation_report_history',
-          localField: 'SupportTicketNo',
-          foreignField: 'SupportTicketNo',
-          as: 'claimInfo',
-        },
-      },
+      // {
+      //   $lookup: {
+      //     from: 'support_ticket_claim_intimation_report_history',
+      //     localField: 'SupportTicketNo',
+      //     foreignField: 'SupportTicketNo',
+      //     as: 'claimInfo',
+      //   },
+      // },
       {
         $lookup: {
           from: 'csc_agent_master',
@@ -968,7 +970,7 @@ async processTicketHistory(ticketPayload: any) {
         },
       },
       { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-      { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+      // { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
       { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
       {
         $project: {
@@ -988,13 +990,13 @@ async processTicketHistory(ticketPayload: any) {
           SupportTicketTypeName: '$TicketTypeName',
           InsuranceMasterName: '$InsuranceCompany',
           ReOpenDate: '$ticketHistory.TicketHistoryDate',
-          NCIPDocketNo: {
-            $replaceAll: {
-              input: '$claimInfo.ClaimReportNo',
-              find: '`',
-              replacement: '',
-            },
-          },
+          // NCIPDocketNo: {
+          //   $replaceAll: {
+          //     input: '$claimInfo.ClaimReportNo',
+          //     find: '`',
+          //     replacement: '',
+          //   },
+          // },
           CallingUserID: '$agentInfo.UserID',
         },
       },
@@ -1002,6 +1004,8 @@ async processTicketHistory(ticketPayload: any) {
       { $limit: limit },
     ];
 
+
+    console.log(JSON.stringify(pipeline));
     results = await db
       .collection('SLA_KRPH_SupportTickets_Records')
       .aggregate(pipeline, { allowDiskUse: true })
@@ -1063,7 +1067,7 @@ async processTicketHistory(ticketPayload: any) {
     SPUserID,
     page = 1,
     limit = 1000000000,
-    userEmail, // Used later only for sending the email
+    userEmail,
   } = ticketPayload;
 
   const db = this.db;
@@ -1225,7 +1229,6 @@ async processTicketHistory(ticketPayload: any) {
   const excelFileName = `support_ticket_data_${timestamp}.xlsx`;
   const excelFilePath = path.join(folderPath, excelFileName);
 
-  // Create Excel file
   const ws = XLSX.utils.json_to_sheet(results);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Support Ticket Data');
@@ -1235,7 +1238,6 @@ async processTicketHistory(ticketPayload: any) {
   const zipFileName = excelFileName.replace('.xlsx', '.zip');
   const zipFilePath = path.join(folderPath, zipFileName);
 
-  // Create ZIP archive
   const output = fs.createWriteStream(zipFilePath);
   const archive = archiver('zip', { zlib: { level: 9 } });
 
@@ -1243,7 +1245,6 @@ async processTicketHistory(ticketPayload: any) {
   archive.file(excelFilePath, { name: excelFileName });
   await archive.finalize();
 
-  // Wait for the output stream to finish to ensure file is fully written
   await new Promise<void>((resolve, reject) => {
     output.on('close', () => {
       console.log(`ZIP file created at: ${zipFilePath} (${archive.pointer()} total bytes)`);
@@ -1255,7 +1256,6 @@ async processTicketHistory(ticketPayload: any) {
     });
   });
 
-  // Remove Excel file after zip creation
   try {
     await fs.remove(excelFilePath);
     console.log(`Deleted Excel file: ${excelFilePath}`);
@@ -1263,7 +1263,6 @@ async processTicketHistory(ticketPayload: any) {
     console.error(`Failed to delete Excel file ${excelFilePath}:`, err);
   }
 
-  // Upload ZIP to GCP
   const gcpService = new GCPServices();
   const fileBuffer = await fs.readFile(zipFilePath);
 
