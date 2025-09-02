@@ -89,7 +89,7 @@ async fetchSupportTicketHistoryReportView(
     let { data, message, pagination } = result;
 
     if (data) {
-      // data = await this.utilService.GZip(data);
+      data = await this.utilService.GZip(data);
     }
 
     return jsonResponseHandlerCopy(
