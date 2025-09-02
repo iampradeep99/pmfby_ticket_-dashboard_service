@@ -60,7 +60,8 @@ export class TicketDashboardController {
 
     return {
       rcode: 1,
-      rmessage: 'Request received. Processing in background.',
+      rmessage: `Your download request has been received. You will receive an email at ${userEmail} with the support ticket data shortly.`
+
     };
   }
 
