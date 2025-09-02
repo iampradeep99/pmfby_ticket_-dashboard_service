@@ -1046,7 +1046,7 @@ async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], m
 
 
 
-async processTicketHistoryView(ticketPayload: any) {
+async processTicketHistoryViewOlder(ticketPayload: any) {
   const {
     SPFROMDATE,
     SPTODATE,
@@ -1077,10 +1077,12 @@ async processTicketHistoryView(ticketPayload: any) {
 
   const Delta = await this.getSupportTicketUserDetail(SPUserID);
   const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+  // console.log(JSON.stringify(responseInfo))
+
   const item = (responseInfo.data as any)?.user?.[0];
 
   if (!item) return { rcode: 0, rmessage: 'User details not found.' };
-
+  
   const userDetail = {
     InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
     StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
@@ -1113,6 +1115,8 @@ async processTicketHistoryView(ticketPayload: any) {
     ...(StateMasterID?.length && LocationTypeID !== 2 && { FilterStateID: { $in: StateMasterID } }),
   };
 
+
+
   // if (SPFROMDATE || SPTODATE) {
   //   match.InsertDateTime = {};
   //   if (SPFROMDATE) match.InsertDateTime.$gte = new Date(SPFROMDATE);
@@ -1131,8 +1135,8 @@ async processTicketHistoryView(ticketPayload: any) {
   }
 }
 
-console.log(match.InsertDateTime);
-
+console.log(JSON.stringify(match));
+return
 
   const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
   const totalPages = Math.ceil(totalCount / limit);
@@ -1262,6 +1266,293 @@ console.log(match.InsertDateTime);
     pagination: responsePayload.pagination,
   };
 }
+
+async processTicketHistoryView(ticketPayload: any) {
+  const {
+    SPFROMDATE,
+    SPTODATE,
+    SPInsuranceCompanyID,
+    SPStateID,
+    SPTicketHeaderID,
+    SPUserID,
+    page = 1,
+    limit = 20,
+  } = ticketPayload;
+
+  const db = this.db;
+  this.AddIndex(db);
+
+  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+  if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+
+  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+  const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+  if (cachedData) {
+    return {
+      rcode: 1,
+      rmessage: 'Success',
+      data: cachedData.data,
+      pagination: cachedData.pagination,
+    };
+  }
+
+  const Delta = await this.getSupportTicketUserDetail(SPUserID);
+  const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+  // console.log(JSON.stringify(responseInfo))
+
+  const item = (responseInfo.data as any)?.user?.[0];
+
+  if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+
+  const userDetail = {
+    InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+    StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+    BRHeadTypeID: item.BRHeadTypeID,
+    LocationTypeID: item.LocationTypeID,
+  };
+
+  const { InsuranceCompanyID, StateMasterID, LocationTypeID, BRHeadTypeID } = userDetail;
+
+  let locationFilter: any = {};
+
+  if (LocationTypeID === 1 && StateMasterID?.length) {
+    locationFilter = {
+      FilterStateID: { $in: StateMasterID },
+    };
+  } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+    locationFilter = {
+      FilterDistrictRequestorID: { $in: item.DistrictIDs },
+    };
+  } else {
+    locationFilter = {};
+  }
+
+  // ✅ SECURE FILTERING
+  const match: any = {
+    ...locationFilter,
+  };
+
+  // TicketHeaderID filter
+  if (SPTicketHeaderID && SPTicketHeaderID !== 0) {
+    match.TicketHeaderID = SPTicketHeaderID;
+  }
+
+  // INSURANCE COMPANY FILTER
+  // if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+  //   const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map(id => id.trim());
+  //   const allowedInsuranceIDs = InsuranceCompanyID.map(String); // from user profile
+  //   const validInsuranceIDs = requestedInsuranceIDs.filter(id => allowedInsuranceIDs.includes(id));
+
+  //   if (validInsuranceIDs.length === 0) {
+  //     return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+  //   }
+
+  //   match.InsuranceCompanyID = { $in: validInsuranceIDs };
+  // } else {
+  //   // If #ALL, limit to allowed insurance companies
+  //   if (InsuranceCompanyID?.length) {
+  //     match.InsuranceCompanyID = { $in: InsuranceCompanyID };
+  //   }
+  // }
+
+  if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+  const requestedInsuranceIDs = SPInsuranceCompanyID
+    .split(',')
+    .map(id => Number(id.trim())); // convert to integer
+
+  const allowedInsuranceIDs = InsuranceCompanyID.map(Number); // from user profile (ensure integers)
+
+  const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
+    allowedInsuranceIDs.includes(id)
+  );
+
+  if (validInsuranceIDs.length === 0) {
+    return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+  }
+
+  match.InsuranceCompanyID = { $in: validInsuranceIDs };
+} else {
+  // If #ALL, limit to allowed insurance companies
+  if (InsuranceCompanyID?.length) {
+    match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }; // force integers
+  }
+}
+
+
+  // STATE FILTER
+  if (SPStateID && SPStateID !== '#ALL') {
+    const requestedStateIDs = SPStateID.split(',').map(id => id.trim());
+    const validStateIDs = requestedStateIDs.filter(id => StateMasterID.includes(id));
+
+    if (validStateIDs.length === 0) {
+      return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+    }
+
+    match.FilterStateID = { $in: validStateIDs };
+  } else if (StateMasterID?.length && LocationTypeID !== 2) {
+    match.FilterStateID = { $in: StateMasterID };
+  }
+
+  // DATE FILTER
+  if (SPFROMDATE || SPTODATE) {
+    match.InsertDateTime = {};
+
+    if (SPFROMDATE) {
+      match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`);
+    }
+
+    if (SPTODATE) {
+      match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`);
+    }
+  }
+
+  console.log(JSON.stringify(match));
+  // return; // Uncomment if you want to debug only
+
+  const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
+  const totalPages = Math.ceil(totalCount / limit);
+
+  const pipeline: any[] = [
+    { $match: match },
+
+    {
+      $lookup: {
+        from: 'SLA_KRPH_SupportTicketsHistory_Records',
+        let: { ticketId: '$SupportTicketID' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$SupportTicketID', '$$ticketId'] },
+                  { $eq: ['$TicketStatusID', 109304] }
+                ]
+              }
+            }
+          },
+          { $sort: { TicketHistoryID: -1 } },
+          { $limit: 1 }
+        ],
+        as: 'ticketHistory',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'support_ticket_claim_intimation_report_history',
+        localField: 'SupportTicketNo',
+        foreignField: 'SupportTicketNo',
+        as: 'claimInfo',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'csc_agent_master',
+        localField: 'InsertUserID',
+        foreignField: 'UserLoginID',
+        as: 'agentInfo',
+      },
+    },
+
+    { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+
+    {
+      $project: {
+        SupportTicketID: 1,
+        ApplicationNo: 1,
+        InsurancePolicyNo: 1,
+        TicketStatusID: 1,
+        TicketStatus: 1,
+        CallerContactNumber: 1,
+        RequestorName: 1,
+        RequestorMobileNo: 1,
+        StateMasterName: 1,
+        DistrictMasterName: 1,
+        SubDistrictName: 1,
+        TicketHeadName: 1,
+        TicketCategoryName: 1,
+        RequestSeason: 1,
+        RequestYear: 1,
+        ApplicationCropName: 1,
+        Relation: 1,
+        RelativeName: 1,
+        PolicyPremium: 1,
+        PolicyArea: 1,
+        PolicyType: 1,
+        LandSurveyNumber: 1,
+        LandDivisionNumber: 1,
+        IsSos: 1,
+        PlotStateName: 1,
+        PlotDistrictName: 1,
+        PlotVillageName: 1,
+        ApplicationSource: 1,
+        CropShare: 1,
+        IFSCCode: 1,
+        FarmerShare: 1,
+        SowingDate: 1,
+        LossDate: 1,
+        CreatedBY: 1,
+        CreatedAt: "$InsertDateTime",
+        Sos: 1,
+        NCIPDocketNo: "$TicketNCIPDocketNo",
+        TicketDescription: 1,
+        CallingUniqueID: 1,
+        TicketDate: {
+          $dateToString: {
+            format: "%Y-%m-%d %H:%M:%S",
+            date: "$Created"
+          }
+        },
+        StatusDate: {
+          $dateToString: {
+            format: "%Y-%m-%d %H:%M:%S",
+            date: "$StatusUpdateTime"
+          }
+        },
+        SupportTicketTypeName: "$TicketTypeName",
+        SupportTicketNo: 1,
+        InsuranceMasterName: "$InsuranceCompany",
+        ReOpenDate: "$TicketReOpenDate",
+        CallingUserID: "$agentInfo.UserID",
+        SchemeName: 1,
+      }
+    },
+
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+  ];
+
+  let results = await db.collection('SLA_KRPH_SupportTickets_Records')
+    .aggregate(pipeline, { allowDiskUse: true })
+    .toArray();
+
+  results = Array.isArray(results) ? results : [results];
+
+  const responsePayload = {
+    data: results,
+    pagination: {
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1
+    },
+  };
+
+  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+
+  return {
+    rcode: 1,
+    rmessage: 'Success',
+    data: results,
+    pagination: responsePayload.pagination,
+  };
+}
+
 
 
 
