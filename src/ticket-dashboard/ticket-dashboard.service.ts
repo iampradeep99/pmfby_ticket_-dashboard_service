@@ -837,7 +837,6 @@ async getSupportTicketHistotReportDownload(ticketPayload: any): Promise<void> {
 
 async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], message: string, pagination:any }> {
   const result = await this.processTicketHistoryView(ticketPayload);
-  console.log(result, "tt")
   return {
     data: result.data,
     message: result.rmessage || 'Success',
@@ -1111,11 +1110,26 @@ async processTicketHistoryView(ticketPayload: any) {
     ...(StateMasterID?.length && LocationTypeID !== 2 && { FilterStateID: { $in: StateMasterID } }),
   };
 
-  if (SPFROMDATE || SPTODATE) {
-    match.InsertDateTime = {};
-    if (SPFROMDATE) match.InsertDateTime.$gte = new Date(SPFROMDATE);
-    if (SPTODATE) match.InsertDateTime.$lte = new Date(SPTODATE);
+  // if (SPFROMDATE || SPTODATE) {
+  //   match.InsertDateTime = {};
+  //   if (SPFROMDATE) match.InsertDateTime.$gte = new Date(SPFROMDATE);
+  //   if (SPTODATE) match.InsertDateTime.$lte = new Date(SPTODATE);
+  // }
+
+ if (SPFROMDATE || SPTODATE) {
+  match.InsertDateTime = {};
+
+  if (SPFROMDATE) {
+    match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`);
   }
+
+  if (SPTODATE) {
+    match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`);
+  }
+}
+
+console.log(match.InsertDateTime);
+
 
   const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
   const totalPages = Math.ceil(totalCount / limit);
