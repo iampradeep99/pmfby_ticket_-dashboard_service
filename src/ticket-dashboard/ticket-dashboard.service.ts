@@ -1970,23 +1970,83 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
       BRHeadTypeID: item.BRHeadTypeID,
       LocationTypeID: item.LocationTypeID,
     };
-    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID,BRHeadTypeID } = userDetail;
 
-    let locationFilter: any = {};
-    if (LocationTypeID === 1 && StateMasterID?.length) {
-      locationFilter = { FilterStateID: { $in: StateMasterID } };
-    } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
-      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+    // let locationFilter: any = {};
+    // if (LocationTypeID === 1 && StateMasterID?.length) {
+    //   locationFilter = { FilterStateID: { $in: StateMasterID } };
+    // } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+    //   locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+    // }
+
+      let locationFilter: any = {};
+
+  if (LocationTypeID === 1 && StateMasterID?.length) {
+    locationFilter = {
+      FilterStateID: { $in: StateMasterID },
+    };
+  } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+    locationFilter = {
+      FilterDistrictRequestorID: { $in: item.DistrictIDs },
+    };
+  } else {
+    locationFilter = {};
+  }
+
+    // const match: any = {
+    //   ...locationFilter,
+    //   ...(SPStateID !== '#ALL' && { FilterStateID: { $in: SPStateID.split(',') } }),
+    //   ...(SPInsuranceCompanyID !== '#ALL' && { InsuranceCompanyID: { $in: SPInsuranceCompanyID.split(',') } }),
+    //   ...(SPTicketHeaderID && SPTicketHeaderID !== 0 && { TicketHeaderID: SPTicketHeaderID }),
+    //   ...(InsuranceCompanyID?.length && { InsuranceCompanyID: { $in: InsuranceCompanyID } }),
+    //   ...(StateMasterID?.length && LocationTypeID !== 2 && { FilterStateID: { $in: StateMasterID } }),
+    // };
+
+      const match: any = {
+    ...locationFilter,
+  };
+
+
+    if (SPTicketHeaderID && SPTicketHeaderID !== 0) {
+    match.TicketHeaderID = SPTicketHeaderID;
+  }
+
+    if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+  const requestedInsuranceIDs = SPInsuranceCompanyID
+    .split(',')
+    .map(id => Number(id.trim())); // convert to integer
+
+  const allowedInsuranceIDs = InsuranceCompanyID.map(Number); // from user profile (ensure integers)
+
+  const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
+    allowedInsuranceIDs.includes(id)
+  );
+
+  if (validInsuranceIDs.length === 0) {
+    return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+  }
+
+  match.InsuranceCompanyID = { $in: validInsuranceIDs };
+} else {
+  // If #ALL, limit to allowed insurance companies
+  if (InsuranceCompanyID?.length) {
+    match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }; // force integers
+  }
+}
+
+ // STATE FILTER
+  if (SPStateID && SPStateID !== '#ALL') {
+    const requestedStateIDs = SPStateID.split(',').map(id => id.trim());
+    const validStateIDs = requestedStateIDs.filter(id => StateMasterID.includes(id));
+
+    if (validStateIDs.length === 0) {
+      return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
     }
 
-    const match: any = {
-      ...locationFilter,
-      ...(SPStateID !== '#ALL' && { FilterStateID: { $in: SPStateID.split(',') } }),
-      ...(SPInsuranceCompanyID !== '#ALL' && { InsuranceCompanyID: { $in: SPInsuranceCompanyID.split(',') } }),
-      ...(SPTicketHeaderID && SPTicketHeaderID !== 0 && { TicketHeaderID: SPTicketHeaderID }),
-      ...(InsuranceCompanyID?.length && { InsuranceCompanyID: { $in: InsuranceCompanyID } }),
-      ...(StateMasterID?.length && LocationTypeID !== 2 && { FilterStateID: { $in: StateMasterID } }),
-    };
+    match.FilterStateID = { $in: validStateIDs };
+  } else if (StateMasterID?.length && LocationTypeID !== 2) {
+    match.FilterStateID = { $in: StateMasterID };
+  }
 
     if (SPFROMDATE || SPTODATE) {
       match.InsertDateTime = {};
