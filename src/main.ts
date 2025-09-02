@@ -17,7 +17,7 @@ async function bootstrap() {
   // ✅ Optional: Redis initialization
   const redis = new RedisWrapper();
   try {
-    await redis.connectionInit({ url: "redis://10.128.60.9:6379" });
+    // await redis.connectionInit({ url: "redis://10.128.60.9:6379" });
     console.log('✅ Redis connected and subscriber started');
   } catch (err) {
     console.error('❌ Redis init error:', err);
