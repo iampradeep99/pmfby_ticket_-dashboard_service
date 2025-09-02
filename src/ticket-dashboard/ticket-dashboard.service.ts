@@ -12,6 +12,8 @@ const XLSX = require('xlsx');
 import { MailService } from '../mail/mail.service';
 import {generateSupportTicketEmailHTML,getCurrentFormattedDateTime} from '../templates/mailTemplates'
 import {GCPServices} from '../commonServices/GCSFileUpload'
+import { format } from '@fast-csv/format';
+
 
 import * as ExcelJS from 'exceljs';
 @Injectable()
@@ -1265,7 +1267,7 @@ console.log(match.InsertDateTime);
 
 
 
-  async processTicketHistoryAndGenerateZip(ticketPayload: any) {
+  async processTicketHistoryAndGenerateZipx(ticketPayload: any) {
   const {
     SPFROMDATE,
     SPTODATE,
@@ -1365,81 +1367,6 @@ console.log(match.InsertDateTime);
       .countDocuments(match);
 
     totalPages = Math.ceil(totalCount / limit);
-
-    /* const pipeline: any[] = [
-      { $match: match },
-      {
-        $lookup: {
-          from: 'SLA_KRPH_SupportTicketsHistory_Records',
-          let: { ticketId: '$SupportTicketID' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ['$SupportTicketID', '$$ticketId'] },
-                    { $eq: ['$TicketStatusID', 109304] },
-                  ],
-                },
-              },
-            },
-            { $sort: { TicketHistoryID: -1 } },
-            { $limit: 1 },
-          ],
-          as: 'ticketHistory',
-        },
-      },
-      {
-        $lookup: {
-          from: 'support_ticket_claim_intimation_report_history',
-          localField: 'SupportTicketNo',
-          foreignField: 'SupportTicketNo',
-          as: 'claimInfo',
-        },
-      },
-      {
-        $lookup: {
-          from: 'csc_agent_master',
-          localField: 'InsertUserID',
-          foreignField: 'UserLoginID',
-          as: 'agentInfo',
-        },
-      },
-      { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-      { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-      { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          SupportTicketID: 1,
-          TicketHeaderID: 1,
-          TicketTypeName: 1,
-          InsuranceCompany: 1,
-          Created: 1,
-          StatusUpdateTime: 1,
-          InsertDateTime: 1,
-          TicketDate: {
-            $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' },
-          },
-          StatusDate: {
-            $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$StatusUpdateTime' },
-          },
-          SupportTicketTypeName: '$TicketTypeName',
-          InsuranceMasterName: '$InsuranceCompany',
-          ReOpenDate: '$ticketHistory.TicketHistoryDate',
-          NCIPDocketNo: {
-            $replaceAll: {
-              input: '$claimInfo.ClaimReportNo',
-              find: '`',
-              replacement: '',
-            },
-          },
-          CallingUserID: '$agentInfo.UserID',
-        },
-      },
-      { $skip: (page - 1) * limit },
-      { $limit: limit },
-    ]; */
-
     const pipeline: any[] = [
     { $match: match },
 
@@ -1686,6 +1613,321 @@ console.log(match.InsertDateTime);
   //   ...responsePayload,
   // };
 }
+
+
+
+
+// import { format } from '@fast-csv/format';
+// import * as fs from 'fs';
+// import * as path from 'path';
+// import * as archiver from 'archiver';
+
+async processTicketHistoryAndGenerateZip(ticketPayload: any) {
+  const {
+    SPFROMDATE,
+    SPTODATE,
+    SPInsuranceCompanyID,
+    SPStateID,
+    SPTicketHeaderID,
+    SPUserID,
+    page = 1,
+    limit = 1000000000,
+    userEmail,
+  } = ticketPayload;
+  const db = this.db;
+
+  if (!SPInsuranceCompanyID) {
+    console.log('InsuranceCompanyID Missing!');
+    return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+  }
+  if (!SPStateID) {
+    console.log('StateID Missing!');
+    return { rcode: 0, rmessage: 'StateID Missing!' };
+  }
+
+  const RequestDateTime = await getCurrentFormattedDateTime();
+  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+  const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+
+  let totalCount = 0;
+  let totalPages = 0;
+  let isFromCache = false;
+
+  if (cachedData) {
+    console.log('Using cached data');
+    isFromCache = true;
+    totalCount = cachedData.pagination.total;
+    totalPages = cachedData.pagination.totalPages;
+  }
+
+  if (!isFromCache) {
+    const Delta = await this.getSupportTicketUserDetail(SPUserID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+    if (!item) {
+      console.log('User details not found.');
+      return { rcode: 0, rmessage: 'User details not found.' };
+    }
+
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID
+        ? await this.convertStringToArray(item.InsuranceCompanyID)
+        : [],
+      StateMasterID: item.StateMasterID
+        ? await this.convertStringToArray(item.StateMasterID)
+        : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+    };
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+
+    let locationFilter: any = {};
+    if (LocationTypeID === 1 && StateMasterID?.length) {
+      locationFilter = { FilterStateID: { $in: StateMasterID } };
+    } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+    }
+
+    const match: any = {
+      ...locationFilter,
+      ...(SPStateID !== '#ALL' && { FilterStateID: { $in: SPStateID.split(',') } }),
+      ...(SPInsuranceCompanyID !== '#ALL' && { InsuranceCompanyID: { $in: SPInsuranceCompanyID.split(',') } }),
+      ...(SPTicketHeaderID && SPTicketHeaderID !== 0 && { TicketHeaderID: SPTicketHeaderID }),
+      ...(InsuranceCompanyID?.length && { InsuranceCompanyID: { $in: InsuranceCompanyID } }),
+      ...(StateMasterID?.length && LocationTypeID !== 2 && { FilterStateID: { $in: StateMasterID } }),
+    };
+
+    if (SPFROMDATE || SPTODATE) {
+      match.InsertDateTime = {};
+      if (SPFROMDATE) {
+        match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`);
+      }
+      if (SPTODATE) {
+        match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`);
+      }
+    }
+
+    totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
+    totalPages = Math.ceil(totalCount / limit);
+
+     const pipeline: any[] = [
+    { $match: match },
+
+    {
+      $lookup: {
+        from: 'SLA_KRPH_SupportTicketsHistory_Records',
+        let: { ticketId: '$SupportTicketID' },
+        pipeline: [
+          { $match: { $expr: { $and: [
+            { $eq: ['$SupportTicketID', '$$ticketId'] },
+            { $eq: ['$TicketStatusID', 109304] }
+          ] } } },
+          { $sort: { TicketHistoryID: -1 } },
+          { $limit: 1 }
+        ],
+        as: 'ticketHistory',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'support_ticket_claim_intimation_report_history',
+        localField: 'SupportTicketNo',
+        foreignField: 'SupportTicketNo',
+        as: 'claimInfo',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'csc_agent_master',
+        localField: 'InsertUserID',
+        foreignField: 'UserLoginID',
+        as: 'agentInfo',
+      },
+    },
+
+    { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+
+ {
+    $project: {
+      SupportTicketID: 1,
+      ApplicationNo:1,
+      InsurancePolicyNo:1,
+      TicketStatusID:1,
+      TicketStatus:1,
+      CallerContactNumber:1,
+      RequestorName:1,
+      RequestorMobileNo:1,
+      StateMasterName:1,
+      DistrictMasterName:1,
+      SubDistrictName:1,
+      TicketHeadName:1,
+      TicketCategoryName:1,
+      RequestSeason:1,
+      RequestYear:1,
+      ApplicationCropName:1,
+      Relation:1,
+      RelativeName:1, 
+      PolicyPremium:1,
+      PolicyArea:1,
+      PolicyType:1,
+      LandSurveyNumber:1,
+      LandDivisionNumber:1,
+      IsSos:1,
+      PlotStateName:1,
+     PlotDistrictName:1,
+      PlotVillageName:1,
+      ApplicationSource:1,
+      CropShare:1,
+      IFSCCode:1,
+      FarmerShare:1,
+      SowingDate:1,
+      LossDate:1,
+      CreatedBY:1,
+      CreatedAt:"$InsertDateTime",
+      Sos:1,
+      NCIPDocketNo:"$TicketNCIPDocketNo",
+      TicketDescription:1,
+      CallingUniqueID:1,
+      TicketDate: {
+        $dateToString: {
+          format: "%Y-%m-%d %H:%M:%S",
+          date: "$Created"
+        }
+      },
+      StatusDate: {
+        $dateToString: {
+          format: "%Y-%m-%d %H:%M:%S",
+          date: "$StatusUpdateTime"
+        }
+      },
+      SupportTicketTypeName: "$TicketTypeName",
+      SupportTicketNo:1,
+      InsuranceMasterName: "$InsuranceCompany",
+      ReOpenDate: "$TicketReOpenDate",
+      CallingUserID: "$agentInfo.UserID",
+      SchemeName:1,
+      
+    }
+  },
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+  ];
+
+    // Prepare CSV streaming
+    const folderPath = path.join(process.cwd(), 'downloads');
+    await fs.promises.mkdir(folderPath, { recursive: true });
+
+    const timestamp = Date.now();
+    const csvFileName = `support_ticket_data_${timestamp}.csv`;
+    const csvFilePath = path.join(folderPath, csvFileName);
+
+    const writeStream = fs.createWriteStream(csvFilePath);
+    const csvStream = format({ headers: true });
+    csvStream.pipe(writeStream);
+
+    const cursor = db
+      .collection('SLA_KRPH_SupportTickets_Records')
+      .aggregate(pipeline, { allowDiskUse: true })
+      .stream();
+
+    for await (const doc of cursor) {
+      csvStream.write(doc);
+    }
+    csvStream.end();
+
+    await new Promise<void>((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+    console.log(`CSV file created at: ${csvFilePath}`);
+
+    // Zip it
+    const zipFileName = csvFileName.replace('.csv', '.zip');
+    const zipFilePath = path.join(folderPath, zipFileName);
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(output);
+    archive.file(csvFilePath, { name: csvFileName });
+    await archive.finalize();
+
+    await new Promise<void>((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
+    });
+
+    console.log(`ZIP file created at: ${zipFilePath} (${archive.pointer()} bytes)`);
+
+    // Cleanup CSV
+    await fs.promises.unlink(csvFilePath).catch(console.error);
+
+    const gcpService = new GCPServices();
+    const fileBuffer = await fs.promises.readFile(zipFilePath);
+    let uploadResult;
+    try {
+      uploadResult = await gcpService.uploadFileToGCP({
+        filePath: 'krph/reports/',
+        uploadedBy: 'KRPH',
+        file: { buffer: fileBuffer, originalname: zipFileName },
+      });
+      console.log('Upload to GCP successful');
+    } catch (err) {
+      console.error('Upload to GCP failed:', err);
+      throw err;
+    }
+
+    const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+    console.log('GCP Download URL:', gcpDownloadUrl);
+
+    if (gcpDownloadUrl) {
+      await fs.promises.unlink(zipFilePath).catch(console.error);
+    }
+
+    await db.collection('support_ticket_download_logs').insertOne({
+      userId: SPUserID,
+      insuranceCompanyId: SPInsuranceCompanyID,
+      stateId: SPStateID,
+      ticketHeaderId: SPTicketHeaderID,
+      fromDate: SPFROMDATE,
+      toDate: SPTODATE,
+      zipFileName,
+      downloadUrl: gcpDownloadUrl,
+      createdAt: new Date(),
+    });
+    console.log('Inserted download log into DB');
+
+    const responsePayload = {
+      data: [], // streaming CSV, so omit data or optionally provide page summary
+      pagination: { total: totalCount, page, limit, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+      downloadUrl: gcpDownloadUrl,
+    };
+
+    const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
+    try {
+      await this.mailService.sendMail({
+        to: userEmail,
+        subject: 'Support Ticket History Report Download Service',
+        text: 'Support Ticket History Report',
+        html: supportTicketTemplate,
+      });
+      console.log(`Email sent to ${userEmail}`);
+    } catch (err) {
+      console.error(`Failed to send email to ${userEmail}:`, err);
+    }
+
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+    console.log('Cached response payload in Redis');
+
+    // Optionally return
+    // return { rcode: 1, rmessage: 'Success', ...responsePayload };
+  }
+
+}
+
+
 
 
 
