@@ -46,7 +46,9 @@ export class TicketDashboardController {
   }
 
    @Post('getSupportTicketHistory')
-  async fetchSupportTicketHistory(@Body() ticketPayload: any) {
+  async fetchSupportTicketHistory(@Body() ticketPayload: any,@Req() req: Request,
+  @Res({ passthrough: false }) res: Response) {
+    
     const userEmail = ticketPayload?.userEmail?.trim();
 
     if (!userEmail) {
@@ -57,12 +59,10 @@ export class TicketDashboardController {
     }
 
     await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
+    let rmessage = `Your download request has been received. You will receive an email at ${userEmail} with the support ticket data shortly.`
+    return jsonResponseHandler([], rmessage, req, res, () => {});
 
-    return {
-      rcode: 1,
-      rmessage: `Your download request has been received. You will receive an email at ${userEmail} with the support ticket data shortly.`
-
-    };
+    
   }
 
 @Post('getSupportTicketHistoryReportView')
