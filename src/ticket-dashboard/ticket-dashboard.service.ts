@@ -1161,34 +1161,73 @@ async processTicketHistory(ticketPayload: any) {
     { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
     { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
 
-    {
-      $project: {
-        SupportTicketID: 1,
-        TicketHeaderID: 1,
-        TicketTypeName: 1,
-        InsuranceCompany: 1,
-        Created: 1,
-        InsertDateTime: 1,
-        StatusUpdateTime: 1,
-        TicketDate: { $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' } },
-        StatusDate: { $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$StatusUpdateTime' } },
-        SupportTicketTypeName: '$TicketTypeName',
-        InsuranceMasterName: '$InsuranceCompany',
-        ReOpenDate: '$ticketHistory.TicketHistoryDate',
-        NCIPDocketNo: { $replaceAll: { input: '$claimInfo.ClaimReportNo', find: '`', replacement: '' } },
-        CallingUserID: '$agentInfo.UserID',
-        CreatedBY: {
-          $switch: {
-            branches: [
-              { case: { $eq: ['$InsertUserID', 99999] }, then: 'Farmer' },
-              { case: { $eq: ['$InsertUserID', 88888] }, then: 'BOT' }
-            ],
-            default: 'Agent',
-          },
-        },
+ {
+    $project: {
+      SupportTicketID: 1,
+     
+    
+      ApplicationNo:1,
+      InsurancePolicyNo:1,
+      TicketStatusID:1,
+      TicketStatus:1,
+      CallerContactNumber:1,
+      RequestorName:1,
+      RequestorMobileNo:1,
+      StateMasterName:1,
+      DistrictMasterName:1,
+      SubDistrictName:1,
+      TicketHeadName:1,
+      TicketCategoryName:1,
+      RequestSeason:1,
+      RequestYear:1,
+      ApplicationCropName:1,
+      Relation:1,
+      RelativeName:1,
+            
+      PolicyPremium:1,
+      PolicyArea:1,
+      PolicyType:1,
+      LandSurveyNumber:1,
+      LandDivisionNumber:1,
+      IsSos:1,
+      PlotStateName:1,
+            PlotDistrictName:1,
+      PlotVillageName:1,
+      ApplicationSource:1,
+      CropShare:1,
+      IFSCCode:1,
+      FarmerShare:1,
+      SowingDate:1,
+      LossDate:1,
+      CreatedBY:1,
+      CreatedAt:"$InsertDateTime",
+      Sos:1,
+      // InsuranceMasterName:1,
+      NCIPDocketNo:"$TicketNCIPDocketNo",
+      
+      TicketDescription:1,
+      CallingUniqueID:1,
+      TicketDate: {
+        $dateToString: {
+          format: "%Y-%m-%d %H:%M:%S",
+          date: "$Created"
+        }
       },
-    },
-
+      StatusDate: {
+        $dateToString: {
+          format: "%Y-%m-%d %H:%M:%S",
+          date: "$StatusUpdateTime"
+        }
+      },
+      SupportTicketTypeName: "$TicketTypeName",
+      SupportTicketNo:1,
+      InsuranceMasterName: "$InsuranceCompany",
+      ReOpenDate: "$TicketReOpenDate",
+      CallingUserID: "$agentInfo.UserID",
+      SchemeName:1,
+      
+    }
+  },
     { $skip: (page - 1) * limit },
     { $limit: limit },
   ];
