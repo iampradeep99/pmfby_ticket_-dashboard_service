@@ -836,7 +836,7 @@ async getSupportTicketHistotReportDownload(ticketPayload: any): Promise<void> {
 }
 
 async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], message: string, pagination:any }> {
-  const result = await this.processTicketHistory(ticketPayload);
+  const result = await this.processTicketHistoryView(ticketPayload);
   console.log(result, "tt")
   return {
     data: result.data,
@@ -1044,7 +1044,7 @@ async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], m
 
 
 
-async processTicketHistory(ticketPayload: any) {
+async processTicketHistoryView(ticketPayload: any) {
   const {
     SPFROMDATE,
     SPTODATE,
@@ -1164,8 +1164,6 @@ async processTicketHistory(ticketPayload: any) {
  {
     $project: {
       SupportTicketID: 1,
-     
-    
       ApplicationNo:1,
       InsurancePolicyNo:1,
       TicketStatusID:1,
@@ -1182,8 +1180,7 @@ async processTicketHistory(ticketPayload: any) {
       RequestYear:1,
       ApplicationCropName:1,
       Relation:1,
-      RelativeName:1,
-            
+      RelativeName:1, 
       PolicyPremium:1,
       PolicyArea:1,
       PolicyType:1,
@@ -1191,7 +1188,7 @@ async processTicketHistory(ticketPayload: any) {
       LandDivisionNumber:1,
       IsSos:1,
       PlotStateName:1,
-            PlotDistrictName:1,
+     PlotDistrictName:1,
       PlotVillageName:1,
       ApplicationSource:1,
       CropShare:1,
@@ -1202,9 +1199,7 @@ async processTicketHistory(ticketPayload: any) {
       CreatedBY:1,
       CreatedAt:"$InsertDateTime",
       Sos:1,
-      // InsuranceMasterName:1,
       NCIPDocketNo:"$TicketNCIPDocketNo",
-      
       TicketDescription:1,
       CallingUniqueID:1,
       TicketDate: {
@@ -1231,7 +1226,6 @@ async processTicketHistory(ticketPayload: any) {
     { $skip: (page - 1) * limit },
     { $limit: limit },
   ];
-console.log(JSON.stringify(pipeline))
   let results = await db.collection('SLA_KRPH_SupportTickets_Records')
     .aggregate(pipeline, { allowDiskUse: true })
     .toArray();
