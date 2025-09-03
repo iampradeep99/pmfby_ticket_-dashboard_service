@@ -1301,7 +1301,7 @@ async processTicketHistoryView(ticketPayload: any) {
   // console.log(JSON.stringify(responseInfo))
 
   const item = (responseInfo.data as any)?.user?.[0];
-
+  console.log(item, "test");
   if (!item) return { rcode: 0, rmessage: 'User details not found.' };
 
   const userDetail = {
@@ -1380,18 +1380,24 @@ async processTicketHistoryView(ticketPayload: any) {
 
 
   // STATE FILTER
-  if (SPStateID && SPStateID !== '#ALL') {
-    const requestedStateIDs = SPStateID.split(',').map(id => id.trim());
-    const validStateIDs = requestedStateIDs.filter(id => StateMasterID.includes(id));
+if (SPStateID && SPStateID !== '#ALL') {
+  const requestedStateIDs = SPStateID
+    .split(',')
+    .map(id => Number(id.trim())); // convert to number
 
-    if (validStateIDs.length === 0) {
-      return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
-    }
+  const validStateIDs = requestedStateIDs.filter(id =>
+    StateMasterID.map(Number).includes(id) // compare as numbers
+  );
 
-    match.FilterStateID = { $in: validStateIDs };
-  } else if (StateMasterID?.length && LocationTypeID !== 2) {
-    match.FilterStateID = { $in: StateMasterID };
+  if (validStateIDs.length === 0) {
+    return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
   }
+
+  match.FilterStateID = { $in: validStateIDs };
+} else if (StateMasterID?.length && LocationTypeID !== 2) {
+  match.FilterStateID = { $in: StateMasterID.map(Number) }; // ensure integers
+}
+
 
   // DATE FILTER
   if (SPFROMDATE || SPTODATE) {
@@ -2014,9 +2020,9 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
   const requestedInsuranceIDs = SPInsuranceCompanyID
     .split(',')
-    .map(id => Number(id.trim())); // convert to integer
+    .map(id => Number(id.trim()));
 
-  const allowedInsuranceIDs = InsuranceCompanyID.map(Number); // from user profile (ensure integers)
+  const allowedInsuranceIDs = InsuranceCompanyID.map(Number); 
 
   const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
     allowedInsuranceIDs.includes(id)
@@ -2028,13 +2034,11 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
 
   match.InsuranceCompanyID = { $in: validInsuranceIDs };
 } else {
-  // If #ALL, limit to allowed insurance companies
   if (InsuranceCompanyID?.length) {
-    match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }; // force integers
+    match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }; 
   }
 }
 
- // STATE FILTER
   if (SPStateID && SPStateID !== '#ALL') {
     const requestedStateIDs = SPStateID.split(',').map(id => id.trim());
     const validStateIDs = requestedStateIDs.filter(id => StateMasterID.includes(id));
