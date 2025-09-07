@@ -39,9 +39,13 @@ export class TicketDashboardService {
         };
     }
 
-async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
-  const cacheKey = 'ticket-stats';
+/* async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
 
+
+  console.log("entering in this process");
+  
+  const cacheKey = 'ticket-stats';
+  this.AddIndex(this.db)
   try {
     const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
     if (cachedData) {
@@ -111,11 +115,731 @@ async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string
       message: { msg: 'Failed to fetch ticket data', code: 0 },
     };
   }
+} */
+
+
+/*   async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+  console.log("🚀 Entering fetchTickets process");
+
+  const cacheKey = 'ticket-stats';
+  this.AddIndex(this.db); // Ensure indexes are created
+
+  try {
+    // Check Redis cache
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
+    if (cachedData) {
+      return {
+        data: cachedData,
+        message: { msg: '✅ Data fetched from cache', code: 1 },
+      };
+    }
+
+    // Optimized aggregation pipeline
+    const pipeline = [
+      {
+        $match: {
+          TicketHeaderID: { $in: [1, 2, 4] }, // Pre-filter for better performance
+        },
+      },
+      {
+        $facet: {
+          Grievance: [
+            { $match: { TicketHeaderID: 1 } },
+            { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+            { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+          ],
+          Information: [
+            { $match: { TicketHeaderID: 2 } },
+            {
+              $group: {
+                _id: {
+                  status: "$TicketStatus",
+                  head: "$TicketHeadName",
+                  code: "$BMCGCode",
+                },
+                Total: { $sum: 1 },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                TicketStatus: {
+                  $cond: [
+                    { $eq: ["$_id.code", 109025] },
+                    { $concat: ["$_id.status", " (", "$_id.head", ")"] },
+                    "$_id.status",
+                  ],
+                },
+                Total: 1,
+              },
+            },
+          ],
+          CropLoss: [
+            { $match: { TicketHeaderID: 4 } },
+            { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+            { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+          ],
+        },
+      },
+    ];
+
+    // Use allowDiskUse to prevent memory errors with large data
+    const result = await this.ticketDbCollection
+      .aggregate(pipeline, { allowDiskUse: true })
+      .toArray();
+
+    const response = result[0];
+
+    // Cache the result
+    await this.redisWrapper.setRedisCache(cacheKey, response, 3600); // cache for 1 hour
+
+    return {
+      data: response,
+      message: { msg: '✅ Data fetched successfully', code: 1 },
+    };
+  } catch (error) {
+    console.error('❌ Error in fetchTickets:', error);
+
+    return {
+      data: null,
+      message: { msg: '❌ Failed to fetch ticket data', code: 0 },
+    };
+  }
+} */
+
+
+
+async createOptimizedIndex(db: any): Promise<void> {
+  try {
+    const collection = db.collection('SLA_KRPH_SupportTickets_Records');
+
+    // Get existing indexes
+    const indexes = await collection.indexes();
+
+    // Drop old index if it exists
+    if (indexes.some(idx => idx.name === 'TicketQuery_Compound_Index')) {
+      await collection.dropIndex('TicketQuery_Compound_Index');
+      console.log('✅ Dropped existing index: TicketQuery_Compound_Index');
+    }
+
+    // Create new indexes
+    await collection.createIndex(
+      {
+        TicketHeaderID: 1,
+        InsertDateTime: 1,
+        InsuranceCompanyID: 1,
+        FilterStateID: 1,
+        FilterDistrictRequestorID: 1,
+      },
+      {
+        name: 'MainFilterIndex',
+        background: true,
+      }
+    );
+
+    await collection.createIndex(
+      {
+        TicketStatus: 1,
+        TicketHeadName: 1,
+        BMCGCode: 1,
+      },
+      {
+        name: 'AggregationFieldsIndex',
+        background: true,
+      }
+    );
+
+    console.log("✅ Indexes created successfully: MainFilterIndex, AggregationFieldsIndex");
+  } catch (error) {
+    console.error("❌ Failed to create indexes:", error);
+  }
+}
+
+  
+//   async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+//   console.log("🚀 Entering fetchTickets process");
+
+//   const cacheKey = 'ticket-stats';
+//   // this.AddIndex(this.db); // Ensure indexes are created
+
+//   this.createOptimizedIndex(this.db)
+
+//   try {
+//     // 🧠 Step 1: Check Redis cache
+//     const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
+//     if (cachedData) {
+//       return {
+//         data: cachedData,
+//         message: { msg: '✅ Data fetched from cache', code: 1 },
+//       };
+//     }
+
+//     // 📅 Step 2: Calculate date range (yesterday to 3 months ago)
+//     const now = new Date();
+//     const endDate = new Date(now);
+//     endDate.setDate(endDate.getDate() - 1); // yesterday
+
+//     const startDate = new Date(now);
+//     startDate.setMonth(startDate.getMonth() - 3);
+//     startDate.setDate(startDate.getDate() - 1); // also exclude today
+
+//     // 🔍 Step 3: Aggregation pipeline
+//     const pipeline = [
+//       {
+//         $match: {
+//           TicketHeaderID: { $in: [1, 2, 4] },
+//           InsertDateTime: {
+//             $gte: startDate,
+//             $lte: endDate
+//           }
+//         },
+//       },
+//       {
+//         $facet: {
+//           Grievance: [
+//             { $match: { TicketHeaderID: 1 } },
+//             { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+//             { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+//           ],
+//           Information: [
+//             { $match: { TicketHeaderID: 2 } },
+//             {
+//               $group: {
+//                 _id: {
+//                   status: "$TicketStatus",
+//                   head: "$TicketHeadName",
+//                   code: "$BMCGCode",
+//                 },
+//                 Total: { $sum: 1 },
+//               },
+//             },
+//             {
+//               $project: {
+//                 _id: 0,
+//                 TicketStatus: {
+//                   $cond: [
+//                     { $eq: ["$_id.code", 109025] },
+//                     { $concat: ["$_id.status", " (", "$_id.head", ")"] },
+//                     "$_id.status",
+//                   ],
+//                 },
+//                 Total: 1,
+//               },
+//             },
+//           ],
+//           CropLoss: [
+//             { $match: { TicketHeaderID: 4 } },
+//             { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+//             { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+//           ],
+//         },
+//       },
+//     ];
+
+//     // 🚀 Step 4: Run aggregation with allowDiskUse for large datasets
+//     const result = await this.ticketDbCollection
+//       .aggregate(pipeline, { allowDiskUse: true })
+//       .toArray();
+
+//     const response = result[0];
+
+//     // 🧊 Step 5: Cache the result in Redis
+//     await this.redisWrapper.setRedisCache(cacheKey, response, 3600); // 1 hour
+
+//     return {
+//       data: response,
+//       message: { msg: '✅ Data fetched successfully', code: 1 },
+//     };
+//   } catch (error) {
+//     console.error('❌ Error in fetchTickets:', error);
+
+//     return {
+//       data: null,
+//       message: { msg: '❌ Failed to fetch ticket data', code: 0 },
+//     };
+//   }
+// }
+// async createOptimizedIndex(db: any) {
+//   await db.collection('SLA_KRPH_SupportTickets_Records').createIndex(
+//     { InsertDateTime: 1, TicketStatus: 1, TicketHeadName: 1, BMCGCode: 1 },
+//     { partialFilterExpression: { TicketHeaderID: 1 } }
+//   );
+//   await db.collection('SLA_KRPH_SupportTickets_Records').createIndex(
+//     { InsertDateTime: 1, TicketStatus: 1, TicketHeadName: 1, BMCGCode: 1 },
+//     { partialFilterExpression: { TicketHeaderID: 2 } }
+//   );
+//   await db.collection('SLA_KRPH_SupportTickets_Records').createIndex(
+//     { InsertDateTime: 1, TicketStatus: 1, TicketHeadName: 1, BMCGCode: 1 },
+//     { partialFilterExpression: { TicketHeaderID: 4 } }
+//   );
+// }
+
+/* async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+  console.log("🚀 Entering fetchTickets process");
+
+   const Delta = await this.getSupportTicketUserDetail(ticketInfo?.userID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+
+  const item = (responseInfo.data as any)?.user?.[0];
+ const userDetail = {
+    InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+    StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+    BRHeadTypeID: item.BRHeadTypeID,
+    LocationTypeID: item.LocationTypeID,
+  };
+  return;
+
+  try {
+    const fromDate = new Date(`${ticketInfo.fromDate}T00:00:00.000Z`);
+    const toDate = new Date(`${ticketInfo.toDate}T23:59:59.999Z`);
+
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return {
+        data: null,
+        message: { msg: "❌ Invalid date format", code: 0 },
+      };
+    }
+
+    const cacheKey = `ticket-stats-${ticketInfo.fromDate}-to-${ticketInfo.toDate}`;
+
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
+    if (cachedData) {
+      console.log('✅ Redis cache hit:', cacheKey);
+      return {
+        data: cachedData,
+        message: { msg: '✅ Data fetched from cache', code: 1 },
+      };
+    }
+
+    const pipelines = {
+      Grievance: [
+        { $match: { TicketHeaderID: 1, InsertDateTime: { $gte: fromDate, $lte: toDate } } },
+        { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+        { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+      ],
+      Information: [
+        { $match: { TicketHeaderID: 2, InsertDateTime: { $gte: fromDate, $lte: toDate } } },
+        {
+          $group: {
+            _id: { status: "$TicketStatus", head: "$TicketHeadName", code: "$BMCGCode" },
+            Total: { $sum: 1 }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            TicketStatus: {
+              $cond: [
+                { $eq: ["$_id.code", 109025] },
+                { $concat: ["$_id.status", " (", "$_id.head", ")"] },
+                "$_id.status"
+              ]
+            },
+            Total: 1
+          }
+        }
+      ],
+      CropLoss: [
+        { $match: { TicketHeaderID: 4, InsertDateTime: { $gte: fromDate, $lte: toDate } } },
+        { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+        { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+      ]
+    };
+
+    const [grievance, information, cropLoss] = await Promise.all([
+      this.ticketDbCollection.aggregate(pipelines.Grievance, { allowDiskUse: true }).toArray(),
+      this.ticketDbCollection.aggregate(pipelines.Information, { allowDiskUse: true }).toArray(),
+      this.ticketDbCollection.aggregate(pipelines.CropLoss, { allowDiskUse: true }).toArray(),
+    ]);
+
+    const response = { Grievance: grievance, Information: information, CropLoss: cropLoss };
+
+    await this.redisWrapper.setRedisCache(cacheKey, response, 3600);
+
+    return {
+      data: response,
+      message: { msg: '✅ Data fetched successfully', code: 1 },
+    };
+  } catch (error) {
+    console.error('❌ Error in fetchTickets:', error);
+    return {
+      data: null,
+      message: { msg: '❌ Failed to fetch ticket data', code: 0 },
+    };
+  }
+} */
+
+
+
+  async fetchTicketsdddd(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+  console.log("🚀 Entering fetchTickets process");
+
+
+  // this.createOptimizedIndex(this.db)
+
+  try {
+    const Delta = await this.getSupportTicketUserDetail(ticketInfo?.userID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+      DistrictIDs: item.DistrictIDs || []
+    };
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID, DistrictIDs } = userDetail;
+
+    const fromDate = new Date(`${ticketInfo.fromDate}T00:00:00.000Z`);
+    const toDate = new Date(`${ticketInfo.toDate}T23:59:59.999Z`);
+
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return {
+        data: null,
+        message: { msg: "❌ Invalid date format", code: 0 },
+      };
+    }
+
+    const cacheKey = `ticket-stats-${ticketInfo.fromDate}-to-${ticketInfo.toDate}-user-${ticketInfo.userID}`;
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
+    if (cachedData) {
+      console.log('✅ Redis cache hit:', cacheKey);
+      return {
+        data: cachedData,
+        message: { msg: '✅ Data fetched from cache', code: 1 },
+      };
+    }
+
+    const match: any = {};
+
+    if (InsuranceCompanyID?.length) {
+      match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
+
+    if (LocationTypeID === 1 && StateMasterID?.length) {
+      match.FilterStateID = { $in: StateMasterID.map(Number) };
+    } else if (LocationTypeID === 2 && DistrictIDs?.length) {
+      match.FilterDistrictRequestorID = { $in: DistrictIDs.map(Number) };
+    }
+
+    match.InsertDateTime = { $gte: fromDate, $lte: toDate };
+    
+    const pipelines = {
+      Grievance: [
+        { $match: { ...match, TicketHeaderID: 1 } },
+        { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+        { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+      ],
+      Information: [
+        { $match: { ...match, TicketHeaderID: 2 } },
+        {
+          $group: {
+            _id: { status: "$TicketStatus", head: "$TicketHeadName", code: "$BMCGCode" },
+            Total: { $sum: 1 }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            TicketStatus: {
+              $cond: [
+                { $eq: ["$_id.code", 109025] },
+                { $concat: ["$_id.status", " (", "$_id.head", ")"] },
+                "$_id.status"
+              ]
+            },
+            Total: 1
+          }
+        }
+      ],
+      CropLoss: [
+        { $match: { ...match, TicketHeaderID: 4 } },
+        { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+        { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } },
+      ]
+    };
+
+  
+
+    const [grievance, information, cropLoss] = await Promise.all([
+      this.ticketDbCollection.aggregate(pipelines.Grievance, { allowDiskUse: true }).toArray(),
+      this.ticketDbCollection.aggregate(pipelines.Information, { allowDiskUse: true }).toArray(),
+      this.ticketDbCollection.aggregate(pipelines.CropLoss, { allowDiskUse: true }).toArray(),
+    ]);
+
+    const response = { Grievance: grievance, Information: information, CropLoss: cropLoss };
+    await this.redisWrapper.setRedisCache(cacheKey, response, 3600);
+
+    return {
+      data: response,
+      message: { msg: '✅ Data fetched successfully', code: 1 },
+    };
+
+  } catch (error) {
+    console.error('❌ Error in fetchTickets:', error);
+    return {
+      data: null,
+      message: { msg: '❌ Failed to fetch ticket data', code: 0 },
+    };
+  }
 }
 
 
 
-  
+async fetchTicketsLastUpdated(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+  console.log("🚀 Entering fetchTickets process");
+
+  try {
+    // Step 1: Fetch user detail
+    const Delta = await this.getSupportTicketUserDetail(ticketInfo?.userID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+
+    // Step 2: Extract filter data
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+      DistrictIDs: item.DistrictIDs || []
+    };
+
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID, DistrictIDs } = userDetail;
+
+    // Step 3: Validate dates
+    const fromDate = new Date(`${ticketInfo.fromDate}T00:00:00.000Z`);
+    const toDate = new Date(`${ticketInfo.toDate}T23:59:59.999Z`);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return {
+        data: null,
+        message: { msg: "❌ Invalid date format", code: 0 }
+      };
+    }
+
+    // Step 4: Check cache
+    const cacheKey = `ticket-stats-${ticketInfo.fromDate}-to-${ticketInfo.toDate}-user-${ticketInfo.userID}`;
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
+    if (cachedData) {
+      console.log('✅ Redis cache hit:', cacheKey);
+      return {
+        data: cachedData,
+        message: { msg: '✅ Data fetched from cache', code: 1 }
+      };
+    }
+
+    // Step 5: Build match filter
+    const match: any = {
+      InsertDateTime: { $gte: fromDate, $lte: toDate }
+    };
+
+    if (InsuranceCompanyID?.length) {
+      match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
+
+    if (LocationTypeID === 1 && StateMasterID?.length) {
+      match.FilterStateID = { $in: StateMasterID.map(Number) };
+    } else if (LocationTypeID === 2 && DistrictIDs?.length) {
+      match.FilterDistrictRequestorID = { $in: DistrictIDs.map(Number) };
+    }
+
+    // Step 6: Define pipelines separately
+
+    const grievancePipeline = [
+      { $match: { ...match, TicketHeaderID: 1 } },
+      { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+      { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } }
+    ];
+
+    const informationPipeline = [
+      { $match: { ...match, TicketHeaderID: 2 } },
+      {
+        $group: {
+          _id: {
+            status: "$TicketStatus",
+            head: "$TicketHeadName",
+            code: "$BMCGCode"
+          },
+          Total: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          TicketStatus: {
+            $cond: [
+              { $eq: ["$_id.code", 109025] },
+              { $concat: ["$_id.status", " (", "$_id.head", ")"] },
+              "$_id.status"
+            ]
+          },
+          Total: 1
+        }
+      }
+    ];
+
+    const cropLossPipeline = [
+      { $match: { ...match, TicketHeaderID: 4 } },
+      { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+      { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } }
+    ];
+
+    // Step 7: Run all aggregations concurrently
+    const [grievance, information, cropLoss] = await Promise.all([
+      this.ticketDbCollection.aggregate(grievancePipeline, { allowDiskUse: true }).toArray(),
+      this.ticketDbCollection.aggregate(informationPipeline, { allowDiskUse: true }).toArray(),
+      this.ticketDbCollection.aggregate(cropLossPipeline, { allowDiskUse: true }).toArray()
+    ]);
+
+    // Step 8: Save to cache and return response
+    const response = { Grievance: grievance, Information: information, CropLoss: cropLoss };
+    await this.redisWrapper.setRedisCache(cacheKey, response, 3600);
+
+    return {
+      data: response,
+      message: { msg: '✅ Data fetched successfully', code: 1 }
+    };
+
+  } catch (error) {
+    console.error('❌ Error in fetchTickets:', error);
+    return {
+      data: null,
+      message: { msg: '❌ Failed to fetch ticket data', code: 0 }
+    };
+  }
+}
+
+async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+  console.log("🚀 Entering fetchTickets process");
+  try {
+
+    console.log(ticketInfo?.userID)
+    const Delta = await this.getSupportTicketUserDetail(ticketInfo?.userID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+console.log(JSON.stringify(item))
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+      DistrictIDs: item.DistrictIDs || []
+    };
+    console.log(userDetail, "userDetail")
+
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID, DistrictIDs } = userDetail;
+
+    const fromDate = new Date(`${ticketInfo.fromDate}T00:00:00.000Z`);
+    const toDate = new Date(`${ticketInfo.toDate}T23:59:59.999Z`);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return {
+        data: null,
+        message: { msg: "❌ Invalid date format", code: 0 }
+      };
+    }
+
+    // Step 4: Check cache
+    const cacheKey = `ticket-stats-${ticketInfo.fromDate}-to-${ticketInfo.toDate}-user-${ticketInfo.userID}`;
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
+    if (cachedData) {
+      console.log('✅ Redis cache hit:', cacheKey);
+      return {
+        data: cachedData,
+        message: { msg: '✅ Data fetched from cache', code: 1 }
+      };
+    }
+
+    // Step 5: Build match filter
+    const match: any = {
+      InsertDateTime: { $gte: fromDate, $lte: toDate }
+    };
+
+    if (InsuranceCompanyID?.length) {
+      match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
+
+    if (LocationTypeID === 1 && StateMasterID?.length) {
+      match.FilterStateID = { $in: StateMasterID.map(Number) };
+    } else if (LocationTypeID === 2 && DistrictIDs?.length) {
+      match.FilterDistrictRequestorID = { $in: DistrictIDs.map(Number) };
+    }
+
+    // Step 6: Define pipelines separately
+    const grievancePipeline = [
+      { $match: { ...match, TicketHeaderID: 1 } },
+      { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+      { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } }
+    ];
+
+    const informationPipeline = [
+      { $match: { ...match, TicketHeaderID: 2 } },
+      {
+        $group: {
+          _id: {
+            status: "$TicketStatus",
+            head: "$TicketHeadName",
+            code: "$BMCGCode"
+          },
+          Total: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          TicketStatus: {
+            $cond: [
+              { $eq: ["$_id.code", 109025] },
+              { $concat: ["$_id.status", " (", "$_id.head", ")"] },
+              "$_id.status"
+            ]
+          },
+          Total: 1
+        }
+      }
+    ];
+
+    const cropLossPipeline = [
+      { $match: { ...match, TicketHeaderID: 4 } },
+      { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
+      { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } }
+    ];
+
+    // Step 7: Run all aggregations concurrently
+    const [grievance, information, cropLoss] = await Promise.all([
+      this.ticketDbCollection.aggregate(grievancePipeline, { allowDiskUse: true }).toArray(),
+      this.ticketDbCollection.aggregate(informationPipeline, { allowDiskUse: true }).toArray(),
+      this.ticketDbCollection.aggregate(cropLossPipeline, { allowDiskUse: true }).toArray()
+    ]);
+
+    // Step 8: Add total rows inside each array
+    const addTotalRow = (arr: any[]) => {
+      const total = arr.reduce((sum, item) => sum + item.Total, 0);
+      return [...arr, { TicketStatus: "Total", Total: total }];
+    };
+
+    const response = {
+      Grievance: addTotalRow(grievance),
+      Information: addTotalRow(information),
+      CropLoss: addTotalRow(cropLoss)
+    };
+
+    // Step 9: Save to cache and return response
+    await this.redisWrapper.setRedisCache(cacheKey, response, 3600);
+
+    return {
+      data: response,
+      message: { msg: '✅ Data fetched successfully', code: 1 }
+    };
+
+  } catch (error) {
+    console.error('❌ Error in fetchTickets:', error);
+    return {
+      data: null,
+      message: { msg: '❌ Failed to fetch ticket data', code: 0 }
+    };
+  }
+}
+
 
 
   async getSupportTicketUserDetail(userID)

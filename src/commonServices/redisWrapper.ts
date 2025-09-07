@@ -74,7 +74,6 @@ export class RedisWrapper {
 //   private redisClient: NodeCache;
 
 //   constructor() {
-//     // Initialize NodeCache synchronously with default TTL 1 hour
 //     this.redisClient = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
 //   }
 
