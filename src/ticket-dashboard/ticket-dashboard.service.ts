@@ -213,10 +213,8 @@ async createOptimizedIndex(db: any): Promise<void> {
   try {
     const collection = db.collection('SLA_KRPH_SupportTickets_Records');
 
-    // Get existing indexes
     const indexes = await collection.indexes();
 
-    // Drop old index if it exists
     if (indexes.some(idx => idx.name === 'TicketQuery_Compound_Index')) {
       await collection.dropIndex('TicketQuery_Compound_Index');
       console.log('✅ Dropped existing index: TicketQuery_Compound_Index');
@@ -710,6 +708,7 @@ async fetchTicketsLastUpdated(ticketInfo: any): Promise<{ data: any; message: { 
 }
 
 async fetchTickets(ticketInfo: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+  
   console.log("🚀 Entering fetchTickets process");
   try {
 
@@ -729,8 +728,12 @@ console.log(JSON.stringify(item))
 
     const { InsuranceCompanyID, StateMasterID, LocationTypeID, DistrictIDs } = userDetail;
 
-    const fromDate = new Date(`${ticketInfo.fromDate}T00:00:00.000Z`);
-    const toDate = new Date(`${ticketInfo.toDate}T23:59:59.999Z`);
+        const fromDate = new Date(`${ticketInfo.fromDate}T00:00:00.000Z`);
+
+        const toDate = new Date(`${ticketInfo.toDate}T23:59:59.999Z`);
+
+       
+           toDate.setDate(toDate.getDate() - 1);
     if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
       return {
         data: null,
@@ -738,7 +741,6 @@ console.log(JSON.stringify(item))
       };
     }
 
-    // Step 4: Check cache
     const cacheKey = `ticket-stats-${ticketInfo.fromDate}-to-${ticketInfo.toDate}-user-${ticketInfo.userID}`;
     const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
     if (cachedData) {
@@ -749,7 +751,6 @@ console.log(JSON.stringify(item))
       };
     }
 
-    // Step 5: Build match filter
     const match: any = {
       InsertDateTime: { $gte: fromDate, $lte: toDate }
     };
@@ -764,7 +765,6 @@ console.log(JSON.stringify(item))
       match.FilterDistrictRequestorID = { $in: DistrictIDs.map(Number) };
     }
 
-    // Step 6: Define pipelines separately
     const grievancePipeline = [
       { $match: { ...match, TicketHeaderID: 1 } },
       { $group: { _id: "$TicketStatus", Total: { $sum: 1 } } },
@@ -804,14 +804,12 @@ console.log(JSON.stringify(item))
       { $project: { _id: 0, TicketStatus: "$_id", Total: 1 } }
     ];
 
-    // Step 7: Run all aggregations concurrently
     const [grievance, information, cropLoss] = await Promise.all([
       this.ticketDbCollection.aggregate(grievancePipeline, { allowDiskUse: true }).toArray(),
       this.ticketDbCollection.aggregate(informationPipeline, { allowDiskUse: true }).toArray(),
       this.ticketDbCollection.aggregate(cropLossPipeline, { allowDiskUse: true }).toArray()
     ]);
 
-    // Step 8: Add total rows inside each array
     const addTotalRow = (arr: any[]) => {
       const total = arr.reduce((sum, item) => sum + item.Total, 0);
       return [...arr, { TicketStatus: "Total", Total: total }];
@@ -823,7 +821,6 @@ console.log(JSON.stringify(item))
       CropLoss: addTotalRow(cropLoss)
     };
 
-    // Step 9: Save to cache and return response
     await this.redisWrapper.setRedisCache(cacheKey, response, 3600);
 
     return {
@@ -2022,10 +2019,8 @@ async processTicketHistoryView(ticketPayload: any) {
 
   const Delta = await this.getSupportTicketUserDetail(SPUserID);
   const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
-  // console.log(JSON.stringify(responseInfo))
 
   const item = (responseInfo.data as any)?.user?.[0];
-  console.log(item, "test");
   if (!item) return { rcode: 0, rmessage: 'User details not found.' };
 
   const userDetail = {
@@ -2051,12 +2046,10 @@ async processTicketHistoryView(ticketPayload: any) {
     locationFilter = {};
   }
 
-  // ✅ SECURE FILTERING
   const match: any = {
     ...locationFilter,
   };
 
-  // TicketHeaderID filter
   if (SPTicketHeaderID && SPTicketHeaderID !== 0) {
     match.TicketHeaderID = SPTicketHeaderID;
   }
@@ -3545,6 +3538,59 @@ await db.collection('csc_agent_master').createIndex({
 
 }
 
+
+
+async downloadHistory(payload){
+    console.log(payload)
+  let collectionName = 'support_ticket_download_logs'
+  let pipeline = [
+  {
+    $match: {
+      
+    }
+  },
+  {
+    $lookup: {
+      from: "bm_app_access",
+      localField: "userId",
+      foreignField: "AppAccessID",
+      as: "data"
+    }
+  },
+  {
+    $unwind: {
+      path: "$data",                          
+      preserveNullAndEmptyArrays: true       
+    }
+  }, 
+  {
+    $project:{
+      ReqestorUserID : "$userId",
+      RequestedParamsTicketHeaderID : "$ticketHeaderId",
+      RequestedParamsInsuranceCompany:"$insuranceCompanyId",
+      RequestedParamsStateID : "$stateId",
+      RequestedParamsFromDate : "$fromDate",
+      RequestedParamsToDate : "$toDate",
+      ZippedFileName :"$zipFileName",
+      DownloadURL :"$downloadUrl",
+      RequestCreationDate :"$createdAt",
+      RequestorUserName : "$data.AppAccessUserName",
+      RequestorRole :"$data.BRHeadTypeID"
+      
+    }
+  }, {
+    $sort:{RequestCreationDate:-1}
+  }
+]
+
+    let result = await this.db.collection(collectionName).aggregate(pipeline).toArray()
+
+
+     return {
+      data: result,
+      message: { msg: '✅ Data fetched successfully', code: 1 }
+    };
+}
 
 
 }
