@@ -3546,7 +3546,7 @@ async downloadHistory(payload){
   let pipeline = [
   {
     $match: {
-      
+        userId:payload.userID
     }
   },
   {
