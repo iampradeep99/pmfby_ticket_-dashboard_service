@@ -3141,13 +3141,13 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     "District": "$DistrictMasterName",
     "Sub District": "$SubDistrictName",
     "Type": "$TicketHeadName",
-    "Category": "$TicketTypeName",                          // SupportTicketTypeName
+    "Category": "$TicketTypeName",                         
     "Sub Category": "$TicketCategoryName",
     "Season": "$CropSeasonName",
     "Year": "$RequestYear",
-    "Insurance Company": "$InsuranceCompany",               // InsuranceMasterName
-    "Application No": "$ApplicationNo",
-    "Policy No": "$InsurancePolicyNo",
+    "Insurance Company": "$InsuranceCompany",               
+    "Application No": { $toString: "$ApplicationNo" },
+    "Policy No": { $toString: "$InsurancePolicyNo" },
     "Caller Mobile No": "$CallerContactNumber",
     "Farmer Name": "$RequestorName",
     "Mobile No": "$RequestorMobileNo",
