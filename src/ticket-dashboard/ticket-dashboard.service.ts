@@ -3148,7 +3148,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     "Insurance Company": "$InsuranceCompany",               // InsuranceMasterName
     "Application No": "$ApplicationNo",
     "Policy No": "$InsurancePolicyNo",
-    "Caller Mobile No.": "$CallerContactNumber",
+    "Caller Mobile No": "$CallerContactNumber",
     "Farmer Name": "$RequestorName",
     "Mobile No": "$RequestorMobileNo",
     "Relation": "$Relation",
