@@ -57,13 +57,15 @@ export class TicketDashboardController {
         rmessage: 'User Email is required',
       };
     }
-
     await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
     let rmessage = `Your download request has been received. You will receive an email at ${userEmail} with the support ticket data shortly.`
     return jsonResponseHandler([], rmessage, req, res, () => {});
 
     
   }
+  
+
+ 
 
 @Post('getSupportTicketHistoryReportView')
 async fetchSupportTicketHistoryReportView(
@@ -107,6 +109,30 @@ async fetchSupportTicketHistoryReportView(
 
 
  
+@Post('getRequestDownloadHistory')
+async getDownloadHistory(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response,
+) {
+  try {
+    const { data: resultArray, message } = await this.dashboardService.downloadHistory(payload);
+
+    let gzippedData = null;
+    if (resultArray && resultArray.length > 0) {
+      const stringifiedData:any = resultArray;
+      console.log(stringifiedData)
+      gzippedData = await this.utilService.GZip(stringifiedData);
+    }
+
+    return jsonResponseHandler(gzippedData, message, req, res, () => {});
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+}
+
 
 
 
