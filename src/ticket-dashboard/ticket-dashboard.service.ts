@@ -2248,8 +2248,7 @@ if (SPStateID && SPStateID !== '#ALL') {
     { $limit: limit },
   ];
 
-  console.log(JSON.stringify(pipeline));
-  return
+  
   let results = await db.collection('SLA_KRPH_SupportTickets_Records')
     .aggregate(pipeline, { allowDiskUse: true })
     .toArray();
