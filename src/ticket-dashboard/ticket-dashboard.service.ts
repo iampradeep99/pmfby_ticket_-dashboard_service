@@ -3110,24 +3110,73 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
       { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
       { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
       { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+      // {
+      //   $project: {
+      //     SupportTicketID: 1, ApplicationNo: 1, InsurancePolicyNo: 1, TicketStatusID: 1, TicketStatus: 1,
+      //     CallerContactNumber: 1, RequestorName: 1, RequestorMobileNo: 1, StateMasterName: 1, DistrictMasterName: 1,
+      //     SubDistrictName: 1, TicketHeadName: 1, TicketCategoryName: 1, RequestSeason: 1, RequestYear: 1,
+      //     ApplicationCropName: 1, Relation: 1, RelativeName: 1, PolicyPremium: 1, PolicyArea: 1, PolicyType: 1,
+      //     LandSurveyNumber: 1, LandDivisionNumber: 1, IsSos: 1, PlotStateName: 1, PlotDistrictName: 1,
+      //     PlotVillageName: 1, ApplicationSource: 1, CropShare: 1, IFSCCode: 1, FarmerShare: 1, SowingDate: 1,
+      //     LossDate: 1, CreatedBY: 1, CreatedAt: "$InsertDateTime", Sos: 1, NCIPDocketNo:"$TicketNCIPDocketNo",
+      //     TicketDescription: 1, CallingUniqueID: 1,
+      //     TicketDate: { $dateToString: { format: "%Y-%m-%d %H:%M:%S", date: "$Created" } },
+      //     StatusDate: { $dateToString: { format: "%Y-%m-%d %H:%M:%S", date: "$StatusUpdateTime" } },
+      //     SupportTicketTypeName: "$TicketTypeName", SupportTicketNo: 1, InsuranceMasterName: "$InsuranceCompany",
+      //     ReOpenDate: "$TicketReOpenDate", CallingUserID: "$agentInfo.UserID", SchemeName: 1,
+      //   }
+      // }
+
       {
-        $project: {
-          SupportTicketID: 1, ApplicationNo: 1, InsurancePolicyNo: 1, TicketStatusID: 1, TicketStatus: 1,
-          CallerContactNumber: 1, RequestorName: 1, RequestorMobileNo: 1, StateMasterName: 1, DistrictMasterName: 1,
-          SubDistrictName: 1, TicketHeadName: 1, TicketCategoryName: 1, RequestSeason: 1, RequestYear: 1,
-          ApplicationCropName: 1, Relation: 1, RelativeName: 1, PolicyPremium: 1, PolicyArea: 1, PolicyType: 1,
-          LandSurveyNumber: 1, LandDivisionNumber: 1, IsSos: 1, PlotStateName: 1, PlotDistrictName: 1,
-          PlotVillageName: 1, ApplicationSource: 1, CropShare: 1, IFSCCode: 1, FarmerShare: 1, SowingDate: 1,
-          LossDate: 1, CreatedBY: 1, CreatedAt: "$InsertDateTime", Sos: 1, NCIPDocketNo:"$TicketNCIPDocketNo",
-          TicketDescription: 1, CallingUniqueID: 1,
-          TicketDate: { $dateToString: { format: "%Y-%m-%d %H:%M:%S", date: "$Created" } },
-          StatusDate: { $dateToString: { format: "%Y-%m-%d %H:%M:%S", date: "$StatusUpdateTime" } },
-          SupportTicketTypeName: "$TicketTypeName", SupportTicketNo: 1, InsuranceMasterName: "$InsuranceCompany",
-          ReOpenDate: "$TicketReOpenDate", CallingUserID: "$agentInfo.UserID", SchemeName: 1,
-        }
-      }
+  $project: {
+    "Agent ID": "$agentInfo.UserID",                        // CallingUserID
+    "Calling ID": "$CallingUniqueID",
+    "NCIP Docket No": "$TicketNCIPDocketNo",
+    "Ticket No": "$SupportTicketNo",
+    "Creation Date": { $dateToString: { format: "%Y-%m-%d %H:%M:%S", date: "$Created" } },
+    "Re-Open Date": "$TicketReOpenDate",
+    "Ticket Status": "$TicketStatus",
+    "Status Date": { $dateToString: { format: "%Y-%m-%d %H:%M:%S", date: "$StatusUpdateTime" } },
+    "State": "$StateMasterName",
+    "District": "$DistrictMasterName",
+    "Sub District": "$SubDistrictName",
+    "Type": "$TicketHeadName",
+    "Category": "$TicketTypeName",                          // SupportTicketTypeName
+    "Sub Category": "$TicketCategoryName",
+    "Season": "$CropSeasonName",
+    "Year": "$RequestYear",
+    "Insurance Company": "$InsuranceCompany",               // InsuranceMasterName
+    "Application No": "$ApplicationNo",
+    "Policy No": "$InsurancePolicyNo",
+    "Caller Mobile No.": "$CallerContactNumber",
+    "Farmer Name": "$RequestorName",
+    "Mobile No": "$RequestorMobileNo",
+    "Relation": "$Relation",
+    "Relative Name": "$RelativeName",
+    "Policy Premium": "$PolicyPremium",
+    "Policy Area": "$PolicyArea",
+    "Policy Type": "$PolicyType",
+    "Land Survey Number": "$LandSurveyNumber",
+    "Land Division Number": "$LandDivisionNumber",
+    "Plot State": "$PlotStateName",
+    "Plot District": "$PlotDistrictName",
+    "Plot Village": "$PlotVillageName",
+    "Application Source": "$ApplicationSource",
+    "Crop Share": "$CropShare",
+    "IFSC Code": "$IFSCCode",
+    "Farmer Share": "$FarmerShare",
+    "Sowing Date": "$SowingDate",
+    "Created By": "$CreatedBY",
+    "Description": "$TicketDescription"
+  }
+}
+
     ];
 
+
+
+
+     
    
 
     const docs = await db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true }).toArray();
