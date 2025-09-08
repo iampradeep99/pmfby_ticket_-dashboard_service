@@ -3711,6 +3711,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     let hasMore = true;
 
     while (hasMore) {
+      console.log(CHUNK_SIZE, "CHUNK_SIZE")
       const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
 
       const pipeline: any[] = [
