@@ -3204,7 +3204,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   // --- Cache result ---
   await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
 
-  return responsePayload;
+  // return responsePayload;
 }
 
 
