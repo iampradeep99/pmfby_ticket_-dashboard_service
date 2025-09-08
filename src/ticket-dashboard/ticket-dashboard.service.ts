@@ -3697,7 +3697,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     { header: 'Description', key: 'TicketDescription', width: 50 },
   ];
 
-  const CHUNK_SIZE = 1000;
+  const CHUNK_SIZE = 10000;
 
   async function processDateWithChunking(currentDate: Date, endDate: Date) {
     if (currentDate > endDate) return;
