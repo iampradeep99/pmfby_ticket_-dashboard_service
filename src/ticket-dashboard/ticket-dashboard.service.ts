@@ -739,7 +739,7 @@ results.forEach(doc => {
   if (Array.isArray(doc.ticket_comment_journey)) {
     const journey = doc.ticket_comment_journey;
 
-    if (journey.length > 0) {
+    // if (journey.length > 0) {
       journey.forEach((commentObj, index) => {
         const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
 
@@ -750,11 +750,7 @@ results.forEach(doc => {
         doc[`Comment Date ${index + 1}`] = commentDate;
         doc[`Comment ${index + 1}`] = cleanComment;
       });
-    } else {
-      // Optional: Set default/null values if array is empty
-      doc['Comment Date 1'] = null;
-      doc['Comment 1'] = null;
-    }
+    // } 
 
     delete doc.ticket_comment_journey;
   }
