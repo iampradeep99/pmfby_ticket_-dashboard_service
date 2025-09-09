@@ -615,6 +615,7 @@ const pipeline: any[] = [
           },
         },
       },
+      ticket_comment_journey:1,
       ApplicationNo: 1,
       InsurancePolicyNo: 1,
       TicketStatusID: 1,
@@ -700,7 +701,8 @@ const pipeline: any[] = [
       "Mobile No":"$RequestorMobileNo",
       "Created By":"$CreatedBY",
       "Description":"$TicketDescription",
-      "TicketComments":"$TicketComments"
+      // "TicketComments":"$TicketComments",
+      "ticket_comment_journey":"$ticket_comment_journey"
     }
   },
 
@@ -714,15 +716,29 @@ const pipeline: any[] = [
     .toArray();
 
   results = Array.isArray(results) ? results : [results];
+  console.log(results[0].ticket_comment_journey)
 
-  results.forEach(doc => {
-  if (doc.TicketComments) {
-    for (const [key, value] of Object.entries(doc.TicketComments)) {
-      doc[key] = value;
-    }
-    delete doc.TicketComments;
+  
+results.forEach(doc => {
+  if (Array.isArray(doc.ticket_comment_journey)) {
+    doc.ticket_comment_journey.forEach((commentObj, index) => {
+      const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
+
+      // Clean the comment text by removing HTML tags
+      const rawComment = commentObj.ResolvedComment || '';
+      const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
+
+      doc[`Comment Date ${index + 1}`] = commentDate;
+      doc[`Comment ${index + 1}`] = cleanComment;
+    });
+
+    delete doc.ticket_comment_journey;
   }
 });
+
+
+
+
   const responsePayload = {
     data: results,
     pagination: {
@@ -1140,7 +1156,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Support Tickets');
 
-  worksheet.columns = [
+   worksheet.columns = [
     { header: 'Agent ID', key: 'AgentID', width: 20 },
     { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
     { header: 'NCIP Docket No', key: 'TicketNCIPDocketNo', width: 30 },
@@ -1180,8 +1196,9 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     { header: 'Sowing Date', key: 'SowingDate', width: 20 },
     { header: 'Created By', key: 'CreatedBY', width: 20 },
     { header: 'Description', key: 'TicketDescription', width: 50 },
-  ];
+  ]; 
 
+  
   const CHUNK_SIZE = 10000;
 
   async function processDateWithChunking(currentDate: Date, endDate: Date) {
@@ -1229,6 +1246,15 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
             as: 'agentInfo',
           }
         },
+        {
+    $lookup: {
+      from: 'ticket_comment_journey',
+      localField: 'SupportTicketNo',
+      foreignField: 'SupportTicketNo',
+      as: 'ticket_comment_journey',
+    },
+  },
+
         { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
         { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
         { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
@@ -1237,6 +1263,29 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
         {
           $project: {
             agentInfo: 1,
+             TicketComments: {
+        $arrayToObject: {
+          $map: {
+            input: '$ticket_comment_journey',
+            as: 'comment',
+            in: {
+              k: {
+                $concat: [
+                  'Comment (',
+                  {
+                    $dateToString: {
+                      format: '%Y-%m-%d',
+                      date: '$$comment.ResolvedDate',
+                    },
+                  },
+                  ')',
+                ],
+              },
+              v: '$$comment.ResolvedComment',
+            },
+          },
+        },
+      },
             CallingUniqueID: 1,
             TicketNCIPDocketNo: 1,
             SupportTicketNo: 1,
@@ -1276,6 +1325,52 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
             CreatedBY: 1,
             TicketDescription: 1
           }
+        }, 
+        {
+          $project: {
+  "Agent ID": "$AgentID",                    
+  "Calling ID": "$CallingUniqueID",
+  "NCIP Docket No": "$TicketNCIPDocketNo",
+  "Ticket No": "$SupportTicketNo",
+  "Creation Date":"$Created",
+  "Re-Open Date": "$TicketReOpenDate",
+  "Ticket Status": "$TicketStatus",
+  "Status Date":  "$StatusUpdateTime" ,
+  "State": "$StateMasterName",
+  "District": "$DistrictMasterName",
+  "Sub District": "$SubDistrictName",
+  "Type": "$TicketHeadName",
+  "Category": "$TicketTypeName",
+  "Sub Category": "$TicketCategoryName",
+  "Season": "$CropSeasonName",
+  "Year": "$RequestYear",
+  "Insurance Company": "$InsuranceCompany",
+  "Application No": "$ApplicationNo",
+  "Policy No": "$InsurancePolicyNo",
+  "Caller Mobile No": "$CallerContactNumber",
+  "Farmer Name": "$RequestorName",
+  "Mobile No": "$RequestorMobileNo",
+  "Relation": "$Relation",
+  "Relative Name": "$RelativeName",
+  "Policy Premium": "$PolicyPremium",
+  "Policy Area": "$PolicyArea",
+  "Policy Type": "$PolicyType",
+  "Land Survey Number": "$LandSurveyNumber",
+  "Land Division Number": "$LandDivisionNumber",
+  "Plot State": "$PlotStateName",
+  "Plot District": "$PlotDistrictName",
+  "Plot Village": "$PlotVillageName",
+  "Application Source": "$ApplicationSource",
+  "Crop Share": "$CropShare",
+  "IFSC Code": "$IFSCCode",
+  "Farmer Share": "$FarmerShare",
+  "Sowing Date": "$SowingDate",
+  "Created By": "$CreatedBY",
+  "Description": "$TicketDescription",
+  "TicketComments":"$TicketComments"
+}
+
+
         }
       ];
 
@@ -1283,10 +1378,21 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
         .aggregate(pipeline, { allowDiskUse: true })
         .toArray();
 
+         docs.forEach(doc => {
+  if (doc.TicketComments) {
+    for (const [key, value] of Object.entries(doc.TicketComments)) {
+      doc[key] = value;
+    }
+    delete doc.TicketComments;
+  }
+});
+
+        
       if (docs.length === 0) {
         hasMore = false;
       } else {
         docs.forEach(doc => {
+          
           worksheet.addRow({
             AgentID: doc.agentInfo?.UserID?.toString() || '',
             CallingUniqueID: doc.CallingUniqueID || '',
@@ -1328,7 +1434,11 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
             CreatedBY: doc.CreatedBY || '',
             TicketDescription: doc.TicketDescription || ''
           });
-        });
+        }); 
+
+        
+
+        
 
         skip += CHUNK_SIZE;
       }
@@ -1340,6 +1450,8 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   }
 
   await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
+
+  
 
   const excelFileName = `support_ticket_data_${Date.now()}.xlsx`;
   const excelFilePath = path.join(folderPath, excelFileName);
@@ -1399,6 +1511,27 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
 
   // return responsePayload;
 }
+
+
+ formatToDDMMYYYY(dateString) {
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
+  const year = date.getFullYear();
+
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+
+  return `${day}-${month}-${year} ${hours}:${minutes}`;
+}
+
+
+
 
 
 
