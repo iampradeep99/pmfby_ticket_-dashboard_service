@@ -723,20 +723,29 @@ const pipeline: any[] = [
   
 results.forEach(doc => {
   if (Array.isArray(doc.ticket_comment_journey)) {
-    doc.ticket_comment_journey.forEach((commentObj, index) => {
-      const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
+    const journey = doc.ticket_comment_journey;
 
-      // Clean the comment text by removing HTML tags
-      const rawComment = commentObj.ResolvedComment || '';
-      const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
+    if (journey.length > 0) {
+      journey.forEach((commentObj, index) => {
+        const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
 
-      doc[`Comment Date ${index + 1}`] = commentDate;
-      doc[`Comment ${index + 1}`] = cleanComment;
-    });
+        // Clean the comment text by removing HTML tags
+        const rawComment = commentObj.ResolvedComment || '';
+        const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
+
+        doc[`Comment Date ${index + 1}`] = commentDate;
+        doc[`Comment ${index + 1}`] = cleanComment;
+      });
+    } else {
+      // Optional: Set default/null values if array is empty
+      doc['Comment Date 1'] = null;
+      doc['Comment 1'] = null;
+    }
 
     delete doc.ticket_comment_journey;
   }
 });
+
 
 
 
