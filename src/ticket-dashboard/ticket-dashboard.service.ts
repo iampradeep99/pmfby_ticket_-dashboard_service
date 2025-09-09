@@ -590,33 +590,38 @@ const pipeline: any[] = [
   { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
   // { $unwind: { path: '$ticket_comment_journey', preserveNullAndEmptyArrays: true } },
 
+   {
+    $addFields: {
+      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
+    }
+  },
 
   {
     $project: {
       SupportTicketID: 1,
-      TicketComments: {
-        $arrayToObject: {
-          $map: {
-            input: '$ticket_comment_journey',
-            as: 'comment',
-            in: {
-              k: {
-                $concat: [
-                  'Comment (',
-                  {
-                    $dateToString: {
-                      format: '%Y-%m-%d',
-                      date: '$$comment.ResolvedDate',
-                    },
-                  },
-                  ')',
-                ],
-              },
-              v: '$$comment.ResolvedComment',
-            },
-          },
-        },
-      },
+      // TicketComments: {
+      //   $arrayToObject: {
+      //     $map: {
+      //       input: '$ticket_comment_journey',
+      //       as: 'comment',
+      //       in: {
+      //         k: {
+      //           $concat: [
+      //             'Comment (',
+      //             {
+      //               $dateToString: {
+      //                 format: '%Y-%m-%d',
+      //                 date: '$$comment.ResolvedDate',
+      //               },
+      //             },
+      //             ')',
+      //           ],
+      //         },
+      //         v: '$$comment.ResolvedComment',
+      //       },
+      //     },
+      //   },
+      // },
       ticket_comment_journey:1,
       ApplicationNo: 1,
       InsurancePolicyNo: 1,
@@ -712,10 +717,19 @@ const pipeline: any[] = [
   { $limit: limit },
 ];
 
+
  
   let results = await db.collection('SLA_KRPH_SupportTickets_Records')
     .aggregate(pipeline, { allowDiskUse: true })
     .toArray();
+    if(results.length === 0){
+        return {
+    rcode: 1,
+    rmessage: 'Success',
+    data: results,
+    pagination: null,
+  };
+    }
 
   results = Array.isArray(results) ? results : [results];
   console.log(results[0].ticket_comment_journey)
