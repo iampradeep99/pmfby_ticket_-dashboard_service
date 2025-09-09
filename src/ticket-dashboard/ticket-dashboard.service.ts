@@ -588,6 +588,8 @@ const pipeline: any[] = [
   { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
   { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
   { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+  { $unwind: { path: '$ticket_comment_journey', preserveNullAndEmptyArrays: true } },
+
 
   {
     $project: {
