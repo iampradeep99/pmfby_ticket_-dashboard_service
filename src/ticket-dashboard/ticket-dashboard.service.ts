@@ -1219,6 +1219,8 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     { header: 'Description', key: 'TicketDescription', width: 50 },
   ]; 
 
+   await this.insertOrUpdateDownloadLog(SPUserID,SPInsuranceCompanyID,SPStateID,SPTicketHeaderID,SPFROMDATE,SPTODATE,"","",this.db)
+
   
   const CHUNK_SIZE = 10000;
 
@@ -1514,6 +1516,7 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     downloadUrl: gcpDownloadUrl,
     createdAt: new Date(),
   });
+   await this.insertOrUpdateDownloadLog(SPUserID,SPInsuranceCompanyID,SPStateID,SPTicketHeaderID,SPFROMDATE,SPTODATE,zipFileName,gcpDownloadUrl,this.db)
 
   const responsePayload = {
     data: [], pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
@@ -1532,6 +1535,40 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
 
   // return responsePayload;
 }
+
+
+async insertOrUpdateDownloadLog(
+  userId,
+  insuranceCompanyId,
+  stateId,
+  ticketHeaderId,
+  fromDate,
+  toDate,
+  zipFileName,
+  downloadUrl, 
+  db
+) {
+  await db.collection('support_ticket_download_logs').updateOne(
+    {
+      userId,
+      insuranceCompanyId,
+      stateId,
+      ticketHeaderId,
+      fromDate,
+      toDate
+    },
+    {
+      $set: {
+        zipFileName,
+        downloadUrl,
+        createdAt: new Date()
+      }
+    },
+    { upsert: true } // Insert if not found, update if exists
+  );
+}
+
+
 
 
  formatToDDMMYYYY(dateString) {
