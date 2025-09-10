@@ -58,7 +58,7 @@ export class TicketDashboardController {
       };
     }
     await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
-    let rmessage = `Your download request has been received. You will receive an email at ${userEmail} with the support ticket data shortly.`
+    let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
     return jsonResponseHandler([], rmessage, req, res, () => {});
 
     
