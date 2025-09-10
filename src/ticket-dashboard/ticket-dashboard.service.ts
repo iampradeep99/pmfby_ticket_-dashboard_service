@@ -1219,7 +1219,17 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
     { header: 'Description', key: 'TicketDescription', width: 50 },
   ]; 
 
-   await this.insertOrUpdateDownloadLog(SPUserID,SPInsuranceCompanyID,SPStateID,SPTicketHeaderID,SPFROMDATE,SPTODATE,"","",this.db)
+  await this.insertOrUpdateDownloadLog(
+  SPUserID,
+  SPInsuranceCompanyID,
+  SPStateID,
+  SPTicketHeaderID,
+  SPFROMDATE,
+  SPTODATE,
+  "",       // empty zipFileName
+  "",       // empty downloadUrl
+  this.db
+);
 
   
   const CHUNK_SIZE = 10000;
@@ -1505,19 +1515,20 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
   const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
   if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
 
-  await db.collection('support_ticket_download_logs').insertOne({
-    userId: SPUserID,
-    insuranceCompanyId: SPInsuranceCompanyID,
-    stateId: SPStateID,
-    ticketHeaderId: SPTicketHeaderID,
-    fromDate: SPFROMDATE,
-    toDate: SPTODATE,
-    zipFileName,
-    downloadUrl: gcpDownloadUrl,
-    createdAt: new Date(),
-  });
-   await this.insertOrUpdateDownloadLog(SPUserID,SPInsuranceCompanyID,SPStateID,SPTicketHeaderID,SPFROMDATE,SPTODATE,zipFileName,gcpDownloadUrl,this.db)
+ 
+  
 
+   await this.insertOrUpdateDownloadLog(
+  SPUserID,
+  SPInsuranceCompanyID,
+  SPStateID,
+  SPTicketHeaderID,
+  SPFROMDATE,
+  SPTODATE,
+  zipFileName,
+  gcpDownloadUrl,
+  this.db
+);
   const responsePayload = {
     data: [], pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
     downloadUrl: gcpDownloadUrl
@@ -1545,28 +1556,48 @@ async insertOrUpdateDownloadLog(
   fromDate,
   toDate,
   zipFileName,
-  downloadUrl, 
+  downloadUrl,
   db
 ) {
-  await db.collection('support_ticket_download_logs').updateOne(
-    {
+  const filter = {
+    userId,
+    insuranceCompanyId,
+    stateId,
+    ticketHeaderId
+  };
+
+  const existingDoc = await db.collection('support_ticket_download_logs').findOne(filter);
+
+  if (existingDoc) {
+    // Update existing doc with updatedAt field
+    await db.collection('support_ticket_download_logs').updateOne(
+      filter,
+      {
+        $set: {
+          fromDate,
+          toDate,
+          zipFileName,
+          downloadUrl,
+          updatedAt: new Date() // Only on update
+        }
+      }
+    );
+  } else {
+    // Insert new doc with createdAt field
+    await db.collection('support_ticket_download_logs').insertOne({
       userId,
       insuranceCompanyId,
       stateId,
       ticketHeaderId,
       fromDate,
-      toDate
-    },
-    {
-      $set: {
-        zipFileName,
-        downloadUrl,
-        createdAt: new Date()
-      }
-    },
-    { upsert: true } // Insert if not found, update if exists
-  );
+      toDate,
+      zipFileName,
+      downloadUrl,
+      createdAt: new Date() 
+    });
+  }
 }
+
 
 
 
