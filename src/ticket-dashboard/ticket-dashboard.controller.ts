@@ -174,14 +174,8 @@ async FarmerSelectCallingHistoryRoute(
   async createIndexesAll(@Body() ticketPayload: any, @Req() req: Request,
     @Res({ passthrough: false }) res: Response) {
 
-    const userEmail = ticketPayload?.userEmail?.trim();
 
-    if (!userEmail) {
-      return {
-        rcode: 0,
-        rmessage: 'User Email is required',
-      };
-    }
+    
     await this.dashboardService.assignIndexes(ticketPayload);
     let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
     return jsonResponseHandler([], rmessage, req, res, () => { });
