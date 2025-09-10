@@ -12,7 +12,7 @@ import { CreateTicketDto } from 'src/DTOs/createTicket.dto';
 import { UtilService } from '../commonServices/utilService';
 import {
   jsonErrorHandler,
-  jsonResponseHandler,jsonResponseHandlerCopy
+  jsonResponseHandler, jsonResponseHandlerCopy
 } from '../commonServices/responseHandler';
 
 @Controller('ticket-dashboard')
@@ -21,7 +21,7 @@ export class TicketDashboardController {
     private readonly dashboardService: TicketDashboardService,
     private readonly utilService: UtilService,
 
-  ) {}
+  ) { }
 
   @Post('myticket')
   async createTicket(@Body() ticketData: CreateTicketDto) {
@@ -39,16 +39,16 @@ export class TicketDashboardController {
 
       if (data) data = await this.utilService.GZip(data);
 
-      return jsonResponseHandler(data, message, req, res, () => {});
+      return jsonResponseHandler(data, message, req, res, () => { });
     } catch (err) {
-      return jsonErrorHandler(err, req, res, () => {});
+      return jsonErrorHandler(err, req, res, () => { });
     }
   }
 
-   @Post('getSupportTicketHistory')
-  async fetchSupportTicketHistory(@Body() ticketPayload: any,@Req() req: Request,
-  @Res({ passthrough: false }) res: Response) {
-    
+  @Post('getSupportTicketHistory')
+  async fetchSupportTicketHistory(@Body() ticketPayload: any, @Req() req: Request,
+    @Res({ passthrough: false }) res: Response) {
+
     const userEmail = ticketPayload?.userEmail?.trim();
 
     if (!userEmail) {
@@ -59,82 +59,120 @@ export class TicketDashboardController {
     }
     await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
     let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
-    return jsonResponseHandler([], rmessage, req, res, () => {});
+    return jsonResponseHandler([], rmessage, req, res, () => { });
 
-    
   }
-  
 
- 
 
-@Post('getSupportTicketHistoryReportView')
-async fetchSupportTicketHistoryReportView(
-  @Body() ticketPayload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    const userEmail = ticketPayload?.userEmail?.trim();
 
-    if (!userEmail) {
-      // Call the response handler with optional parameters
+
+  @Post('getSupportTicketHistoryReportView')
+  async fetchSupportTicketHistoryReportView(
+    @Body() ticketPayload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const userEmail = ticketPayload?.userEmail?.trim();
+
+      if (!userEmail) {
+        return jsonResponseHandlerCopy(
+          null,
+          'User Email is required',
+          undefined,
+          req,
+          res
+        );
+      }
+
+      const result: any = await this.dashboardService.getSupportTicketHistotReport(ticketPayload);
+
+      let { data, message, pagination } = result;
+
+      if (data) {
+        data = await this.utilService.GZip(data);
+      }
+
       return jsonResponseHandlerCopy(
-        null,
-        'User Email is required',
-        undefined, // pagination is optional
+        data,
+        message || 'Report generated successfully.',
+        pagination, // optional
         req,
         res
       );
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
     }
-
-    const result: any = await this.dashboardService.getSupportTicketHistotReport(ticketPayload);
-
-    let { data, message, pagination } = result;
-
-    if (data) {
-      data = await this.utilService.GZip(data);
-    }
-
-    return jsonResponseHandlerCopy(
-      data,
-      message || 'Report generated successfully.',
-      pagination, // optional
-      req,
-      res
-    );
-  } catch (err) {
-   return jsonErrorHandler(err, req, res, () => {});
   }
-}
 
 
- 
-@Post('getRequestDownloadHistory')
-async getDownloadHistory(
+
+  @Post('getRequestDownloadHistory')
+  async getDownloadHistory(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    try {
+      const { data: resultArray, message } = await this.dashboardService.downloadHistory(payload);
+
+      let gzippedData = null;
+      if (resultArray && resultArray.length > 0) {
+        const stringifiedData: any = resultArray;
+        console.log(stringifiedData)
+        gzippedData = await this.utilService.GZip(stringifiedData);
+      }
+
+      return jsonResponseHandler(gzippedData, message, req, res, () => { });
+
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    }
+  }
+
+
+  @Post('FarmerSelectCallingHistory')
+async FarmerSelectCallingHistoryRoute(
   @Body() payload: any,
   @Req() req: Request,
   @Res({ passthrough: false }) res: Response,
 ) {
   try {
-    const { data: resultArray, message } = await this.dashboardService.downloadHistory(payload);
+    const responsePayload = await this.dashboardService.FarmerSelectCallingHistoryService(payload);
+
+    const { data: resultArray, pagination } = responsePayload;
 
     let gzippedData = null;
     if (resultArray && resultArray.length > 0) {
-      const stringifiedData:any = resultArray;
-      console.log(stringifiedData)
+      const stringifiedData:any = JSON.stringify(resultArray);
       gzippedData = await this.utilService.GZip(stringifiedData);
     }
 
-    return jsonResponseHandler(gzippedData, message, req, res, () => {});
+    return jsonResponseHandler(
+      { data: gzippedData, pagination },
+      { msg: '✅ Data fetched successfully', code: 1 },
+      req,
+      res,
+      () => {}
+    );
 
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: 'Internal Server Error' });
+    return jsonResponseHandler(
+      null,
+      { msg: '❌ Internal Server Error', code: 0 },
+      req,
+      res,
+      () => {}
+    );
   }
 }
 
 
+  }
 
 
-}
+
+
 
