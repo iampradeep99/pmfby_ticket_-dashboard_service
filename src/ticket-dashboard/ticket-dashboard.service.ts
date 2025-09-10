@@ -2739,32 +2739,7 @@ async insertOrUpdateDownloadLog(
 
 
 
-async AddIndex(db){
-  await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
-  FilterStateID: 1,
-  InsuranceCompanyID: 1,
-  TicketHeaderID: 1,
-  InsertDateTime: 1,
-  SupportTicketID: 1,
-  SupportTicketNo: 1,
-  InsertUserID: 1
-});
 
-await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
-  SupportTicketID: 1,
-  TicketStatusID: 1,
-  TicketHistoryID: -1
-});
-
-await db.collection('support_ticket_claim_intimation_report_history').createIndex({
-  SupportTicketNo: 1
-});
-
-await db.collection('csc_agent_master').createIndex({
-  UserLoginID: 1
-});
-
-}
 
 
 
@@ -3063,21 +3038,18 @@ async  getUserDetails(userId: any): Promise<any> {
 
 async createIndexes(db) {
   try {
-    // Index on the main collection (already present)
     await db.collection('SLA_KRPH_Farmer_Calling_Master').createIndex(
       { InsertDateTime: 1, StateCodeAlpha: 1 },
       { name: 'idx_InsertDateTime_StateCodeAlpha' }
     );
     console.log('✅ Index created: InsertDateTime + StateCodeAlpha');
 
-    // Index to support lookup from bm_app_access
     await db.collection('bm_app_access').createIndex(
       { AppAccessID: 1 },
       { name: 'idx_AppAccessID' }
     );
     console.log('✅ Index created: bm_app_access.AppAccessID');
 
-    // Compound index to support lookup from csc_agent_master
     await db.collection('csc_agent_master').createIndex(
       { UserLoginID: 1, Status: 1 },
       { name: 'idx_UserLoginID_Status' }
@@ -3087,6 +3059,41 @@ async createIndexes(db) {
   } catch (error) {
     console.error('❌ Failed to create indexes:', error);
   }
+}
+
+
+async AddIndex(db){
+  await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
+  FilterStateID: 1,
+  InsuranceCompanyID: 1,
+  TicketHeaderID: 1,
+  InsertDateTime: 1,
+  SupportTicketID: 1,
+  SupportTicketNo: 1,
+  InsertUserID: 1
+});
+
+await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
+  SupportTicketID: 1,
+  TicketStatusID: 1,
+  TicketHistoryID: -1
+});
+
+await db.collection('support_ticket_claim_intimation_report_history').createIndex({
+  SupportTicketNo: 1
+});
+
+await db.collection('csc_agent_master').createIndex({
+  UserLoginID: 1
+});
+
+}
+
+
+async assignIndexes(payload){
+ let database =  this.db
+  this.AddIndex(database)
+  this.createIndexes(database)
 }
 
 
