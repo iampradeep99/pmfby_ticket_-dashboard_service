@@ -119,6 +119,3 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
     console.log('[RabbitMQ] Shutdown complete');
   }
 }
-
-
-
