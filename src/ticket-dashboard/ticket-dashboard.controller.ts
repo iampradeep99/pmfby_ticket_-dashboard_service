@@ -10,6 +10,7 @@ import { Request, Response } from 'express';
 import { TicketDashboardService } from './ticket-dashboard.service';
 import { CreateTicketDto } from 'src/DTOs/createTicket.dto';
 import { UtilService } from '../commonServices/utilService';
+import { RabbitMQService } from '../commonServices/rabbitmq/rabbitmq.service';
 import {
   jsonErrorHandler,
   jsonResponseHandler, jsonResponseHandlerCopy
@@ -19,7 +20,7 @@ import {
 export class TicketDashboardController {
   constructor(
     private readonly dashboardService: TicketDashboardService,
-    private readonly utilService: UtilService,
+    private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService
 
   ) { }
 
@@ -57,7 +58,8 @@ export class TicketDashboardController {
         rmessage: 'User Email is required',
       };
     }
-    await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
+     await this.rabbitMQService.sendToQueue(ticketPayload);
+    // await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
     let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
     return jsonResponseHandler([], rmessage, req, res, () => { });
 

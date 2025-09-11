@@ -3092,9 +3092,70 @@ await db.collection('csc_agent_master').createIndex({
 
 async assignIndexes(payload){
  let database =  this.db
-  this.AddIndex(database)
-  this.createIndexes(database)
+  // this.AddIndex(database)
+  // this.createIndexes(database)
+  this.AddIndexss(database)
 }
+
+
+async  AddIndexss(db) {
+  // Drop indexes before recreating (excluding _id index)
+  const collections = [
+    'SLA_KRPH_SupportTickets_Records',
+    'SLA_KRPH_SupportTicketsHistory_Records',
+    'support_ticket_claim_intimation_report_history',
+    'csc_agent_master',
+    'ticket_comment_journey',
+  ];
+
+  for (const collName of collections) {
+    const coll = db.collection(collName);
+    const indexes = await coll.indexes();
+
+    for (const index of indexes) {
+      if (index.name !== '_id_') {
+        await coll.dropIndex(index.name);
+      }
+    }
+  }
+
+  // Indexes for main tickets collection
+  await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
+    InsuranceCompanyID: 1,
+    FilterStateID: 1,
+    TicketHeaderID: 1,
+    InsertDateTime: 1,
+  });
+
+  await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ SupportTicketID: 1 });
+  await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ SupportTicketNo: 1 });
+  await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ InsertUserID: 1 });
+
+  // Indexes for ticket history
+  await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
+    SupportTicketID: 1,
+    TicketStatusID: 1,
+    TicketHistoryID: -1,
+  });
+
+  // Index for claim info lookup
+  await db.collection('support_ticket_claim_intimation_report_history').createIndex({
+    SupportTicketNo: 1,
+  });
+
+  // Index for agent info lookup
+  await db.collection('csc_agent_master').createIndex({
+    UserLoginID: 1,
+  });
+
+  // Index for ticket comments lookup
+  await db.collection('ticket_comment_journey').createIndex({
+    SupportTicketNo: 1,
+  });
+
+  console.log('Indexes dropped and recreated successfully.');
+}
+
 
 
 }
