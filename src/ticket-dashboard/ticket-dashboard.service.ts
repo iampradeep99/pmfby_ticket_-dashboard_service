@@ -3599,6 +3599,22 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
             Reason: 1,
             InsertDateTime: 1
           }
+        }, {
+          $project:{
+            UserID:"$UserID",
+            CallingUniqueID:"$CallingUniqueID",
+            CallerMobileNumber:"$CallerMobileNumber",
+            CallStatus:"$CallStatus",
+            CallPurpose:"$CallPurpose",
+            FarmerName:"$FarmerName",
+            StateMasterName:"$FarmerStateName",
+            DistrictMasterName:"$DistrictMasterName",
+            IsRegistered:"$IsRegistered",
+            Reason:"$Reason",
+            InsertDateTime:"$InsertDateTime"
+
+
+          }
         }
       ];
 
@@ -3621,7 +3637,8 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
           DistrictMasterName: row.DistrictMasterName || '',
           IsRegistered: row.IsRegistered || '',
           Reason: row.Reason || '',
-          InsertDateTime: row.InsertDateTime ? new Date(row.InsertDateTime).toISOString() : ''
+          // InsertDateTime: row.InsertDateTime ? new Date(row.InsertDateTime).toISOString() : ''
+          InsertDateTime: row.InsertDateTime ? this.formatTimestamp(row.InsertDateTime) : ''
         }).commit();
       });
 
@@ -3760,6 +3777,19 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
     console.error('❌ Failed to cache the response:', err);
   }
 }
+
+async formatTimestamp(timestamp: string): Promise<string> {
+  const date = new Date(timestamp);
+
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+
+  return `${day}-${month}-${year} ${hours}:${minutes}`;
+}
+
 
 
 }
