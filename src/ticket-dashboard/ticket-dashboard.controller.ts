@@ -13,7 +13,7 @@ import { UtilService } from '../commonServices/utilService';
 import { RabbitMQService } from '../commonServices/rabbitMQ/rabbitmq.service';
 import {
   jsonErrorHandler,
-  jsonResponseHandler, jsonResponseHandlerCopy
+  jsonResponseHandler, jsonResponseHandlerCopy,jsonResponseHandlerReport
 } from '../commonServices/responseHandler';
 
 @Controller('ticket-dashboard')
@@ -151,7 +151,7 @@ async FarmerSelectCallingHistoryRoute(
       gzippedData = await this.utilService.GZip(stringifiedData); // ✅ Make sure this returns a Buffer
     }
 
-    return jsonResponseHandlerCopy(
+    return jsonResponseHandlerReport(
       gzippedData,
       "✅ Data fetched successfully",
       pagination,
