@@ -2930,10 +2930,9 @@ async FarmerSelectCallingHistoryService(payload: any) {
   limit = parseInt(limit);
   const skip = (page - 1) * limit;
 
-  // Create indexes (non-blocking)
-  // this.createIndexes(this.db).catch(err => {
-  //   console.error('❌ Index creation failed:', err);
-  // });
+  this.createIndexes(this.db).catch(err => {
+    console.error('❌ Index creation failed:', err);
+  });
 
   let matchStage: Record<string, any> = {
     InsertDateTime: {}
@@ -3155,7 +3154,6 @@ async  AddIndexss(db) {
     }
   }
 
-  // Indexes for main tickets collection
   await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
     InsuranceCompanyID: 1,
     FilterStateID: 1,
@@ -3167,24 +3165,20 @@ async  AddIndexss(db) {
   await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ SupportTicketNo: 1 });
   await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ InsertUserID: 1 });
 
-  // Indexes for ticket history
   await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
     SupportTicketID: 1,
     TicketStatusID: 1,
     TicketHistoryID: -1,
   });
 
-  // Index for claim info lookup
   await db.collection('support_ticket_claim_intimation_report_history').createIndex({
     SupportTicketNo: 1,
   });
 
-  // Index for agent info lookup
   await db.collection('csc_agent_master').createIndex({
     UserLoginID: 1,
   });
 
-  // Index for ticket comments lookup
   await db.collection('ticket_comment_journey').createIndex({
     SupportTicketNo: 1,
   });
