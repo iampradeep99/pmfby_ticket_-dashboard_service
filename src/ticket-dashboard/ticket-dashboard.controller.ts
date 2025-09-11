@@ -134,7 +134,7 @@ export class TicketDashboardController {
   }
 
 
-  @Post('FarmerSelectCallingHistory')
+@Post('FarmerSelectCallingHistory')
 async FarmerSelectCallingHistoryRoute(
   @Body() payload: any,
   @Req() req: Request,
@@ -147,13 +147,13 @@ async FarmerSelectCallingHistoryRoute(
 
     let gzippedData = null;
     if (resultArray && resultArray.length > 0) {
-      const stringifiedData:any = JSON.stringify(resultArray);
-      gzippedData = await this.utilService.GZip(stringifiedData);
+      const stringifiedData: any = JSON.stringify(resultArray);
+      gzippedData = await this.utilService.GZip(stringifiedData); // ✅ Make sure this returns a Buffer
     }
 
     return jsonResponseHandlerCopy(
-       gzippedData, 
-      "fetched",
+      gzippedData,
+      "✅ Data fetched successfully",
       pagination,
       req,
       res,
