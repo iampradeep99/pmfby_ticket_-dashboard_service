@@ -147,7 +147,7 @@ async FarmerSelectCallingHistoryRoute(
 
     let gzippedData = null;
     if (resultArray && resultArray.length > 0) {
-      const stringifiedData: any = JSON.stringify(resultArray);
+      const stringifiedData: any = resultArray;
       gzippedData = await this.utilService.GZip(stringifiedData); // ✅ Make sure this returns a Buffer
     }
 
