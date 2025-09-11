@@ -162,22 +162,24 @@
 
 
 
-import { Injectable, OnModuleInit } from '@nestjs/common';
+
+import { Injectable, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
 import * as amqp from 'amqplib';
 import * as os from 'os';
 import { TicketDashboardService } from '../../ticket-dashboard/ticket-dashboard.service';
 
 @Injectable()
-export class RabbitMQService implements OnModuleInit {
+export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
   private readonly RABBITMQ_URL = 'amqp://user:password@10.128.60.11:5672';
   private readonly QUEUE_NAME = 'support_ticket_download';
   private connection: amqp.Connection;
   private channel: amqp.Channel;
 
   private activeJobs = 0;
-  private readonly MAX_CONCURRENCY = 15;
-  private readonly MIN_CONCURRENCY = 1;
-  private readonly BACKLOG_FACTOR = 0.5;
+  private readonly MAX_CONCURRENCY = 20; // slightly higher max for backlog
+  private readonly MIN_CONCURRENCY = 2; 
+  private readonly BACKLOG_FACTOR = 1; // stronger weight on backlog
+  private shuttingDown = false;
 
   constructor(private readonly ticketDashboardService: TicketDashboardService) {}
 
@@ -188,14 +190,10 @@ export class RabbitMQService implements OnModuleInit {
       this.channel = await this.connection.createChannel();
       await this.channel.assertQueue(this.QUEUE_NAME, { durable: true });
 
-      // Set initial prefetch
       this.channel.prefetch(this.MIN_CONCURRENCY);
       console.log(`[RabbitMQ] Connected. Listening to queue "${this.QUEUE_NAME}"...`);
 
-      // Start consuming messages
       this.consumeMessages();
-
-      // Start dynamic concurrency monitor
       this.monitorQueueAndAdjustConcurrency();
     } catch (err) {
       console.error('[RabbitMQ] Connection or channel error:', err);
@@ -215,8 +213,13 @@ export class RabbitMQService implements OnModuleInit {
     const freeMemRatio = os.freemem() / os.totalmem();
     const cpuLoad = os.loadavg()[0] / os.cpus().length;
 
+    // Base concurrency from system resources
     let concurrency = Math.floor(this.MAX_CONCURRENCY * freeMemRatio * (1 - cpuLoad));
+
+    // Increase concurrency proportional to queue backlog
     concurrency += Math.floor(pendingMessages * this.BACKLOG_FACTOR);
+
+    // Clamp to min/max
     concurrency = Math.max(this.MIN_CONCURRENCY, Math.min(this.MAX_CONCURRENCY, concurrency));
 
     return concurrency;
@@ -226,15 +229,12 @@ export class RabbitMQService implements OnModuleInit {
     await this.channel.consume(
       this.QUEUE_NAME,
       (msg) => {
-        if (!msg) return;
+        if (!msg || this.shuttingDown) return;
 
         const ticketPayload = JSON.parse(msg.content.toString());
-        console.log('[RabbitMQ] Received job:', ticketPayload);
-
-        // Increment activeJobs counter for logging/monitoring
         this.activeJobs++;
+        console.log('[RabbitMQ] Received job:', ticketPayload, `Active: ${this.activeJobs}`);
 
-        // Process message asynchronously
         (async () => {
           try {
             await this.ticketDashboardService.processTicketHistoryAndGenerateZip(ticketPayload);
@@ -242,14 +242,14 @@ export class RabbitMQService implements OnModuleInit {
             console.log('[RabbitMQ] Job processed successfully');
           } catch (err) {
             console.error('[RabbitMQ] Job failed:', err);
-            this.channel.nack(msg, false, true); // requeue on failure
+            this.channel.nack(msg, false, true); // requeue failed job
           } finally {
             this.activeJobs--;
             console.log('[RabbitMQ] Active jobs:', this.activeJobs);
           }
         })();
       },
-      { noAck: false } // manual ack
+      { noAck: false }
     );
   }
 
@@ -259,14 +259,34 @@ export class RabbitMQService implements OnModuleInit {
         const q = await this.channel.checkQueue(this.QUEUE_NAME);
         const pendingMessages = q.messageCount;
 
+        // Calculate new concurrency dynamically
         const newConcurrency = this.calculateDynamicConcurrency(pendingMessages);
-        this.channel.prefetch(newConcurrency);
 
-        console.log(`[RabbitMQ] Adjusted concurrency to ${newConcurrency} (pending: ${pendingMessages}, active: ${this.activeJobs})`);
+        // Only adjust if changed
+        if (newConcurrency !== this.channel.prefetch) {
+          this.channel.prefetch(newConcurrency);
+          console.log(
+            `[RabbitMQ] Adjusted concurrency to ${newConcurrency} | Pending: ${pendingMessages} | Active: ${this.activeJobs} | Total workload: ${pendingMessages + this.activeJobs}`
+          );
+        }
       } catch (err) {
         console.error('[RabbitMQ] Error adjusting concurrency:', err);
       }
-    }, 5000); // adjust every 5 seconds
+    }, 2000); // faster interval for responsive backlog scaling
+  }
+
+  async onApplicationShutdown(signal?: string) {
+    console.log('[RabbitMQ] Shutting down, waiting for active jobs to finish...');
+    this.shuttingDown = true;
+
+    while (this.activeJobs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    if (this.channel) await this.channel.close();
+    if (this.connection) await this.connection.close();
+
+    console.log('[RabbitMQ] Shutdown complete');
   }
 }
 
