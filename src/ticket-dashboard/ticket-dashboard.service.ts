@@ -2924,7 +2924,7 @@ async FarmerSelectCallingHistoryService(payload: any) {
  */
 
 async FarmerSelectCallingHistoryService(payload: any) {
-  let { fromDate, toDate, stateCodeAlpha, page = 1, limit = 1000, objCommon } = payload;
+  let { fromDate, toDate, stateCodeAlpha, page = 1, limit = 1000000000, objCommon } = payload;
 
   page = parseInt(page);
   limit = parseInt(limit);
