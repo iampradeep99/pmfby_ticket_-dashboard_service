@@ -173,6 +173,42 @@ async FarmerSelectCallingHistoryRoute(
 }
 
 
+
+
+
+
+
+
+ @Post('FarmerSelectCallingHistoryDownload')
+  async downloadFarmerCallingReport(
+    @Body() ticketPayload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const userEmail = ticketPayload?.userEmail?.trim();
+
+      if (!userEmail) {
+        return jsonResponseHandlerCopy(
+          null,
+          'User Email is required',
+          undefined,
+          req,
+          res
+        );
+      }
+
+    await this.dashboardService.downloadFarmerCallingReportService(ticketPayload);
+
+
+    let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
+    return jsonResponseHandler([], rmessage, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
+
  @Post('assignAllIndexed')
   async createIndexesAll(@Body() ticketPayload: any, @Req() req: Request,
     @Res({ passthrough: false }) res: Response) {
