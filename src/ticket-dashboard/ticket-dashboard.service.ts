@@ -2961,7 +2961,7 @@ async FarmerSelectCallingHistoryService(payload: any) {
   const pipeline = [
     { $match: matchStage },
     { $sort: { InsertDateTime: 1 } },
-    { $limit: limit },  
+    { $limit: 1000 },  
     { $skip: skip },
     { $limit: limit },
 
