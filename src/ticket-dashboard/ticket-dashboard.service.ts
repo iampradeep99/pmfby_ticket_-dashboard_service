@@ -285,6 +285,21 @@ async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], m
 
 
 
+async downloadFarmerCallingReportService(ticketPayload: any): Promise<void> {
+
+  setImmediate(async () => {
+    try {
+      await this.farmerCallingHistoryDownloadReportAndZip(ticketPayload);
+    } catch (err) {
+      console.error('Background processing failed:', err);
+    }
+  });
+
+ 
+}
+
+
+
 
 async processTicketHistoryView(ticketPayload: any) {
   let {
@@ -3186,6 +3201,223 @@ async  AddIndexss(db) {
   console.log('Indexes dropped and recreated successfully.');
 }
 
+
+
+async farmerCallingHistoryDownloadReportAndZip(payload: any) {
+  const {
+    fromDate,
+    toDate,
+    stateCodeAlpha,
+    userEmail,
+    page = 1,
+    limit = 1000000000,
+  } = payload;
+
+  const db = this.db;
+  const cacheKey = `farmerCallingHistory:${fromDate}:${toDate}:${stateCodeAlpha}:${page}:${limit}`;
+  const RequestDateTime = await getCurrentFormattedDateTime();
+
+  // Redis cache check
+  const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
+  if (cachedData) {
+    console.log('✅ Using cached data');
+    return cachedData;
+  }
+
+  // Create downloads folder
+  const folderPath = path.join(process.cwd(), 'downloads');
+  await fs.promises.mkdir(folderPath, { recursive: true });
+
+  // Create ExcelJS workbook
+  const excelFileName = `farmer_calling_history_${Date.now()}.xlsx`;
+  const excelFilePath = path.join(folderPath, excelFileName);
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
+  const worksheet = workbook.addWorksheet('Farmer Calling History');
+
+  worksheet.columns = [
+    { header: 'User ID', key: 'UserID', width: 15 },
+    { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
+    { header: 'Caller Mobile No', key: 'CallerMobileNumber', width: 20 },
+    { header: 'Call Status', key: 'CallStatus', width: 20 },
+    { header: 'Call Purpose', key: 'CallPurpose', width: 30 },
+    { header: 'Farmer Name', key: 'FarmerName', width: 25 },
+    { header: 'State', key: 'StateMasterName', width: 20 },
+    { header: 'District', key: 'DistrictMasterName', width: 20 },
+    { header: 'Is Registered', key: 'IsRegistered', width: 15 },
+    { header: 'Reason', key: 'Reason', width: 30 },
+    { header: 'Insert Date', key: 'InsertDateTime', width: 25 }
+  ];
+
+  const CHUNK_SIZE = 10000;
+
+  async function processDateChunk(currentDate: Date, endDate: Date) {
+    if (currentDate > endDate) return;
+
+    const startOfDay = new Date(currentDate);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(currentDate);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    let skip = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const matchStage: Record<string, any> = {
+        InsertDateTime: { $gte: startOfDay, $lte: endOfDay }
+      };
+
+      if (stateCodeAlpha && stateCodeAlpha.trim() !== '') {
+        matchStage.StateCodeAlpha = stateCodeAlpha;
+      }
+
+      const pipeline = [
+        { $match: matchStage },
+        { $sort: { InsertDateTime: 1 } },
+        { $skip: skip },
+        { $limit: CHUNK_SIZE },
+        {
+          $lookup: {
+            from: 'bm_app_access',
+            localField: 'InsertUserID',
+            foreignField: 'AppAccessID',
+            as: 'appAccess'
+          }
+        },
+        { $unwind: { path: '$appAccess', preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: 'csc_agent_master',
+            let: { appAccessId: '$appAccess.AppAccessID' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$UserLoginID', '$$appAccessId'] },
+                      { $eq: ['$Status', 'Y'] }
+                    ]
+                  }
+                }
+              },
+              {
+                $project: {
+                  UserID: 1,
+                  DisplayName: 1
+                }
+              }
+            ],
+            as: 'agentMaster'
+          }
+        },
+        { $unwind: { path: '$agentMaster', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            UserID: '$agentMaster.UserID',
+            CallingUniqueID: 1,
+            CallerMobileNumber: 1,
+            CallStatus: 1,
+            CallPurpose: 1,
+            FarmerName: 1,
+            StateMasterName: '$FarmerStateName',
+            DistrictMasterName: '$FarmerDistrictName',
+            IsRegistered: 1,
+            Reason: 1,
+            InsertDateTime: 1
+          }
+        }
+      ];
+
+      const results = await db.collection('SLA_KRPH_Farmer_Calling_Master').aggregate(pipeline, { allowDiskUse: true }).toArray();
+
+      results.forEach(row => {
+        worksheet.addRow({
+          UserID: row.UserID || '',
+          CallingUniqueID: row.CallingUniqueID || '',
+          CallerMobileNumber: row.CallerMobileNumber || '',
+          CallStatus: row.CallStatus || '',
+          CallPurpose: row.CallPurpose || '',
+          FarmerName: row.FarmerName || '',
+          StateMasterName: row.StateMasterName || '',
+          DistrictMasterName: row.DistrictMasterName || '',
+          IsRegistered: row.IsRegistered || '',
+          Reason: row.Reason || '',
+          InsertDateTime: row.InsertDateTime ? new Date(row.InsertDateTime).toISOString() : ''
+        }).commit();
+      });
+
+      if (results.length < CHUNK_SIZE) {
+        hasMore = false;
+      } else {
+        skip += CHUNK_SIZE;
+      }
+    }
+
+    const nextDate = new Date(currentDate);
+    nextDate.setDate(currentDate.getDate() + 1);
+    await processDateChunk(nextDate, endDate);
+  }
+
+  // 🔁 Process all dates in the range
+  await processDateChunk(new Date(fromDate), new Date(toDate));
+
+  await workbook.commit();
+
+  // ZIP creation
+  const zipFileName = excelFileName.replace('.xlsx', '.zip');
+  const zipFilePath = path.join(folderPath, zipFileName);
+  const output = fs.createWriteStream(zipFilePath);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  archive.pipe(output);
+  archive.file(excelFilePath, { name: excelFileName });
+  await archive.finalize();
+  await new Promise<void>((resolve, reject) => {
+    output.on('close', resolve);
+    output.on('error', reject);
+  });
+
+  await fs.promises.unlink(excelFilePath).catch(console.error);
+
+  // Upload to GCP
+  const gcpService = new GCPServices();
+  const fileBuffer = await fs.promises.readFile(zipFilePath);
+  const uploadResult = await gcpService.uploadFileToGCP({
+    filePath: 'krph/reports/',
+    uploadedBy: 'KRPH',
+    file: { buffer: fileBuffer, originalname: zipFileName },
+  });
+  const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+
+  if (gcpDownloadUrl) {
+    await fs.promises.unlink(zipFilePath).catch(console.error);
+  }
+
+  // Send email
+  const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
+  try {
+    await this.mailService.sendMail({
+      to: userEmail,
+      subject: 'Farmer Calling History Report Download',
+      text: 'Farmer Calling History Report',
+      html: supportTicketTemplate
+    });
+    console.log('📧 Mail sent successfully');
+  } catch (err) {
+    console.error(`❌ Failed to send email to ${userEmail}:`, err);
+  }
+
+  // Cache result
+  const responsePayload = {
+    data: [],
+    pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+    downloadUrl: gcpDownloadUrl,
+    zipFileName
+  };
+  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+
+  return responsePayload;
+}
 
 
 }
