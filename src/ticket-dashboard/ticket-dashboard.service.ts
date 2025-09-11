@@ -3625,22 +3625,51 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
         console.error('❌ Error while querying DB:', err);
       }
 
+      // results.forEach(row => {
+      //   worksheet.addRow({
+      //     UserID: row.UserID || '',
+      //     CallingUniqueID: row.CallingUniqueID || '',
+      //     CallerMobileNumber: row.CallerMobileNumber || '',
+      //     CallStatus: row.CallStatus || '',
+      //     CallPurpose: row.CallPurpose || '',
+      //     FarmerName: row.FarmerName || '',
+      //     StateMasterName: row.StateMasterName || '',
+      //     DistrictMasterName: row.DistrictMasterName || '',
+      //     IsRegistered: row.IsRegistered || '',
+      //     Reason: row.Reason || '',
+      //     // InsertDateTime: row.InsertDateTime ? new Date(row.InsertDateTime).toISOString() : ''
+      //     InsertDateTime: row.InsertDateTime ? this.formatTimestamp(row.InsertDateTime) : ''
+      //   }).commit();
+      // });
+
       results.forEach(row => {
-        worksheet.addRow({
-          UserID: row.UserID || '',
-          CallingUniqueID: row.CallingUniqueID || '',
-          CallerMobileNumber: row.CallerMobileNumber || '',
-          CallStatus: row.CallStatus || '',
-          CallPurpose: row.CallPurpose || '',
-          FarmerName: row.FarmerName || '',
-          StateMasterName: row.StateMasterName || '',
-          DistrictMasterName: row.DistrictMasterName || '',
-          IsRegistered: row.IsRegistered || '',
-          Reason: row.Reason || '',
-          // InsertDateTime: row.InsertDateTime ? new Date(row.InsertDateTime).toISOString() : ''
-          InsertDateTime: row.InsertDateTime ? this.formatTimestamp(row.InsertDateTime) : ''
-        }).commit();
-      });
+  const insertDateTime = row.InsertDateTime
+    ? (() => {
+        const date = new Date(row.InsertDateTime);
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const year = date.getUTCFullYear();
+        const hours = String(date.getUTCHours()).padStart(2, '0');
+        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+        return `${day}-${month}-${year} ${hours}:${minutes}`;
+      })()
+    : '';
+
+  worksheet.addRow({
+    UserID: row.UserID || '',
+    CallingUniqueID: row.CallingUniqueID || '',
+    CallerMobileNumber: row.CallerMobileNumber || '',
+    CallStatus: row.CallStatus || '',
+    CallPurpose: row.CallPurpose || '',
+    FarmerName: row.FarmerName || '',
+    StateMasterName: row.StateMasterName || '',
+    DistrictMasterName: row.DistrictMasterName || '',
+    IsRegistered: row.IsRegistered || '',
+    Reason: row.Reason || '',
+    InsertDateTime: insertDateTime,
+  }).commit();
+});
+
 
       if (results.length < CHUNK_SIZE) {
         hasMore = false;
