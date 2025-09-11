@@ -10,7 +10,7 @@ import { Request, Response } from 'express';
 import { TicketDashboardService } from './ticket-dashboard.service';
 import { CreateTicketDto } from 'src/DTOs/createTicket.dto';
 import { UtilService } from '../commonServices/utilService';
-import { RabbitMQService } from '../commonServices/rabbitmq/rabbitmq.service';
+import { RabbitMQService } from '../commonServices/rabbitMQ/rabbitmq.service';
 import {
   jsonErrorHandler,
   jsonResponseHandler, jsonResponseHandlerCopy
