@@ -151,9 +151,10 @@ async FarmerSelectCallingHistoryRoute(
       gzippedData = await this.utilService.GZip(stringifiedData);
     }
 
-    return jsonResponseHandler(
-      { data: gzippedData, pagination },
-      { msg: '✅ Data fetched successfully', code: 1 },
+    return jsonResponseHandlerCopy(
+       gzippedData, 
+      "fetched",
+      pagination,
       req,
       res,
       () => {}
@@ -177,7 +178,6 @@ async FarmerSelectCallingHistoryRoute(
     @Res({ passthrough: false }) res: Response) {
 
 
-    
     await this.dashboardService.assignIndexes(ticketPayload);
     let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
     return jsonResponseHandler([], rmessage, req, res, () => { });
