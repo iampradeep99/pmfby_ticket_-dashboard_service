@@ -3007,17 +3007,17 @@ async FarmerSelectCallingHistoryService(payload: any) {
 
     {
       $project:{
-        "Agent ID":"$agentMaster.UserID",
-        "Calling ID":"$CallingUniqueID",
-        "Caller Mobile No":"$CallerMobileNumber",
-        "Call Status" :"$CallStatus",
-        "Call Purpose" :"$CallPurpose",
-        "Farmer Name":"$FarmerName",
-        "State" :"$FarmerStateName",
-        "District":"$FarmerDistrictName",
-        "Is Registered" :"IsRegistered",
+        "UserID":"$agentMaster.UserID",
+        "CallingUniqueID":"$CallingUniqueID",
+        "CallerMobileNumber":"$CallerMobileNumber",
+        "CallStatus" :"$CallStatus",
+        "CallPurpose" :"$CallPurpose",
+        "FarmerName":"$FarmerName",
+        "StateMasterName" :"$FarmerStateName",
+        "DistrictMasterName":"$FarmerDistrictName",
+        "IsRegistered" :"$IsRegistered",
         "Reason":"$Reason",
-        "Created At":"$InsertDateTime"
+        "InsertDateTime":"$InsertDateTime"
       }
     }
   ];
