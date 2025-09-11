@@ -3203,7 +3203,7 @@ async  AddIndexss(db) {
 
 
 
-async farmerCallingHistoryDownloadReportAndZip(payload: any) {
+/* async farmerCallingHistoryDownloadReportAndZip(payload: any) {
   const {
     fromDate,
     toDate,
@@ -3217,18 +3217,20 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
   const cacheKey = `farmerCallingHistory:${fromDate}:${toDate}:${stateCodeAlpha}:${page}:${limit}`;
   const RequestDateTime = await getCurrentFormattedDateTime();
 
-  // Redis cache check
   const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
   if (cachedData) {
     console.log('✅ Using cached data');
     return cachedData;
   }
 
-  // Create downloads folder
-  const folderPath = path.join(process.cwd(), 'downloads');
-  await fs.promises.mkdir(folderPath, { recursive: true });
+  const todayFolder = new Date().toISOString().split('T')[0];
+  const folderPath = path.join(process.cwd(), 'downloads', todayFolder);
+  try {
+    await fs.promises.mkdir(folderPath, { recursive: true });
+  } catch (err) {
+    console.error(`❌ Failed to create folder ${folderPath}`, err);
+  }
 
-  // Create ExcelJS workbook
   const excelFileName = `farmer_calling_history_${Date.now()}.xlsx`;
   const excelFilePath = path.join(folderPath, excelFileName);
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
@@ -3328,7 +3330,12 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
         }
       ];
 
-      const results = await db.collection('SLA_KRPH_Farmer_Calling_Master').aggregate(pipeline, { allowDiskUse: true }).toArray();
+      let results: any[] = [];
+      try {
+        results = await db.collection('SLA_KRPH_Farmer_Calling_Master').aggregate(pipeline, { allowDiskUse: true }).toArray();
+      } catch (err) {
+        console.error('❌ Error while querying DB:', err);
+      }
 
       results.forEach(row => {
         worksheet.addRow({
@@ -3358,12 +3365,18 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
     await processDateChunk(nextDate, endDate);
   }
 
-  // 🔁 Process all dates in the range
-  await processDateChunk(new Date(fromDate), new Date(toDate));
+  try {
+    await processDateChunk(new Date(fromDate), new Date(toDate));
+  } catch (err) {
+    console.error('❌ Error while processing date chunks:', err);
+  }
 
-  await workbook.commit();
+  try {
+    await workbook.commit();
+  } catch (err) {
+    console.error('❌ Failed to commit workbook:', err);
+  }
 
-  // ZIP creation
   const zipFileName = excelFileName.replace('.xlsx', '.zip');
   const zipFilePath = path.join(folderPath, zipFileName);
   const output = fs.createWriteStream(zipFilePath);
@@ -3371,30 +3384,52 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
 
   archive.pipe(output);
   archive.file(excelFilePath, { name: excelFileName });
-  await archive.finalize();
-  await new Promise<void>((resolve, reject) => {
-    output.on('close', resolve);
-    output.on('error', reject);
-  });
 
-  await fs.promises.unlink(excelFilePath).catch(console.error);
-
-  // Upload to GCP
-  const gcpService = new GCPServices();
-  const fileBuffer = await fs.promises.readFile(zipFilePath);
-  const uploadResult = await gcpService.uploadFileToGCP({
-    filePath: 'krph/reports/',
-    uploadedBy: 'KRPH',
-    file: { buffer: fileBuffer, originalname: zipFileName },
-  });
-  const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
-
-  if (gcpDownloadUrl) {
-    await fs.promises.unlink(zipFilePath).catch(console.error);
+  try {
+    await archive.finalize();
+    await new Promise<void>((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
+    });
+  } catch (err) {
+    console.error('❌ Failed to create ZIP archive:', err);
   }
 
-  // Send email
+  const gcpService = new GCPServices();
+  let gcpDownloadUrl = '';
+  const MAX_RETRIES = 3;
+  let attempt = 0;
+
+  while (attempt < MAX_RETRIES) {
+    try {
+      const fileBuffer = await fs.promises.readFile(zipFilePath);
+      const uploadResult = await gcpService.uploadFileToGCP({
+        filePath: 'krph/reports/',
+        uploadedBy: 'KRPH',
+        file: { buffer: fileBuffer, originalname: zipFileName },
+      });
+      gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+      if (gcpDownloadUrl) break;
+    } catch (err) {
+      console.error(`❌ GCP upload attempt ${attempt + 1} failed:`, err);
+    }
+    attempt++;
+    await new Promise(res => setTimeout(res, 1000 * Math.pow(2, attempt)));
+  }
+
+  if (gcpDownloadUrl) {
+    await Promise.all([
+      fs.promises.unlink(zipFilePath).catch(err => console.error('❌ Failed to delete zip file:', err)),
+      fs.promises.unlink(excelFilePath).catch(err => console.error('❌ Failed to delete excel file:', err))
+    ]);
+  } else {
+    console.error('❌ All GCP upload attempts failed. File not sent.');
+    console.log('📄 File not uploaded. Skipping email and cache.');
+    return;
+  }
+
   const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
+
   try {
     await this.mailService.sendMail({
       to: userEmail,
@@ -3407,16 +3442,323 @@ async farmerCallingHistoryDownloadReportAndZip(payload: any) {
     console.error(`❌ Failed to send email to ${userEmail}:`, err);
   }
 
-  // Cache result
   const responsePayload = {
     data: [],
     pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
     downloadUrl: gcpDownloadUrl,
     zipFileName
   };
-  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
 
-  return responsePayload;
+  try {
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+  } catch (err) {
+    console.error('❌ Failed to cache the response:', err);
+  }
+} */
+
+async farmerCallingHistoryDownloadReportAndZip(payload: any) {
+  const {
+    fromDate,
+    toDate,
+    stateCodeAlpha,
+    userEmail,
+    page = 1,
+    limit = 1000000000,
+  } = payload;
+
+  const db = this.db;
+  const cacheKey = `farmerCallingHistory:${fromDate}:${toDate}:${stateCodeAlpha}:${page}:${limit}`;
+  const RequestDateTime = await getCurrentFormattedDateTime();
+
+  const reportLogCollection = db.collection('report_logs');
+  let logDocId = null;
+
+  try {
+    const logDoc = await reportLogCollection.insertOne({
+      userEmail,
+      stateCodeAlpha,
+      fromDate,
+      toDate,
+      createdAt: new Date(),
+      status: 'Processing',
+      zipFileName: null,
+      gcpDownloadUrl: null
+    });
+    logDocId = logDoc.insertedId;
+  } catch (err) {
+    console.error('❌ Failed to create report log document:', err);
+  }
+
+  const cachedData = await this.redisWrapper.getRedisCache(cacheKey);
+  if (cachedData) {
+    console.log('✅ Using cached data');
+    return cachedData;
+  }
+
+  const todayFolder = new Date().toISOString().split('T')[0];
+  const folderPath = path.join(process.cwd(), 'downloads', todayFolder);
+  try {
+    await fs.promises.mkdir(folderPath, { recursive: true });
+  } catch (err) {
+    console.error(`❌ Failed to create folder ${folderPath}`, err);
+  }
+
+  const excelFileName = `farmer_calling_history_${Date.now()}.xlsx`;
+  const excelFilePath = path.join(folderPath, excelFileName);
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
+  const worksheet = workbook.addWorksheet('Farmer Calling History');
+
+  worksheet.columns = [
+    { header: 'User ID', key: 'UserID', width: 15 },
+    { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
+    { header: 'Caller Mobile No', key: 'CallerMobileNumber', width: 20 },
+    { header: 'Call Status', key: 'CallStatus', width: 20 },
+    { header: 'Call Purpose', key: 'CallPurpose', width: 30 },
+    { header: 'Farmer Name', key: 'FarmerName', width: 25 },
+    { header: 'State', key: 'StateMasterName', width: 20 },
+    { header: 'District', key: 'DistrictMasterName', width: 20 },
+    { header: 'Is Registered', key: 'IsRegistered', width: 15 },
+    { header: 'Reason', key: 'Reason', width: 30 },
+    { header: 'Insert Date', key: 'InsertDateTime', width: 25 }
+  ];
+
+  const CHUNK_SIZE = 10000;
+
+  async function processDateChunk(currentDate: Date, endDate: Date) {
+    if (currentDate > endDate) return;
+
+    const startOfDay = new Date(currentDate);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(currentDate);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    let skip = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const matchStage: Record<string, any> = {
+        InsertDateTime: { $gte: startOfDay, $lte: endOfDay }
+      };
+
+      if (stateCodeAlpha && stateCodeAlpha.trim() !== '') {
+        matchStage.StateCodeAlpha = stateCodeAlpha;
+      }
+
+      const pipeline = [
+        { $match: matchStage },
+        { $sort: { InsertDateTime: 1 } },
+        { $skip: skip },
+        { $limit: CHUNK_SIZE },
+        {
+          $lookup: {
+            from: 'bm_app_access',
+            localField: 'InsertUserID',
+            foreignField: 'AppAccessID',
+            as: 'appAccess'
+          }
+        },
+        { $unwind: { path: '$appAccess', preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: 'csc_agent_master',
+            let: { appAccessId: '$appAccess.AppAccessID' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$UserLoginID', '$$appAccessId'] },
+                      { $eq: ['$Status', 'Y'] }
+                    ]
+                  }
+                }
+              },
+              {
+                $project: {
+                  UserID: 1,
+                  DisplayName: 1
+                }
+              }
+            ],
+            as: 'agentMaster'
+          }
+        },
+        { $unwind: { path: '$agentMaster', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            UserID: '$agentMaster.UserID',
+            CallingUniqueID: 1,
+            CallerMobileNumber: 1,
+            CallStatus: 1,
+            CallPurpose: 1,
+            FarmerName: 1,
+            StateMasterName: '$FarmerStateName',
+            DistrictMasterName: '$FarmerDistrictName',
+            IsRegistered: 1,
+            Reason: 1,
+            InsertDateTime: 1
+          }
+        }
+      ];
+
+      let results: any[] = [];
+      try {
+        results = await db.collection('SLA_KRPH_Farmer_Calling_Master').aggregate(pipeline, { allowDiskUse: true }).toArray();
+      } catch (err) {
+        console.error('❌ Error while querying DB:', err);
+      }
+
+      results.forEach(row => {
+        worksheet.addRow({
+          UserID: row.UserID || '',
+          CallingUniqueID: row.CallingUniqueID || '',
+          CallerMobileNumber: row.CallerMobileNumber || '',
+          CallStatus: row.CallStatus || '',
+          CallPurpose: row.CallPurpose || '',
+          FarmerName: row.FarmerName || '',
+          StateMasterName: row.StateMasterName || '',
+          DistrictMasterName: row.DistrictMasterName || '',
+          IsRegistered: row.IsRegistered || '',
+          Reason: row.Reason || '',
+          InsertDateTime: row.InsertDateTime ? new Date(row.InsertDateTime).toISOString() : ''
+        }).commit();
+      });
+
+      if (results.length < CHUNK_SIZE) {
+        hasMore = false;
+      } else {
+        skip += CHUNK_SIZE;
+      }
+    }
+
+    const nextDate = new Date(currentDate);
+    nextDate.setDate(currentDate.getDate() + 1);
+    await processDateChunk(nextDate, endDate);
+  }
+
+  try {
+    await processDateChunk(new Date(fromDate), new Date(toDate));
+  } catch (err) {
+    console.error('❌ Error while processing date chunks:', err);
+  }
+
+  try {
+    await workbook.commit();
+  } catch (err) {
+    console.error('❌ Failed to commit workbook:', err);
+  }
+
+  const zipFileName = excelFileName.replace('.xlsx', '.zip');
+  const zipFilePath = path.join(folderPath, zipFileName);
+  const output = fs.createWriteStream(zipFilePath);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  archive.pipe(output);
+  archive.file(excelFilePath, { name: excelFileName });
+
+  try {
+    await archive.finalize();
+    await new Promise<void>((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
+    });
+  } catch (err) {
+    console.error('❌ Failed to create ZIP archive:', err);
+  }
+
+  const gcpService = new GCPServices();
+  let gcpDownloadUrl = '';
+  const MAX_RETRIES = 3;
+  let attempt = 0;
+
+  while (attempt < MAX_RETRIES) {
+    try {
+      const fileBuffer = await fs.promises.readFile(zipFilePath);
+      const uploadResult = await gcpService.uploadFileToGCP({
+        filePath: 'krph/reports/',
+        uploadedBy: 'KRPH',
+        file: { buffer: fileBuffer, originalname: zipFileName },
+      });
+      gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+      if (gcpDownloadUrl) break;
+    } catch (err) {
+      console.error(`❌ GCP upload attempt ${attempt + 1} failed:`, err);
+    }
+    attempt++;
+    await new Promise(res => setTimeout(res, 1000 * Math.pow(2, attempt)));
+  }
+
+  if (!gcpDownloadUrl) {
+    console.error('❌ All GCP upload attempts failed. File not sent.');
+    console.log('📄 File not uploaded. Skipping email and cache.');
+    if (logDocId) {
+      try {
+        await reportLogCollection.updateOne(
+          { _id: logDocId },
+          {
+            $set: {
+              status: 'Failed',
+              updatedAt: new Date()
+            }
+          }
+        );
+      } catch (err) {
+        console.error('❌ Failed to update log document on failure:', err);
+      }
+    }
+    return;
+  }
+
+  await Promise.all([
+    fs.promises.unlink(zipFilePath).catch(err => console.error('❌ Failed to delete zip file:', err)),
+    fs.promises.unlink(excelFilePath).catch(err => console.error('❌ Failed to delete excel file:', err))
+  ]);
+
+  if (logDocId) {
+    try {
+      await reportLogCollection.updateOne(
+        { _id: logDocId },
+        {
+          $set: {
+            status: 'Completed',
+            zipFileName,
+            gcpDownloadUrl,
+            updatedAt: new Date()
+          }
+        }
+      );
+    } catch (err) {
+      console.error('❌ Failed to update report log document:', err);
+    }
+  }
+
+  const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
+
+  try {
+    await this.mailService.sendMail({
+      to: userEmail,
+      subject: 'Farmer Calling History Report Download',
+      text: 'Farmer Calling History Report',
+      html: supportTicketTemplate
+    });
+    console.log('📧 Mail sent successfully');
+  } catch (err) {
+    console.error(`❌ Failed to send email to ${userEmail}:`, err);
+  }
+
+  const responsePayload = {
+    data: [],
+    pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+    downloadUrl: gcpDownloadUrl,
+    zipFileName
+  };
+
+  try {
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+  } catch (err) {
+    console.error('❌ Failed to cache the response:', err);
+  }
 }
 
 
