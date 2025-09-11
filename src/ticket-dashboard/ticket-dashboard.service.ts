@@ -1422,30 +1422,66 @@ async processTicketHistoryAndGenerateZip(ticketPayload: any) {
         {
           $project: {
             agentInfo: 1,
-             TicketComments: {
-        $arrayToObject: {
-          $map: {
-            input: '$ticket_comment_journey',
-            as: 'comment',
-            in: {
-              k: {
-                $concat: [
-                  'Comment (',
-                  {
-                    $dateToString: {
-                      format: '%Y-%m-%d',
-                      date: '$$comment.ResolvedDate',
-                    },
-                  },
-                  ')',
-                ],
-              },
-              v: '$$comment.ResolvedComment',
-            },
-          },
-        },
+      //        TicketComments: {
+      //   $arrayToObject: {
+      //     $map: {
+      //       input: '$ticket_comment_journey',
+      //       as: 'comment',
+      //       in: {
+      //         k: {
+      //           $concat: [
+      //             'Comment (',
+      //             {
+      //               $dateToString: {
+      //                 format: '%Y-%m-%d',
+      //                 date: '$$comment.ResolvedDate',
+      //               },
+      //             },
+      //             ')',
+      //           ],
+      //         },
+      //         v: '$$comment.ResolvedComment',
+      //       },
+      //     },
+      //   },
+      // },
+            
+            TicketComments: {
+  $arrayToObject: {
+    $map: {
+      input: {
+        $filter: {
+          input: '$ticket_comment_journey',
+          as: 'comment',
+          cond: {
+            $and: [
+              { $ne: ['$$comment.ResolvedDate', null] },
+              { $ne: ['$$comment.ResolvedComment', null] }
+            ]
+          }
+        }
       },
-            CallingUniqueID: 1,
+      as: 'comment',
+      in: {
+        k: {
+          $concat: [
+            'Comment (',
+            {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: '$$comment.ResolvedDate',
+              },
+            },
+            ')',
+          ],
+        },
+        v: '$$comment.ResolvedComment',
+      },
+    }
+  }
+},
+
+      CallingUniqueID: 1,
             TicketNCIPDocketNo: 1,
             SupportTicketNo: 1,
             Created: 1,
