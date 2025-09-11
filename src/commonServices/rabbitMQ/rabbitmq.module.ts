@@ -1,5 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { RabbitMQService } from './rabbitmq.service';
+import { RabbitMQService } from './rabbitMQ.service';
 import { TicketDashboardModule } from 'src/ticket-dashboard/ticket-dashboard.module';
 
 @Module({
