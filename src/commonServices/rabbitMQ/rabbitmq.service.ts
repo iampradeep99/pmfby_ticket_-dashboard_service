@@ -177,40 +177,88 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
     console.log('[RabbitMQ] Message sent to queue:', message);
   }
 
-  private consumeMessages(channel: amqp.Channel) {
-    channel.consume(
-      this.QUEUE_NAME,
-      (msg) => {
-        if (!msg || this.shuttingDown) return;
+//   private consumeMessages(channel: amqp.Channel) {
+//     channel.consume(
+//       this.QUEUE_NAME,
+//       (msg) => {
+//         if (!msg || this.shuttingDown) return;
 
-        const job = JSON.parse(msg.content.toString());
-        this.activeJobs++;
-        console.log('[RabbitMQ] Received job:', job, `Active jobs: ${this.activeJobs}`);
+//         const job = JSON.parse(msg.content.toString());
+//         this.activeJobs++;
+//         console.log('[RabbitMQ] Received job:', job, `Active jobs: ${this.activeJobs}`);
 
-        (async () => {
-          try {
-            if (job.type === 'ticket_history') {
-              await this.ticketDashboardService.processTicketHistoryAndGenerateZip(job.payload);
-            } else if (job.type === 'farmer_calling_history') {
-              await this.ticketDashboardService.farmerCallingHistoryDownloadReportAndZip(job.payload);
-            } else {
-              console.warn('[RabbitMQ] Unknown job type:', job.type);
-            }
+//         (async () => {
+//           try {
+//             if (job.type === 'ticket_history') {
+//               await this.ticketDashboardService.processTicketHistoryAndGenerateZip(job.payload);
+//             } else if (job.type === 'farmer_calling_history') {
+//               await this.ticketDashboardService.farmerCallingHistoryDownloadReportAndZip(job.payload);
+//             } else {
+//               console.warn('[RabbitMQ] Unknown job type:', job.type);
+//             }
 
-            channel.ack(msg);
-            console.log('[RabbitMQ] Job processed successfully');
-          } catch (err) {
-            console.error('[RabbitMQ] Job failed:', err);
-            channel.nack(msg, false, true); // Requeue
-          } finally {
-            this.activeJobs--;
-            console.log('[RabbitMQ] Active jobs:', this.activeJobs);
+//             channel.ack(msg);
+//             console.log('[RabbitMQ] Job processed successfully');
+//           } catch (err) {
+//             console.error('[RabbitMQ] Job failed:', err);
+//             channel.nack(msg, false, true); // Requeue
+//           } finally {
+//             this.activeJobs--;
+//             console.log('[RabbitMQ] Active jobs:', this.activeJobs);
+//           }
+//         })();
+//       },
+//       { noAck: false }
+//     );
+//   }
+
+private consumeMessages(channel: amqp.Channel) {
+  channel.consume(
+    this.QUEUE_NAME,
+    (msg) => {
+      if (!msg || this.shuttingDown) return;
+
+      console.log('[RabbitMQ] Raw message content:', msg.content.toString());
+
+      let job;
+      try {
+        job = JSON.parse(msg.content.toString());
+      } catch (err) {
+        console.error('[RabbitMQ] Failed to parse message:', err);
+        channel.nack(msg, false, false); // Drop bad messages
+        return;
+      }
+
+      this.activeJobs++;
+      console.log('[RabbitMQ] Received job:', job, `Active jobs: ${this.activeJobs}`);
+
+      (async () => {
+        try {
+          if (job.type === 'ticket_history') {
+            console.log('[RabbitMQ] Processing ticket_history job...');
+            await this.ticketDashboardService.processTicketHistoryAndGenerateZip(job.payload);
+          } else if (job.type === 'farmer_calling_history') {
+            console.log('[RabbitMQ] Processing farmer_calling_history job...');
+            await this.ticketDashboardService.farmerCallingHistoryDownloadReportAndZip(job.payload);
+          } else {
+            console.warn('[RabbitMQ] Unknown job type:', job.type);
           }
-        })();
-      },
-      { noAck: false }
-    );
-  }
+
+          channel.ack(msg);
+          console.log('[RabbitMQ] Job processed successfully');
+        } catch (err) {
+          console.error('[RabbitMQ] Job processing error:', err);
+          channel.nack(msg, false, true);
+        } finally {
+          this.activeJobs--;
+          console.log('[RabbitMQ] Active jobs:', this.activeJobs);
+        }
+      })();
+    },
+    { noAck: false }
+  );
+}
+
 
   private async monitorQueueAndAdjustConcurrency() {
     setInterval(async () => {
