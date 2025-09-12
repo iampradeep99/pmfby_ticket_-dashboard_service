@@ -740,8 +740,8 @@ const pipeline: any[] = [
     .toArray();
     if(results.length === 0){
         return {
-    rcode: 1,
-    rmessage: 'Success',
+    rcode: 0,
+    rmessage: 'No Record Found',
     data: results,
     pagination: null,
   };
