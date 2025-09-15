@@ -2939,15 +2939,11 @@ async FarmerSelectCallingHistoryService(payload: any) {
  */
 
 async FarmerSelectCallingHistoryService(payload: any) {
-  let { fromDate, toDate, stateCodeAlpha, page = 1, limit = 1000000000, objCommon } = payload;
+  let { fromDate, toDate, stateCodeAlpha, page = 1, limit, objCommon } = payload;
 
   page = parseInt(page);
   limit = parseInt(limit);
   const skip = (page - 1) * limit;
-
-  this.createIndexes(this.db).catch(err => {
-    console.error('❌ Index creation failed:', err);
-  });
 
   let matchStage: Record<string, any> = {
     InsertDateTime: {}
@@ -2976,10 +2972,8 @@ async FarmerSelectCallingHistoryService(payload: any) {
   const pipeline = [
     { $match: matchStage },
     { $sort: { InsertDateTime: 1 } },
-    { $limit: 1000 },  
     { $skip: skip },
     { $limit: limit },
-
     {
       $lookup: {
         from: 'bm_app_access',
@@ -2989,7 +2983,6 @@ async FarmerSelectCallingHistoryService(payload: any) {
       }
     },
     { $unwind: { path: '$appAccess', preserveNullAndEmptyArrays: true } },
-
     {
       $lookup: {
         from: 'csc_agent_master',
@@ -3019,24 +3012,22 @@ async FarmerSelectCallingHistoryService(payload: any) {
       }
     },
     { $unwind: { path: '$agentMaster', preserveNullAndEmptyArrays: true } },
-
     {
-      $project:{
-        "UserID":"$agentMaster.UserID",
-        "CallingUniqueID":"$CallingUniqueID",
-        "CallerMobileNumber":"$CallerMobileNumber",
-        "CallStatus" :"$CallStatus",
-        "CallPurpose" :"$CallPurpose",
-        "FarmerName":"$FarmerName",
-        "StateMasterName" :"$FarmerStateName",
-        "DistrictMasterName":"$FarmerDistrictName",
-        "IsRegistered" :"$IsRegistered",
-        "Reason":"$Reason",
-        "InsertDateTime":"$InsertDateTime"
+      $project: {
+        UserID: '$agentMaster.UserID',
+        CallingUniqueID: '$CallingUniqueID',
+        CallerMobileNumber: '$CallerMobileNumber',
+        CallStatus: '$CallStatus',
+        CallPurpose: '$CallPurpose',
+        FarmerName: '$FarmerName',
+        StateMasterName: '$FarmerStateName',
+        DistrictMasterName: '$FarmerDistrictName',
+        IsRegistered: '$IsRegistered',
+        Reason: '$Reason',
+        InsertDateTime: '$InsertDateTime'
       }
     }
   ];
-
 
   const results = await this.db.collection(collectionName)
     .aggregate(pipeline, { allowDiskUse: true })
@@ -3044,8 +3035,30 @@ async FarmerSelectCallingHistoryService(payload: any) {
 
   const totalPages = Math.ceil(totalCount / limit);
 
+  if (results.length === 0) {
+    return {
+      data: [],
+      message: {
+        msg: 'Fetched SuccessFully',
+        code: 0
+      },
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: false,
+        hasPrevPage: false
+      }
+    };
+  }
+
   return {
-    data: results || [],
+    data: results,
+    message: {
+      msg: 'Fetched SuccessFully',
+      code: 1
+    },
     pagination: {
       total: totalCount,
       page,
@@ -3056,6 +3069,7 @@ async FarmerSelectCallingHistoryService(payload: any) {
     }
   };
 }
+
 
 
 

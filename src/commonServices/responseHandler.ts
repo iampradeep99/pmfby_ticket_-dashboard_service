@@ -152,17 +152,21 @@ export const jsonResponseHandlerOther = (
 
 export const jsonResponseHandlerReport = (
   data: string, // Gzipped & base64 encoded string
-  message: string,
+  message: any,
   pagination: any,
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
+    const messages = message?.msg || message;
+  const code = message?.code;
+
   res.status(200).send({
+    
     responseObject: null,
     responseDynamic: data || null, // This is the base64 string
-    responseCode: "1",
-    responseMessage: message || "Success",
+    responseCode: code,
+    responseMessage: messages || "Success",
     jsonString: null,
     recordCount: 0,
     pagination: pagination || null, // At top level
