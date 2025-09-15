@@ -143,7 +143,7 @@ async FarmerSelectCallingHistoryRoute(
   try {
     const responsePayload = await this.dashboardService.FarmerSelectCallingHistoryService(payload);
 
-    const { data: resultArray, pagination } = responsePayload;
+    const { data: resultArray, pagination, message } = responsePayload;
 
     let gzippedData = null;
     if (resultArray && resultArray.length > 0) {
@@ -153,7 +153,7 @@ async FarmerSelectCallingHistoryRoute(
 
     return jsonResponseHandlerReport(
       gzippedData,
-      "✅ Data fetched successfully",
+      message,
       pagination,
       req,
       res,
@@ -205,15 +205,7 @@ async FarmerSelectCallingHistoryRoute(
     try {
       const userEmail = ticketPayload?.userEmail?.trim();
 
-      if (!userEmail) {
-        return jsonResponseHandlerCopy(
-          null,
-          'User Email is required',
-          undefined,
-          req,
-          res
-        );
-      }
+     
 
     await this.dashboardService.downloadFarmerCallingReportService(ticketPayload);
 
