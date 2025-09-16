@@ -750,26 +750,31 @@ export class TicketDashboardService {
     console.log(results[0].ticket_comment_journey)
 
 
-    results.forEach(doc => {
-      if (Array.isArray(doc.ticket_comment_journey)) {
-        const journey = doc.ticket_comment_journey;
+   results.forEach(doc => {
+  if (Array.isArray(doc.ticket_comment_journey)) {
+    const journey = doc.ticket_comment_journey;
 
-        // if (journey.length > 0) {
-        journey.forEach((commentObj, index) => {
-          const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
+    // Deduplicate by ResolvedDate + Comment text
+    const seen = new Set();
 
-          // Clean the comment text by removing HTML tags
-          const rawComment = commentObj.ResolvedComment || '';
-          const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
+    journey.forEach((commentObj, index) => {
+      const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
 
-          doc[`Comment Date ${index + 1}`] = commentDate;
-          doc[`Comment ${index + 1}`] = cleanComment;
-        });
-        // } 
+      const rawComment = commentObj.ResolvedComment || '';
+      const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
 
-        delete doc.ticket_comment_journey;
+      const uniqueKey = `${commentDate}-${cleanComment}`;
+      if (!seen.has(uniqueKey)) {
+        seen.add(uniqueKey);
+        doc[`Comment Date ${index + 1}`] = commentDate;
+        doc[`Comment ${index + 1}`] = cleanComment;
       }
     });
+
+    delete doc.ticket_comment_journey;
+  }
+});
+
 
 
 
