@@ -356,10 +356,17 @@ async function processTicketHistory(ticketPayload: any) {
   const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
   if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
 
-  await (ticketPayload as any).insertOrUpdateDownloadLog(
+//   await (ticketPayload as any).insertOrUpdateDownloadLog(
+//     SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
+//     SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, db
+//   );
+
+ await insertOrUpdateDownloadLog(
     SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
     SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, db
   );
+
+
 
   const responsePayload = {
     data: [],
