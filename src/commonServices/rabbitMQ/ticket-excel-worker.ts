@@ -1,13 +1,22 @@
-// ticket-excel-worker.js
-import { parentPort, workerData } from 'worker_threads';
-import path from 'path';
-import fs from 'fs';
-import ExcelJS from 'exceljs';
-import archiver from 'archiver';
-import { MongoClient } from 'mongodb';
-import { GCPServices } from '../GCSFileUpload'; // adjust path
-import { MailService } from '../../mail/mail.service'; // adjust path
-import { RedisWrapper } from '../redisWrapper'; // your Redis wrapper
+// // ticket-excel-worker.js
+// import { parentPort, workerData } from 'worker_threads';
+// import path from 'path';
+// import fs from 'fs';
+// import ExcelJS from 'exceljs';
+// import archiver from 'archiver';
+// import { MongoClient } from 'mongodb';
+// import { GCPServices } from '../GCSFileUpload'; // adjust path
+// import { MailService } from '../../mail/mail.service'; // adjust path
+// import { RedisWrapper } from '../redisWrapper'; // your Redis wrapper
+const { parentPort, workerData } = require('worker_threads');
+const path = require('path');
+const fs = require('fs');
+const ExcelJS = require('exceljs');
+const archiver = require('archiver');
+const { MongoClient } = require('mongodb');
+const { GCPServices } = require('../GCSFileUpload'); // adjust path
+const { MailService } = require('../../mail/mail.service'); // adjust path
+const { RedisWrapper } = require('../redisWrapper'); // your Redis wrapper
 
 // Destructure payload
 const payload = workerData;
