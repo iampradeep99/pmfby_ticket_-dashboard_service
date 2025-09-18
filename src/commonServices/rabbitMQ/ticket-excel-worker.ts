@@ -261,7 +261,7 @@ async function processTicketHistory(ticketPayload: any) {
 
       const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
 
-      console.log(cursor[0])
+    //   console.log(cursor[0])
       const docs = await cursor.toArray();
 
       for (const doc of docs) {
