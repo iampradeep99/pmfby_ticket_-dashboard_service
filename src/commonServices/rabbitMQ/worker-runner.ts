@@ -1,6 +1,7 @@
 // worker-runner.ts
 import { Worker } from 'worker_threads';
-import path from 'path';
+import * as path from 'path';
+
 
 export function runWorker(payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
