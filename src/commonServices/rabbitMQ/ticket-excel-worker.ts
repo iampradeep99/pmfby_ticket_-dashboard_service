@@ -11,7 +11,7 @@ import { RedisWrapper } from '../redisWrapper'; // your Redis wrapper
 
 // Destructure payload
 const payload = workerData;
-
+console.log("inside the worker")
 async function main() {
   const {
     SPFROMDATE,
