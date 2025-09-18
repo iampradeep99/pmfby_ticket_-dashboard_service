@@ -134,7 +134,9 @@ async function processTicketHistory(ticketPayload: any) {
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
   const worksheet = workbook.addWorksheet('Support Tickets');
 
-  await (ticketPayload as any).insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", db);
+//   await (ticketPayload as any).insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", db);
+
+   await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", db)
 
   const CHUNK_SIZE = 1000;
 
@@ -412,4 +414,35 @@ processTicketHistory(workerData)
 
   async function convertStringToArray(str) {
     return str.split(",").map(Number);
+  }
+
+   async function insertOrUpdateDownloadLog(
+    userId,
+    insuranceCompanyId,
+    stateId,
+    ticketHeaderId,
+    fromDate,
+    toDate,
+    zipFileName,
+    downloadUrl,
+    db
+  ) {
+    await db.collection('support_ticket_download_logs').updateOne(
+      {
+        userId,
+        insuranceCompanyId,
+        stateId,
+        ticketHeaderId,
+        fromDate,
+        toDate
+      },
+      {
+        $set: {
+          zipFileName,
+          downloadUrl,
+          createdAt: new Date()
+        }
+      },
+      { upsert: true } // Insert if not found, update if exists
+    );
   }
