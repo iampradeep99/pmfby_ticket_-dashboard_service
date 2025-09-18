@@ -38,8 +38,8 @@ async function connectToDatabase(uri: string, dbName: string): Promise<Db> {
 
 
 async function processTicketHistory(ticketPayload: any) {
-  const {
-    SPFROMDATE,
+  let {
+   SPFROMDATE,
     SPTODATE,
     SPInsuranceCompanyID,
     SPStateID,
@@ -51,6 +51,12 @@ async function processTicketHistory(ticketPayload: any) {
   } = ticketPayload;
 
   const db = await connectToDatabase('mongodb://10.128.60.45:27017', 'krph_db')
+   SPTicketHeaderID = Number(SPTicketHeaderID);
+
+     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+  if (!SPStateID){
+    console.log({ rcode: 0, rmessage: 'StateID Missing!' })
+  }
 
   const RequestDateTime = await getCurrentFormattedDateTime();
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
@@ -254,6 +260,8 @@ async function processTicketHistory(ticketPayload: any) {
       ];
 
       const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
+
+      console.log(cursor[0])
       const docs = await cursor.toArray();
 
       for (const doc of docs) {
