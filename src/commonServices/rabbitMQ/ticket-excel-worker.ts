@@ -11,7 +11,8 @@ import { RedisWrapper } from '../redisWrapper'; // your Redis wrapper
 
 // Destructure payload
 const payload = workerData;
-console.log("inside the worker")
+console.log("[Worker] Started with payload:", payload);
+
 async function main() {
   const {
     SPFROMDATE,
@@ -81,12 +82,11 @@ async function main() {
     { header: 'Created By', key: 'CreatedBY', width: 20 },
     { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
   ];
-  worksheet.columns = staticColumns;
 
   const CHUNK_SIZE = 1000;
   let skip = 0;
   let hasMore = true;
-  let dynamicColumns = new Set<string>();
+  const dynamicColumns = new Set<string>();
   let headersSet = false;
 
   function formatToDDMMYYYY(dateString: string) {
@@ -113,11 +113,36 @@ async function main() {
       .limit(CHUNK_SIZE)
       .toArray();
 
+    if (!headersSet) {
+      // build dynamic column names for this chunk
+      for (const doc of docs) {
+        if (Array.isArray(doc.ticket_comment_journey)) {
+          let idx = 1;
+          const seen = new Set();
+          for (const c of doc.ticket_comment_journey) {
+            const raw = (c.ResolvedComment || '').replace(/<\/?[^>]+>/g, '').trim();
+            const date = formatToDDMMYYYY(c.ResolvedDate);
+            const key = `${date}__${raw}`;
+            if (!seen.has(key)) {
+              dynamicColumns.add(`Date ${idx}`);
+              dynamicColumns.add(`Comment ${idx}`);
+              seen.add(key);
+              idx++;
+            }
+          }
+        }
+      }
+
+      const dynamicDefs = Array.from(dynamicColumns).map(col => ({ header: col, key: col, width: 40 }));
+      worksheet.columns = [...staticColumns, ...dynamicDefs];
+      headersSet = true;
+    }
+
     for (const doc of docs) {
-      // Handle dynamic comments
+      // Flatten comments into fields
       if (Array.isArray(doc.ticket_comment_journey)) {
-        const seen = new Set();
         let idx = 1;
+        const seen = new Set();
         for (const c of doc.ticket_comment_journey) {
           const raw = (c.ResolvedComment || '').replace(/<\/?[^>]+>/g, '').trim();
           const date = formatToDDMMYYYY(c.ResolvedDate);
@@ -125,8 +150,6 @@ async function main() {
           if (!seen.has(key)) {
             doc[`Date ${idx}`] = date;
             doc[`Comment ${idx}`] = raw;
-            dynamicColumns.add(`Date ${idx}`);
-            dynamicColumns.add(`Comment ${idx}`);
             seen.add(key);
             idx++;
           }
@@ -134,14 +157,7 @@ async function main() {
         delete doc.ticket_comment_journey;
       }
 
-      // Add dynamic columns to worksheet
-      if (!headersSet) {
-        const dynamicDefs = Array.from(dynamicColumns).map(col => ({ header: col, key: col, width: 40 }));
-        worksheet.columns = [...staticColumns, ...dynamicDefs];
-        headersSet = true;
-      }
-
-      worksheet.addRow({
+      const rowData = {
         AgentID: doc.agentInfo?.UserID?.toString() || '',
         CallingUniqueID: doc.CallingUniqueID || '',
         TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
@@ -182,7 +198,9 @@ async function main() {
         CreatedBY: doc.CreatedBY || '',
         TicketDescription: doc.TicketDescription || '',
         ...Object.fromEntries(Object.entries(doc).filter(([k]) => k.startsWith('Date') || k.startsWith('Comment')))
-      }).commit();
+      };
+
+      worksheet.addRow(rowData).commit();
     }
 
     hasMore = docs.length === CHUNK_SIZE;
@@ -235,4 +253,7 @@ async function main() {
   parentPort?.postMessage({ success: true, downloadUrl: gcpDownloadUrl });
 }
 
-main().catch(err => parentPort?.postMessage({ success: false, error: err.message }));
+main().catch(err => {
+  console.error("[Worker] Failed:", err);
+  parentPort?.postMessage({ success: false, error: err.message });
+});
