@@ -6,6 +6,31 @@ import archiver from 'archiver';
 import { GCPServices } from '../GCSFileUpload';
 import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from '../../templates/mailTemplates'
 import { UtilService } from "../../commonServices/utilService";
+import { RedisWrapper } from '../../commonServices/redisWrapper';
+import { MailService } from '../../mail/mail.service';
+import { MongoClient, Db } from 'mongodb';
+const redisWrapper = new RedisWrapper()
+const mailService = new MailService()
+let cachedDb: Db | null = null;
+
+async function connectToDatabase(uri: string, dbName: string): Promise<Db> {
+  if (cachedDb) return cachedDb;
+
+  if (!uri) throw new Error('MongoDB URI is required');
+  if (!dbName) throw new Error('Database name is required');
+
+  const client = new MongoClient(uri, {
+    maxPoolSize: 50,
+    connectTimeoutMS: 10000,
+  });
+
+  await client.connect();
+  cachedDb = client.db(dbName);
+
+  console.log(`MongoDB connected to database: ${dbName}`);
+  return cachedDb;
+}
+
 
 async function processTicketHistory(ticketPayload: any) {
   const {
@@ -18,10 +43,9 @@ async function processTicketHistory(ticketPayload: any) {
     page = 1,
     limit = 1000000000,
     userEmail,
-    db,
-    redisWrapper,
-    mailService,
   } = ticketPayload;
+
+  const db = await connectToDatabase('mongodb://10.128.60.45:27017', 'krph_db')
 
   const RequestDateTime = await getCurrentFormattedDateTime();
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
@@ -353,6 +377,7 @@ async function processTicketHistory(ticketPayload: any) {
 
   return responsePayload;
 }
+
 
 processTicketHistory(workerData)
   .then(result => parentPort?.postMessage({ success: true, result }))
