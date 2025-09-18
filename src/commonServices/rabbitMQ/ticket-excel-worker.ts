@@ -39,7 +39,7 @@ async function connectToDatabase(uri: string, dbName: string): Promise<Db> {
 
 async function processTicketHistory(ticketPayload: any) {
   let {
-   SPFROMDATE,
+    SPFROMDATE,
     SPTODATE,
     SPInsuranceCompanyID,
     SPStateID,
@@ -51,7 +51,7 @@ async function processTicketHistory(ticketPayload: any) {
   } = ticketPayload;
 
   const db = await connectToDatabase('mongodb://10.128.60.45:27017', 'krph_db')
-   SPTicketHeaderID = Number(SPTicketHeaderID);
+    SPTicketHeaderID = Number(SPTicketHeaderID);
 
      if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
   if (!SPStateID){
@@ -144,7 +144,7 @@ async function processTicketHistory(ticketPayload: any) {
 
    await insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", db)
 
-  const CHUNK_SIZE = 1000;
+  const CHUNK_SIZE = 10000;
 
   const staticColumns = [
     { header: 'Agent ID', key: 'AgentID', width: 20 },
