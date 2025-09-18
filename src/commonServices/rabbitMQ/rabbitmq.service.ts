@@ -424,7 +424,7 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
   private connection: amqp.Connection;
 
   private activeJobs = 0;
-  private readonly MAX_CONCURRENCY = 20;
+  private readonly MAX_CONCURRENCY = 500;
   private readonly MIN_CONCURRENCY = 2;
   private readonly BACKLOG_FACTOR = 1;
   private readonly NUM_CONSUMERS = 3; // number of consumers in same process
