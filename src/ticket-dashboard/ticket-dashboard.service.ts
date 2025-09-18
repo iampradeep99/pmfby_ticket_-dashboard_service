@@ -2525,7 +2525,7 @@ export class TicketDashboardService {
 
   await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
 
-  const CHUNK_SIZE = 10000;
+  const CHUNK_SIZE = 1000;
 
   const staticColumns = [
     { header: 'Agent ID', key: 'AgentID', width: 20 },
