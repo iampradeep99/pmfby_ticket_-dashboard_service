@@ -136,7 +136,7 @@ async function processTicketHistory(ticketPayload: any) {
   const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');
   const fromDateStr = new Date(SPFROMDATE).toLocaleDateString('en-GB').split('/').join('_');
 const toDateStr = new Date(SPTODATE).toLocaleDateString('en-GB').split('/').join('_');
-  const excelFileName = `Support_ticket_data_${ticketTypeName}_${fromDateStr}_to_${toDateStr}_${currentDateStr}.xlsx`;
+  const excelFileName = `Support_ticket_data_${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}_requestDate_${currentDateStr}.xlsx`;
 const excelFilePath = path.join(folderPath, excelFileName);
 
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
