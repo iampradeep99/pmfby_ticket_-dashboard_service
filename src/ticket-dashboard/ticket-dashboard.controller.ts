@@ -46,24 +46,25 @@ export class TicketDashboardController {
     }
   }
 
-  @Post('getSupportTicketHistory')
-  async fetchSupportTicketHistory(@Body() ticketPayload: any, @Req() req: Request,
-    @Res({ passthrough: false }) res: Response) {
-
-    const userEmail = ticketPayload?.userEmail?.trim();
-
-    if (!userEmail) {
-      return {
-        rcode: 0,
-        rmessage: 'User Email is required',
-      };
-    }
-     await this.rabbitMQService.sendToQueue(ticketPayload);
-    // await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
-    let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
-    return jsonResponseHandler([], rmessage, req, res, () => { });
-
+ @Post('getSupportTicketHistory')
+async fetchSupportTicketHistory(@Body() ticketPayload: any, @Req() req: Request, @Res() res: Response) {
+  const userEmail = ticketPayload?.userEmail?.trim();
+  if (!userEmail) {
+    return { rcode: 0, rmessage: 'User Email is required' };
   }
+
+  // Send request to RabbitMQ queue
+  await this.rabbitMQService.sendToQueue(ticketPayload);
+
+  return jsonResponseHandler(
+    [],
+    'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.',
+    req,
+    res,
+    () => {}
+  );
+}
+
 
 
 
