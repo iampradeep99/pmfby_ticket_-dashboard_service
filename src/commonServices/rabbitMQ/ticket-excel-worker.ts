@@ -8,6 +8,7 @@ import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from '../
 import { UtilService } from "../../commonServices/utilService";
 import { RedisWrapper } from '../../commonServices/redisWrapper';
 import { MailService } from '../../mail/mail.service';
+import axios from 'axios'
 import { MongoClient, Db } from 'mongodb';
 const redisWrapper = new RedisWrapper()
 const mailService = new MailService()
@@ -69,14 +70,15 @@ async function processTicketHistory(ticketPayload: any) {
   }
 
   // ===== User detail auth =====
-  const Delta = await (ticketPayload as any).getSupportTicketUserDetail(SPUserID);
+//   const Delta = await (ticketPayload as any).getSupportTicketUserDetail(SPUserID);
+  const Delta = await getSupportTicketUserDetail(SPUserID);
   const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
   const item = (responseInfo.data as any)?.user?.[0];
   if (!item) return { rcode: 0, rmessage: 'User details not found.' };
 
   const userDetail = {
-    InsuranceCompanyID: item.InsuranceCompanyID ? await (ticketPayload as any).convertStringToArray(item.InsuranceCompanyID) : [],
-    StateMasterID: item.StateMasterID ? await (ticketPayload as any).convertStringToArray(item.StateMasterID) : [],
+    InsuranceCompanyID: item.InsuranceCompanyID ? await convertStringToArray(item.InsuranceCompanyID) : [],
+    StateMasterID: item.StateMasterID ? await convertStringToArray(item.StateMasterID) : [],
     BRHeadTypeID: item.BRHeadTypeID,
     LocationTypeID: item.LocationTypeID,
   };
@@ -382,3 +384,28 @@ async function processTicketHistory(ticketPayload: any) {
 processTicketHistory(workerData)
   .then(result => parentPort?.postMessage({ success: true, result }))
   .catch(err => parentPort?.postMessage({ success: false, error: err.message }));
+
+
+    async function getSupportTicketUserDetail(userID) {
+    const data = { userID };
+    const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk'
+
+    const url = 'https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail'
+    return axios.post(url, data, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': TOKEN
+      }
+    })
+      .then(response => {
+        return response.data;
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        throw error;
+      });
+  };
+
+  async function convertStringToArray(str) {
+    return str.split(",").map(Number);
+  }
