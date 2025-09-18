@@ -4,7 +4,7 @@ import path from 'path';
 
 export function runWorker(payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(path.resolve(__dirname, 'ticket-excel-worker.js'), {
+    const worker = new Worker(path.resolve(__dirname, 'ticket-excel-worker.ts'), {
       workerData: payload,
     });
 
