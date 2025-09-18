@@ -24,9 +24,9 @@ async function main() {
   } = payload;
 
   // === DB & Redis setup ===
-  const mongoClient = new MongoClient(process.env.MONGO_URI || 'mongodb://localhost:27017');
+  const mongoClient = new MongoClient(process.env.MONGO_URI || 'mongodb://10.128.60.45:27017');
   await mongoClient.connect();
-  const db = mongoClient.db('yourDB'); // replace with your DB name
+  const db = mongoClient.db('krph_db'); // replace with your DB name
   const redisWrapper = new RedisWrapper();
 
   const folderPath = path.join(process.cwd(), 'downloads');
