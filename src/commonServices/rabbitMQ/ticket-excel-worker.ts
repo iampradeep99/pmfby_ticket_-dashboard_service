@@ -1,14 +1,18 @@
-import { parentPort, workerData } from 'worker_threads';
-import fs from 'fs';
-import path from 'path';
-import ExcelJS from 'exceljs';
-import archiver from 'archiver';
+// import { parentPort, workerData } from 'worker_threads';
+const { parentPort, workerData } = require('worker_threads');
+// import fs from 'fs';
+// import path from 'path';
+const fs = require('fs');
+const path = require('path');
+const ExcelJS = require('exceljs');
+const archiver = require('archiver');
+const axios = require('axios');
 import { GCPServices } from '../GCSFileUpload';
 import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from '../../templates/mailTemplates'
 import { UtilService } from "../../commonServices/utilService";
 import { RedisWrapper } from '../../commonServices/redisWrapper';
 import { MailService } from '../../mail/mail.service';
-import axios from 'axios'
+// import axios from 'axios'
 import { MongoClient, Db } from 'mongodb';
 const redisWrapper = new RedisWrapper()
 const mailService = new MailService()
