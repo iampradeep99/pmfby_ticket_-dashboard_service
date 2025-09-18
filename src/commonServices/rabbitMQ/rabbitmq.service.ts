@@ -534,6 +534,7 @@
 import { Injectable, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
 import * as amqp from 'amqplib';
 import { TicketDashboardService } from '../../ticket-dashboard/ticket-dashboard.service';
+import { runWorker } from './worker-runner'; 
 
 @Injectable()
 export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
@@ -587,30 +588,32 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
     console.log('[RabbitMQ] Message sent:', message);
   }
 
-  private consumeMessages() {
-    this.consumerChannel.consume(
-      this.QUEUE_NAME,
-      async (msg) => {
-        if (!msg || this.shuttingDown) return;
+ private consumeMessages() {
+  this.consumerChannel.consume(
+    this.QUEUE_NAME,
+    async (msg) => {
+      if (!msg || this.shuttingDown) return;
 
-        const payload = JSON.parse(msg.content.toString());
-        this.activeJobs++;
-        console.log(`[RabbitMQ] Job received | Active: ${this.activeJobs}`);
+      const payload = JSON.parse(msg.content.toString());
+      this.activeJobs++;
+      console.log(`[RabbitMQ] Job received | Active: ${this.activeJobs}`);
 
-        try {
-          await this.ticketDashboardService.processTicketHistoryAndGenerateZip(payload);
-          this.consumerChannel.ack(msg);
-          console.log('[RabbitMQ] Job done');
-        } catch (err) {
-          console.error('[RabbitMQ] Job failed:', err);
-          this.consumerChannel.nack(msg, false, true); // requeue
-        } finally {
-          this.activeJobs--;
-        }
-      },
-      { noAck: false }
-    );
-  }
+      try {
+        // Run heavy job in worker thread
+        await runWorker(payload);
+        this.consumerChannel.ack(msg);
+        console.log('[RabbitMQ] Job done');
+      } catch (err) {
+        console.error('[RabbitMQ] Job failed:', err);
+        this.consumerChannel.nack(msg, false, true);
+      } finally {
+        this.activeJobs--;
+      }
+    },
+    { noAck: false }
+  );
+}
+
 
   private async monitorQueueAndAdjustConcurrency() {
     setInterval(async () => {
