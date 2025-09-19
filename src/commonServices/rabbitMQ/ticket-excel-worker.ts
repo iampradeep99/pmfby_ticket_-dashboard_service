@@ -51,9 +51,9 @@ async function processTicketHistory(ticketPayload: any) {
   } = ticketPayload;
 
   const db = await connectToDatabase('mongodb://10.128.60.45:27017', 'krph_db')
-    SPTicketHeaderID = Number(SPTicketHeaderID);
+  SPTicketHeaderID = Number(SPTicketHeaderID);
 
-     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
   if (!SPStateID){
     console.log({ rcode: 0, rmessage: 'StateID Missing!' })
   }
@@ -80,7 +80,7 @@ async function processTicketHistory(ticketPayload: any) {
   }
 
   // ===== User detail auth =====
-//   const Delta = await (ticketPayload as any).getSupportTicketUserDetail(SPUserID);
+  //   const Delta = await (ticketPayload as any).getSupportTicketUserDetail(SPUserID);
   const Delta = await getSupportTicketUserDetail(SPUserID);
   const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
   const item = (responseInfo.data as any)?.user?.[0];
@@ -135,16 +135,15 @@ async function processTicketHistory(ticketPayload: any) {
   const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
   const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');
   const fromDateStr = new Date(SPFROMDATE).toLocaleDateString('en-GB').split('/').join('_');
-const toDateStr = new Date(SPTODATE).toLocaleDateString('en-GB').split('/').join('_');
+  const toDateStr = new Date(SPTODATE).toLocaleDateString('en-GB').split('/').join('_');
   const excelFileName = `Support_ticket_data_${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}_requestDate_${currentDateStr}.xlsx`;
-const excelFilePath = path.join(folderPath, excelFileName);
+  const excelFilePath = path.join(folderPath, excelFileName);
 
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
-  const worksheet = workbook.addWorksheet('Support Tickets');
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath, useStyles: false, useSharedStrings: true });
+  let worksheet = workbook.addWorksheet('Support Tickets');
 
-//   await (ticketPayload as any).insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", db);
-
-   await insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", db)
+  // insert or update log initially (keeps your logic)
+  await insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", db)
 
   const CHUNK_SIZE = 10000;
 
@@ -189,7 +188,28 @@ const excelFilePath = path.join(folderPath, excelFileName);
     { header: 'Created By', key: 'CreatedBY', width: 20 },
     { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
   ];
+
+  // set initial static columns
   worksheet.columns = staticColumns;
+
+  // helper: track dynamic columns we've already added to worksheet.columns
+  const dynamicColumnKeys = new Set<string>();
+
+  function ensureDynamicColumns(keys: string[]) {
+    // keys: array like ['Date 1', 'Comment 1', ...]
+    const newCols: any[] = [];
+    for (const k of keys) {
+      if (!dynamicColumnKeys.has(k)) {
+        dynamicColumnKeys.add(k);
+        newCols.push({ header: k, key: k, width: k.startsWith('Comment') ? 50 : 20 });
+      }
+    }
+    if (newCols.length > 0) {
+      // Merge existing columns + newCols
+      // In streaming writer you can update columns before rows are written; doing this keeps headers
+      worksheet.columns = [...(worksheet.columns || []), ...newCols];
+    }
+  }
 
   function formatToDDMMYYYY(dateString) {
     if (!dateString) return '';
@@ -201,6 +221,26 @@ const excelFilePath = path.join(folderPath, excelFileName);
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     return `${day}-${month}-${year} ${hours}:${minutes}`;
+  }
+
+  const ROW_BUFFER_LIMIT = 5000; // tunable: how many rows to buffer before addRows
+  const MAX_ROWS_PER_SHEET = 300000; // tunable: when to create new sheet
+  let globalSheetCount = 1;
+  let currentSheetRowCount = 0;
+  let rowBuffer: any[] = [];
+
+  async function flushBufferToSheet() {
+    if (rowBuffer.length === 0) return;
+    // Ensure worksheet exists
+    try {
+      worksheet.addRows(rowBuffer);
+    } catch (err) {
+      // In very rare cases streaming writer might throw; attempt per-row fallback
+      for (const r of rowBuffer) {
+        worksheet.addRow(r).commit();
+      }
+    }
+    rowBuffer = [];
   }
 
   async function processDateWithChunking(currentDate: Date, endDate: Date) {
@@ -263,11 +303,12 @@ const excelFilePath = path.join(folderPath, excelFileName);
 
       const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
 
-    //   console.log(cursor[0])
       const docs = await cursor.toArray();
 
       for (const doc of docs) {
+        // Build dynamic columns exactly as original code did
         const dynamicColumnsBatch: any = {};
+        const dynamicKeysToEnsure: string[] = [];
         if (Array.isArray(doc.ticket_comment_journey)) {
           const seen = new Set();
           let idx = 1;
@@ -276,15 +317,23 @@ const excelFilePath = path.join(folderPath, excelFileName);
             const date = formatToDDMMYYYY(c.ResolvedDate);
             const key = `${date}__${raw}`;
             if (!seen.has(key)) {
-              dynamicColumnsBatch[`Date ${idx}`] = date;
-              dynamicColumnsBatch[`Comment ${idx}`] = raw;
+              const dateKey = `Date ${idx}`;
+              const commentKey = `Comment ${idx}`;
+              dynamicColumnsBatch[dateKey] = date;
+              dynamicColumnsBatch[commentKey] = raw;
+              dynamicKeysToEnsure.push(dateKey, commentKey);
               seen.add(key);
               idx++;
             }
           }
         }
 
-        worksheet.addRow({
+        // Ensure dynamic columns exist in worksheet columns before adding row
+        if (dynamicKeysToEnsure.length > 0) {
+          ensureDynamicColumns(dynamicKeysToEnsure);
+        }
+
+        const rowObj = {
           AgentID: doc.agentInfo?.UserID?.toString() || '',
           CallingUniqueID: doc.CallingUniqueID || '',
           TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
@@ -325,19 +374,57 @@ const excelFilePath = path.join(folderPath, excelFileName);
           CreatedBY: doc.CreatedBY || '',
           TicketDescription: doc.TicketDescription || '',
           ...dynamicColumnsBatch
-        }).commit();
-      }
+        };
 
+        // Buffer the row (don't commit per-row)
+        rowBuffer.push(rowObj);
+        currentSheetRowCount++;
+
+        // If buffer big enough flush it
+        if (rowBuffer.length >= ROW_BUFFER_LIMIT) {
+          await flushBufferToSheet();
+        }
+
+        // If current sheet reached max rows, flush & rotate sheet
+        if (currentSheetRowCount >= MAX_ROWS_PER_SHEET) {
+          // flush remaining buffered rows
+          await flushBufferToSheet();
+          // commit current sheet
+          try { worksheet.commit(); } catch (err) { console.error('worksheet.commit error:', err); }
+          // create new sheet and copy columns (including dynamic ones)
+          globalSheetCount++;
+          worksheet = workbook.addWorksheet(`Support Tickets_${globalSheetCount}`);
+          // reuse header layout: static + dynamic
+          const currentColumns = (worksheet && worksheet.columns) ? worksheet.columns : [];
+          // Compose columns from staticColumns + existing dynamic keys
+          const dynamicColsFromSet = Array.from(dynamicColumnKeys).map(k => ({ header: k, key: k, width: k.startsWith('Comment') ? 50 : 20 }));
+          worksheet.columns = [...staticColumns, ...dynamicColsFromSet];
+          // reset counter
+          currentSheetRowCount = 0;
+        }
+      } // end for docs
+
+      // after processing the chunk, determine if more
       hasMore = docs.length === CHUNK_SIZE;
       skip += CHUNK_SIZE;
-    }
+    } // end while hasMore
 
+    // processed all days in this date; recursion outside will move date forward
     const nextDate = new Date(currentDate);
     nextDate.setDate(nextDate.getDate() + 1);
+    // flush remaining buffer to the last sheet before moving to next date
+    await flushBufferToSheet();
     await processDateWithChunking(nextDate, endDate);
   }
 
+  // Start processing day-by-day
   await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
+
+  // Final flush (in case recursion returned without flushing)
+  await flushBufferToSheet();
+
+  // commit final worksheet & workbook
+  try { worksheet.commit(); } catch (err) { /* ignore commit errors */ }
   await workbook.commit();
   console.log(`Excel file created at: ${excelFilePath}`);
 
@@ -366,17 +453,10 @@ const excelFilePath = path.join(folderPath, excelFileName);
   const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
   if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
 
-//   await (ticketPayload as any).insertOrUpdateDownloadLog(
-//     SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
-//     SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, db
-//   );
-
- await insertOrUpdateDownloadLog(
+  await insertOrUpdateDownloadLog(
     SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
     SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, db
   );
-
-
 
   const responsePayload = {
     data: [],
@@ -409,57 +489,57 @@ processTicketHistory(workerData)
   .catch(err => parentPort?.postMessage({ success: false, error: err.message }));
 
 
-    async function getSupportTicketUserDetail(userID) {
-    const data = { userID };
-    const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk'
+async function getSupportTicketUserDetail(userID) {
+  const data = { userID };
+  const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk'
 
-    const url = 'https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail'
-    return axios.post(url, data, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': TOKEN
-      }
+  const url = 'https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail'
+  return axios.post(url, data, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': TOKEN
+    }
+  })
+    .then(response => {
+      return response.data;
     })
-      .then(response => {
-        return response.data;
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        throw error;
-      });
-  };
+    .catch(error => {
+      console.error('Error:', error);
+      throw error;
+    });
+};
 
-  async function convertStringToArray(str) {
-    return str.split(",").map(Number);
-  }
+async function convertStringToArray(str) {
+  return str.split(",").map(Number);
+}
 
-   async function insertOrUpdateDownloadLog(
-    userId,
-    insuranceCompanyId,
-    stateId,
-    ticketHeaderId,
-    fromDate,
-    toDate,
-    zipFileName,
-    downloadUrl,
-    db
-  ) {
-    await db.collection('support_ticket_download_logs').updateOne(
-      {
-        userId,
-        insuranceCompanyId,
-        stateId,
-        ticketHeaderId,
-        fromDate,
-        toDate
-      },
-      {
-        $set: {
-          zipFileName,
-          downloadUrl,
-          createdAt: new Date()
-        }
-      },
-      { upsert: true } // Insert if not found, update if exists
-    );
-  }
+async function insertOrUpdateDownloadLog(
+  userId,
+  insuranceCompanyId,
+  stateId,
+  ticketHeaderId,
+  fromDate,
+  toDate,
+  zipFileName,
+  downloadUrl,
+  db
+) {
+  await db.collection('support_ticket_download_logs').updateOne(
+    {
+      userId,
+      insuranceCompanyId,
+      stateId,
+      ticketHeaderId,
+      fromDate,
+      toDate
+    },
+    {
+      $set: {
+        zipFileName,
+        downloadUrl,
+        createdAt: new Date()
+      }
+    },
+    { upsert: true } // Insert if not found, update if exists
+  );
+}
