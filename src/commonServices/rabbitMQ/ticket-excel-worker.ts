@@ -267,7 +267,7 @@ const excelFilePath = path.join(folderPath, excelFileName);
         // { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
         { $skip: skip },
         { $limit: CHUNK_SIZE },
-        { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
+        // { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
       ];
 
       const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
