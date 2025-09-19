@@ -600,10 +600,18 @@ export class TicketDashboardService {
         },
       },
 
-      { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-      { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-      { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+      // { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+      // { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+      // { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
       // { $unwind: { path: '$ticket_comment_journey', preserveNullAndEmptyArrays: true } },
+      {
+         $addFields: {
+      ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
+      claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
+      agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
+      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
+    }
+      },
 
       {
         $addFields: {
