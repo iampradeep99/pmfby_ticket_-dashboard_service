@@ -253,9 +253,18 @@ const excelFilePath = path.join(folderPath, excelFileName);
             as: 'ticket_comment_journey',
           },
         },
-        { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+
+         {
+    $addFields: {
+      ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
+      claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
+      agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
+      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
+    }
+  },
+        // { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+        // { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+        // { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
         { $skip: skip },
         { $limit: CHUNK_SIZE },
         { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
