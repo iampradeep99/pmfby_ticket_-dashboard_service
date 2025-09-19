@@ -605,19 +605,15 @@ export class TicketDashboardService {
       // { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
       // { $unwind: { path: '$ticket_comment_journey', preserveNullAndEmptyArrays: true } },
       {
-         $addFields: {
+    $addFields: {
       ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
       claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
       agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
       ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
     }
-      },
+  },
 
-      {
-        $addFields: {
-          ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
-        }
-      },
+   
 
       {
         $project: {
