@@ -325,20 +325,17 @@ const excelFilePath = path.join(folderPath, excelFileName);
     }
   },
 
-  // Group by SupportTicketNo to remove duplicates
   {
     $group: {
       _id: '$SupportTicketNo',
-      doc: { $first: '$$ROOT' } // ensures one document per ticket
+      doc: { $first: '$$ROOT' } 
     }
   },
 
-  // Replace root with the de-duplicated doc
   {
     $replaceRoot: { newRoot: '$doc' }
   },
 
-  // Pagination
   { $skip: skip },
   { $limit: CHUNK_SIZE },
 ];
@@ -371,10 +368,10 @@ const excelFilePath = path.join(folderPath, excelFileName);
           CallingUniqueID: doc.CallingUniqueID || '',
           TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
           SupportTicketNo: doc.SupportTicketNo?.toString() || '',
-          Created: doc.Created ? new Date(doc.Created).toISOString() : '',
+          Created: doc.Created ?  formatDate(doc.Created) : '',
           TicketReOpenDate: doc.TicketReOpenDate || '',
           TicketStatus: doc.TicketStatus || '',
-          StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
+          StatusUpdateTime: doc.StatusUpdateTime ?  formatDate(doc.StatusUpdateTime): '',
           StateMasterName: doc.StateMasterName || '',
           DistrictMasterName: doc.DistrictMasterName || '',
           SubDistrictName: doc.SubDistrictName || '',
@@ -514,6 +511,19 @@ processTicketHistory(workerData)
   async function convertStringToArray(str) {
     return str.split(",").map(Number);
   }
+
+
+  function formatDate(inputDate: string | Date): string {
+  const date = new Date(inputDate);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${year}-${month}-${day}:${hours}:${minutes}`;
+}
 
    async function insertOrUpdateDownloadLog(
     userId,
