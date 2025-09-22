@@ -215,46 +215,108 @@ const excelFilePath = path.join(folderPath, excelFileName);
 
     while (hasMore) {
       const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
-      const pipeline: any[] = [
-        { $match: dailyMatch },
-        {
-          $lookup: {
-            from: 'SLA_KRPH_SupportTicketsHistory_Records',
-            let: { ticketId: '$SupportTicketID' },
-            pipeline: [
-              { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
-              { $sort: { TicketHistoryID: -1 } },
-              { $limit: 1 }
-            ],
-            as: 'ticketHistory',
-          }
-        },
-        {
-          $lookup: {
-            from: 'support_ticket_claim_intimation_report_history',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'claimInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'csc_agent_master',
-            localField: 'InsertUserID',
-            foreignField: 'UserLoginID',
-            as: 'agentInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'ticket_comment_journey',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'ticket_comment_journey',
-          },
-        },
+  //     const pipeline: any[] = [
+  //       { $match: dailyMatch },
+  //       {
+  //         $lookup: {
+  //           from: 'SLA_KRPH_SupportTicketsHistory_Records',
+  //           let: { ticketId: '$SupportTicketID' },
+  //           pipeline: [
+  //             { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
+  //             { $sort: { TicketHistoryID: -1 } },
+  //             { $limit: 1 }
+  //           ],
+  //           as: 'ticketHistory',
+  //         }
+  //       },
+  //       {
+  //         $lookup: {
+  //           from: 'support_ticket_claim_intimation_report_history',
+  //           localField: 'SupportTicketNo',
+  //           foreignField: 'SupportTicketNo',
+  //           as: 'claimInfo',
+  //         }
+  //       },
+  //       {
+  //         $lookup: {
+  //           from: 'csc_agent_master',
+  //           localField: 'InsertUserID',
+  //           foreignField: 'UserLoginID',
+  //           as: 'agentInfo',
+  //         }
+  //       },
+  //       {
+  //         $lookup: {
+  //           from: 'ticket_comment_journey',
+  //           localField: 'SupportTicketNo',
+  //           foreignField: 'SupportTicketNo',
+  //           as: 'ticket_comment_journey',
+  //         },
+  //       },
 
-         {
+  //        {
+  //   $addFields: {
+  //     ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
+  //     claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
+  //     agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
+  //     ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
+  //   }
+  // },
+        
+  //       { $skip: skip },
+  //       { $limit: CHUNK_SIZE },
+  //     ];
+
+
+  const pipeline: any[] = [
+  { $match: dailyMatch },
+
+  // Lookup ticket history (latest record with TicketStatusID 109304)
+  {
+    $lookup: {
+      from: 'SLA_KRPH_SupportTicketsHistory_Records',
+      let: { ticketId: '$SupportTicketID' },
+      pipeline: [
+        { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
+        { $sort: { TicketHistoryID: -1 } },
+        { $limit: 1 }
+      ],
+      as: 'ticketHistory',
+    }
+  },
+
+  // Lookup claim info
+  {
+    $lookup: {
+      from: 'support_ticket_claim_intimation_report_history',
+      localField: 'SupportTicketNo',
+      foreignField: 'SupportTicketNo',
+      as: 'claimInfo',
+    }
+  },
+
+  // Lookup agent info
+  {
+    $lookup: {
+      from: 'csc_agent_master',
+      localField: 'InsertUserID',
+      foreignField: 'UserLoginID',
+      as: 'agentInfo',
+    }
+  },
+
+  // Lookup ticket comments journey
+  {
+    $lookup: {
+      from: 'ticket_comment_journey',
+      localField: 'SupportTicketNo',
+      foreignField: 'SupportTicketNo',
+      as: 'ticket_comment_journey',
+    },
+  },
+
+  // Flatten arrays and handle nulls
+  {
     $addFields: {
       ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
       claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
@@ -262,13 +324,24 @@ const excelFilePath = path.join(folderPath, excelFileName);
       ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
     }
   },
-        // { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-        // { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-        // { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-        { $skip: skip },
-        { $limit: CHUNK_SIZE },
-        // { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
-      ];
+
+  // Group by SupportTicketNo to remove duplicates
+  {
+    $group: {
+      _id: '$SupportTicketNo',
+      doc: { $first: '$$ROOT' } // ensures one document per ticket
+    }
+  },
+
+  // Replace root with the de-duplicated doc
+  {
+    $replaceRoot: { newRoot: '$doc' }
+  },
+
+  // Pagination
+  { $skip: skip },
+  { $limit: CHUNK_SIZE },
+];
 
       const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
 
