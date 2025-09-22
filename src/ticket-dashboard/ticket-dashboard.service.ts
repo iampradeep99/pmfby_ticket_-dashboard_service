@@ -599,11 +599,6 @@ export class TicketDashboardService {
           as: 'ticket_comment_journey',
         },
       },
-
-      // { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-      // { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-      // { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-      // { $unwind: { path: '$ticket_comment_journey', preserveNullAndEmptyArrays: true } },
       {
     $addFields: {
       ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
@@ -613,6 +608,17 @@ export class TicketDashboardService {
     }
   },
 
+
+   {
+    $group: {
+      _id: '$SupportTicketNo',
+      doc: { $first: '$$ROOT' } // pick the first document per ticket
+    }
+  },
+
+  {
+    $replaceRoot: { newRoot: '$doc' }
+  },
    
 
       {
