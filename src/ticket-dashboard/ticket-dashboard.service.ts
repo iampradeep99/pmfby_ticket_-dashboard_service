@@ -547,8 +547,8 @@ export class TicketDashboardService {
     //   { $skip: (page - 1) * limit },
     //   { $limit: limit },
     // ];
-console.log("d")
-   /*  const pipeline: any[] = [
+
+  /*   const pipeline: any[] = [
       { $match: match },
 
       {
@@ -624,7 +624,29 @@ console.log("d")
       {
         $project: {
           SupportTicketID: 1,
-         
+          // TicketComments: {
+          //   $arrayToObject: {
+          //     $map: {
+          //       input: '$ticket_comment_journey',
+          //       as: 'comment',
+          //       in: {
+          //         k: {
+          //           $concat: [
+          //             'Comment (',
+          //             {
+          //               $dateToString: {
+          //                 format: '%Y-%m-%d',
+          //                 date: '$$comment.ResolvedDate',
+          //               },
+          //             },
+          //             ')',
+          //           ],
+          //         },
+          //         v: '$$comment.ResolvedComment',
+          //       },
+          //     },
+          //   },
+          // },
           ticket_comment_journey: 1,
           ApplicationNo: 1,
           InsurancePolicyNo: 1,
@@ -720,10 +742,10 @@ console.log("d")
       { $limit: limit },
     ]; */
 
-
-    const pipeline = [
+    const pipeline: any[] = [
   { $match: match },
 
+  // Ticket history (latest one with status 109304)
   {
     $lookup: {
       from: 'SLA_KRPH_SupportTicketsHistory_Records',
@@ -746,6 +768,7 @@ console.log("d")
     }
   },
 
+  // Claim info
   {
     $lookup: {
       from: 'support_ticket_claim_intimation_report_history',
@@ -755,6 +778,7 @@ console.log("d")
     }
   },
 
+  // Agent info
   {
     $lookup: {
       from: 'csc_agent_master',
@@ -764,6 +788,7 @@ console.log("d")
     }
   },
 
+  // Comments (can have multiple rows)
   {
     $lookup: {
       from: 'ticket_comment_journey',
@@ -773,71 +798,123 @@ console.log("d")
     }
   },
 
+  // 🟢 Remove duplicates per SupportTicketNo
   {
     $group: {
       _id: '$SupportTicketNo',
-      SupportTicketID: { $first: '$SupportTicketID' },
-      SupportTicketNo: { $first: '$SupportTicketNo' },
-      ApplicationNo: { $first: '$ApplicationNo' },
-      InsurancePolicyNo: { $first: '$InsurancePolicyNo' },
-      TicketStatusID: { $first: '$TicketStatusID' },
-      TicketStatus: { $first: '$TicketStatus' },
-      CallerContactNumber: { $first: '$CallerContactNumber' },
-      RequestorName: { $first: '$RequestorName' },
-      RequestorMobileNo: { $first: '$RequestorMobileNo' },
-      StateMasterName: { $first: '$StateMasterName' },
-      DistrictMasterName: { $first: '$DistrictMasterName' },
-      TicketHeadName: { $first: '$TicketHeadName' },
-      TicketCategoryName: { $first: '$TicketCategoryName' },
-      RequestSeason: { $first: '$RequestSeason' },
-      RequestYear: { $first: '$RequestYear' },
-      ApplicationCropName: { $first: '$ApplicationCropName' },
-      CreatedAt: { $first: '$InsertDateTime' },
-      TicketReOpenDate: { $first: '$TicketReOpenDate' },
-      InsuranceMasterName: { $first: '$InsuranceCompany' },
-      TicketDescription: { $first: '$TicketDescription' },
-      CallingUniqueID: { $first: '$CallingUniqueID' },
-      CreatedBY: { $first: '$CreatedBY' },
-      agentInfo: { $first: { $arrayElemAt: ['$agentInfo', 0] } },
-      ticketHistory: { $first: { $arrayElemAt: ['$ticketHistory', 0] } },
-      claimInfo: { $first: { $arrayElemAt: ['$claimInfo', 0] } },
-      ticket_comment_journey: { $push: '$ticket_comment_journey' } // keep all comments
+      doc: { $first: '$$ROOT' },
+      comments: { $push: '$ticket_comment_journey' }
+    }
+  },
+  {
+    $addFields: {
+      'doc.ticket_comment_journey': {
+        $reduce: {
+          input: '$comments',
+          initialValue: [],
+          in: { $concatArrays: ['$$value', '$$this'] }
+        }
+      }
+    }
+  },
+  { $replaceRoot: { newRoot: '$doc' } },
+
+  // Clean lookups (pick only one where needed)
+  {
+    $addFields: {
+      ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
+      claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
+      agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
+      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
     }
   },
 
+  // First projection
+  {
+    $project: {
+      SupportTicketID: 1,
+      ticket_comment_journey: 1,
+      ApplicationNo: 1,
+      InsurancePolicyNo: 1,
+      TicketStatusID: 1,
+      TicketStatus: 1,
+      CallerContactNumber: 1,
+      RequestorName: 1,
+      RequestorMobileNo: 1,
+      StateMasterName: 1,
+      DistrictMasterName: 1,
+      SubDistrictName: 1,
+      TicketHeadName: 1,
+      TicketCategoryName: 1,
+      RequestSeason: 1,
+      RequestYear: 1,
+      ApplicationCropName: 1,
+      Relation: 1,
+      RelativeName: 1,
+      PolicyPremium: 1,
+      PolicyArea: 1,
+      PolicyType: 1,
+      LandSurveyNumber: 1,
+      LandDivisionNumber: 1,
+      IsSos: 1,
+      PlotStateName: 1,
+      PlotDistrictName: 1,
+      PlotVillageName: 1,
+      ApplicationSource: 1,
+      CropShare: 1,
+      IFSCCode: 1,
+      FarmerShare: 1,
+      SowingDate: 1,
+      LossDate: 1,
+      CreatedBY: 1,
+      CreatedAt: '$InsertDateTime',
+      Sos: 1,
+      NCIPDocketNo: '$TicketNCIPDocketNo',
+      TicketDescription: 1,
+      CallingUniqueID: 1,
+      TicketDate: {
+        $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' }
+      },
+      StatusDate: {
+        $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$ticketHistory.StatusUpdateTime' }
+      },
+      SupportTicketTypeName: '$TicketTypeName',
+      SupportTicketNo: 1,
+      InsuranceMasterName: '$InsuranceCompany',
+      ReOpenDate: '$TicketReOpenDate',
+      CallingUserID: '$agentInfo.UserID',
+      SchemeName: 1
+    }
+  },
+
+  // Final projection (UI friendly fields)
   {
     $project: {
       _id: 0,
-      "Agent ID": "$agentInfo.UserID",
-      "Calling ID": "$CallingUniqueID",
-      "NCIP Docket No": "$TicketNCIPDocketNo",
-      "Ticket No": "$SupportTicketNo",
-      "Creation Date": "$CreatedAt",
-      "Re-Open Date": "$TicketReOpenDate",
-      "Ticket Status": "$TicketStatus",
-      "Status Date": "$ticketHistory.StatusUpdateTime",
-      "State": "$StateMasterName",
-      "District": "$DistrictMasterName",
-      "Type": "$TicketHeadName",
-      "Category": "$TicketCategoryName",
-      "Sub Category": "$SupportTicketTypeName",
-      "Season": "$RequestSeason",
-      "Year": "$RequestYear",
-      "Insurance Company": "$InsuranceMasterName",
-      "Application No": "$ApplicationNo",
-      "Policy No": "$InsurancePolicyNo",
-      "Caller Mobile No": "$CallerContactNumber",
-      "Farmer Name": "$RequestorName",
-      "Mobile No": "$RequestorMobileNo",
-      "Created By": "$CreatedBY",
-      "Description": "$TicketDescription",
-      "ticket_comment_journey": {
-        $reduce: {
-          input: "$ticket_comment_journey",
-          initialValue: [],
-          in: { $concatArrays: ["$$value", "$$this"] }
-        }
-      }
+      'Agent ID': '$CallingUserID',
+      'Calling ID': '$CallingUniqueID',
+      'NCIP Docket No': '$NCIPDocketNo',
+      'Ticket No': '$SupportTicketNo',
+      'Creation Date': '$CreatedAt',
+      'Re-Open Date': '$ReOpenDate',
+      'Ticket Status': '$TicketStatus',
+      'Status Date': '$StatusDate',
+      State: '$StateMasterName',
+      District: '$DistrictMasterName',
+      Type: '$TicketHeadName',
+      Category: '$SupportTicketTypeName',
+      'Sub Category': '$TicketCategoryName',
+      Season: '$RequestSeason',
+      Year: '$RequestYear',
+      'Insurance Company': '$InsuranceMasterName',
+      'Application No': '$ApplicationNo',
+      'Policy No': '$InsurancePolicyNo',
+      'Caller Mobile No': '$CallerContactNumber',
+      'Farmer Name': '$RequestorName',
+      'Mobile No': '$RequestorMobileNo',
+      'Created By': '$CreatedBY',
+      Description: '$TicketDescription',
+      ticket_comment_journey: '$ticket_comment_journey'
     }
   },
 
