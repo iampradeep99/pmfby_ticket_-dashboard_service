@@ -547,8 +547,8 @@ export class TicketDashboardService {
     //   { $skip: (page - 1) * limit },
     //   { $limit: limit },
     // ];
-
-    const pipeline: any[] = [
+console.log("d")
+   /*  const pipeline: any[] = [
       { $match: match },
 
       {
@@ -624,29 +624,7 @@ export class TicketDashboardService {
       {
         $project: {
           SupportTicketID: 1,
-          // TicketComments: {
-          //   $arrayToObject: {
-          //     $map: {
-          //       input: '$ticket_comment_journey',
-          //       as: 'comment',
-          //       in: {
-          //         k: {
-          //           $concat: [
-          //             'Comment (',
-          //             {
-          //               $dateToString: {
-          //                 format: '%Y-%m-%d',
-          //                 date: '$$comment.ResolvedDate',
-          //               },
-          //             },
-          //             ')',
-          //           ],
-          //         },
-          //         v: '$$comment.ResolvedComment',
-          //       },
-          //     },
-          //   },
-          // },
+         
           ticket_comment_journey: 1,
           ApplicationNo: 1,
           InsurancePolicyNo: 1,
@@ -740,7 +718,132 @@ export class TicketDashboardService {
 
       { $skip: (page - 1) * limit },
       { $limit: limit },
-    ];
+    ]; */
+
+
+    const pipeline = [
+  { $match: match },
+
+  {
+    $lookup: {
+      from: 'SLA_KRPH_SupportTicketsHistory_Records',
+      let: { ticketId: '$SupportTicketID' },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ['$SupportTicketID', '$$ticketId'] },
+                { $eq: ['$TicketStatusID', 109304] }
+              ]
+            }
+          }
+        },
+        { $sort: { TicketHistoryID: -1 } },
+        { $limit: 1 }
+      ],
+      as: 'ticketHistory'
+    }
+  },
+
+  {
+    $lookup: {
+      from: 'support_ticket_claim_intimation_report_history',
+      localField: 'SupportTicketNo',
+      foreignField: 'SupportTicketNo',
+      as: 'claimInfo'
+    }
+  },
+
+  {
+    $lookup: {
+      from: 'csc_agent_master',
+      localField: 'InsertUserID',
+      foreignField: 'UserLoginID',
+      as: 'agentInfo'
+    }
+  },
+
+  {
+    $lookup: {
+      from: 'ticket_comment_journey',
+      localField: 'SupportTicketNo',
+      foreignField: 'SupportTicketNo',
+      as: 'ticket_comment_journey'
+    }
+  },
+
+  {
+    $group: {
+      _id: '$SupportTicketNo',
+      SupportTicketID: { $first: '$SupportTicketID' },
+      SupportTicketNo: { $first: '$SupportTicketNo' },
+      ApplicationNo: { $first: '$ApplicationNo' },
+      InsurancePolicyNo: { $first: '$InsurancePolicyNo' },
+      TicketStatusID: { $first: '$TicketStatusID' },
+      TicketStatus: { $first: '$TicketStatus' },
+      CallerContactNumber: { $first: '$CallerContactNumber' },
+      RequestorName: { $first: '$RequestorName' },
+      RequestorMobileNo: { $first: '$RequestorMobileNo' },
+      StateMasterName: { $first: '$StateMasterName' },
+      DistrictMasterName: { $first: '$DistrictMasterName' },
+      TicketHeadName: { $first: '$TicketHeadName' },
+      TicketCategoryName: { $first: '$TicketCategoryName' },
+      RequestSeason: { $first: '$RequestSeason' },
+      RequestYear: { $first: '$RequestYear' },
+      ApplicationCropName: { $first: '$ApplicationCropName' },
+      CreatedAt: { $first: '$InsertDateTime' },
+      TicketReOpenDate: { $first: '$TicketReOpenDate' },
+      InsuranceMasterName: { $first: '$InsuranceCompany' },
+      TicketDescription: { $first: '$TicketDescription' },
+      CallingUniqueID: { $first: '$CallingUniqueID' },
+      CreatedBY: { $first: '$CreatedBY' },
+      agentInfo: { $first: { $arrayElemAt: ['$agentInfo', 0] } },
+      ticketHistory: { $first: { $arrayElemAt: ['$ticketHistory', 0] } },
+      claimInfo: { $first: { $arrayElemAt: ['$claimInfo', 0] } },
+      ticket_comment_journey: { $push: '$ticket_comment_journey' } // keep all comments
+    }
+  },
+
+  {
+    $project: {
+      _id: 0,
+      "Agent ID": "$agentInfo.UserID",
+      "Calling ID": "$CallingUniqueID",
+      "NCIP Docket No": "$TicketNCIPDocketNo",
+      "Ticket No": "$SupportTicketNo",
+      "Creation Date": "$CreatedAt",
+      "Re-Open Date": "$TicketReOpenDate",
+      "Ticket Status": "$TicketStatus",
+      "Status Date": "$ticketHistory.StatusUpdateTime",
+      "State": "$StateMasterName",
+      "District": "$DistrictMasterName",
+      "Type": "$TicketHeadName",
+      "Category": "$TicketCategoryName",
+      "Sub Category": "$SupportTicketTypeName",
+      "Season": "$RequestSeason",
+      "Year": "$RequestYear",
+      "Insurance Company": "$InsuranceMasterName",
+      "Application No": "$ApplicationNo",
+      "Policy No": "$InsurancePolicyNo",
+      "Caller Mobile No": "$CallerContactNumber",
+      "Farmer Name": "$RequestorName",
+      "Mobile No": "$RequestorMobileNo",
+      "Created By": "$CreatedBY",
+      "Description": "$TicketDescription",
+      "ticket_comment_journey": {
+        $reduce: {
+          input: "$ticket_comment_journey",
+          initialValue: [],
+          in: { $concatArrays: ["$$value", "$$this"] }
+        }
+      }
+    }
+  },
+
+  { $skip: (page - 1) * limit },
+  { $limit: limit }
+];
 
 
 
