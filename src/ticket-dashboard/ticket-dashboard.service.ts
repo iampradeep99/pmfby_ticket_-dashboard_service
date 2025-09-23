@@ -795,13 +795,19 @@ export class TicketDashboardService {
   },
 
   // Ticket comments (latest first)
-  {
+   {
     $lookup: {
       from: 'ticket_comment_journey',
       let: { ticketNo: '$SupportTicketNo' },
       pipeline: [
         { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
-        { $sort: { ResolvedDate: -1 } }, // latest comments first
+        { $sort: { ResolvedDate: 1 } }, // optional: oldest first
+        {
+          $group: {
+            _id: '$SupportTicketNo',
+            comments: { $push: '$$ROOT' }, // all comments in one array
+          },
+        },
       ],
       as: 'ticket_comment_journey',
     },
@@ -813,7 +819,7 @@ export class TicketDashboardService {
       ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
       claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
       agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
-      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] },
+      ticket_comment_journey: { $arrayElemAt: ['$ticket_comment_journey.comments', 0] },
     },
   },
 
@@ -1096,17 +1102,43 @@ export class TicketDashboardService {
 
    results = Array.isArray(results) ? results : [results];
 
+// results.forEach(doc => {
+//   if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+//     const journey = doc.ticket_comment_journey;
+//     const seen = new Set();
+
+//     journey.forEach((commentObj, index) => {
+//       const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
+
+//       const rawComment = commentObj.ResolvedComment || '';
+//       const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
+
+//       const uniqueKey = `${commentDate}-${cleanComment}`;
+//       if (!seen.has(uniqueKey)) {
+//         seen.add(uniqueKey);
+//         doc[`Comment Date ${index + 1}`] = commentDate;
+//         doc[`Comment ${index + 1}`] = cleanComment;
+//       }
+//     });
+//   } else {
+//     // Default NA values when no journey exists
+//     doc[`Comment Date 1`] = "NA";
+//     doc[`Comment 1`] = "NA";
+//   }
+
+//   // Remove raw journey array if present
+//   delete doc.ticket_comment_journey;
+// });
+
+
 results.forEach(doc => {
   if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
     const journey = doc.ticket_comment_journey;
     const seen = new Set();
-
     journey.forEach((commentObj, index) => {
       const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
-
       const rawComment = commentObj.ResolvedComment || '';
       const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
-
       const uniqueKey = `${commentDate}-${cleanComment}`;
       if (!seen.has(uniqueKey)) {
         seen.add(uniqueKey);
@@ -1115,16 +1147,10 @@ results.forEach(doc => {
       }
     });
   } else {
-    // Default NA values when no journey exists
     doc[`Comment Date 1`] = "NA";
     doc[`Comment 1`] = "NA";
   }
-
-  // Remove raw journey array if present
-  delete doc.ticket_comment_journey;
 });
-
-
 
 
 
