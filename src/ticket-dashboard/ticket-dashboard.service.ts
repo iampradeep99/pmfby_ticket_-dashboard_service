@@ -548,7 +548,7 @@ export class TicketDashboardService {
     //   { $limit: limit },
     // ];
 
-    const pipelinexxx: any[] = [
+    const pipeline: any[] = [
   { $match: match },
 
   {
