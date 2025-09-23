@@ -798,16 +798,38 @@ export class TicketDashboardService {
     },
   },
 
-  // Ensure one document per ticket
   {
     $group: {
       _id: '$SupportTicketNo',
-      doc: { $first: '$$ROOT' }, // pick the first document per ticket
+      SupportTicketID: { $first: '$SupportTicketID' },
+      ApplicationNo: { $first: '$ApplicationNo' },
+      InsurancePolicyNo: { $first: '$InsurancePolicyNo' },
+      TicketStatusID: { $first: '$TicketStatusID' },
+      TicketStatus: { $first: '$TicketStatus' },
+      CallerContactNumber: { $first: '$CallerContactNumber' },
+      RequestorName: { $first: '$RequestorName' },
+      RequestorMobileNo: { $first: '$RequestorMobileNo' },
+      StateMasterName: { $first: '$StateMasterName' },
+      DistrictMasterName: { $first: '$DistrictMasterName' },
+      SubDistrictName: { $first: '$SubDistrictName' },
+      TicketHeadName: { $first: '$TicketHeadName' },
+      TicketCategoryName: { $first: '$TicketCategoryName' },
+      RequestSeason: { $first: '$RequestSeason' },
+      RequestYear: { $first: '$RequestYear' },
+      TicketTypeName: { $first: '$TicketTypeName' },
+      InsuranceCompany: { $first: '$InsuranceCompany' },
+      TicketNCIPDocketNo: { $first: '$TicketNCIPDocketNo' },
+      InsertDateTime: { $first: '$InsertDateTime' },
+      Created: { $first: '$Created' },
+      StatusUpdateTime: { $first: '$StatusUpdateTime' },
+      agentInfo: { $first: '$agentInfo' },
+      claimInfo: { $first: '$claimInfo' },
+      ticketHistory: { $first: '$ticketHistory' },
+      TicketDescription: { $first: '$TicketDescription' },
+      CallingUniqueID: { $first: '$CallingUniqueID' },
+      TicketReOpenDate: { $first: '$TicketReOpenDate' },
+      SchemeName: { $first: '$SchemeName' },
     },
-  },
-
-  {
-    $replaceRoot: { newRoot: '$doc' },
   },
 
   // Project required fields
