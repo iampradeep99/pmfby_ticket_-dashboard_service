@@ -548,7 +548,7 @@ export class TicketDashboardService {
     //   { $limit: limit },
     // ];
 
-  /*   const pipeline: any[] = [
+/*     const pipeline: any[] = [
       { $match: match },
 
       {
@@ -740,12 +740,13 @@ export class TicketDashboardService {
 
       { $skip: (page - 1) * limit },
       { $limit: limit },
-    ]; */
+    ];
+ */
+
 
     const pipeline: any[] = [
   { $match: match },
 
-  // Ticket history (latest one with status 109304)
   {
     $lookup: {
       from: 'SLA_KRPH_SupportTicketsHistory_Records',
@@ -756,84 +757,70 @@ export class TicketDashboardService {
             $expr: {
               $and: [
                 { $eq: ['$SupportTicketID', '$$ticketId'] },
-                { $eq: ['$TicketStatusID', 109304] }
-              ]
-            }
-          }
+                { $eq: ['$TicketStatusID', 109304] },
+              ],
+            },
+          },
         },
         { $sort: { TicketHistoryID: -1 } },
-        { $limit: 1 }
+        { $limit: 1 },
       ],
-      as: 'ticketHistory'
-    }
+      as: 'ticketHistory',
+    },
   },
 
-  // Claim info
   {
     $lookup: {
       from: 'support_ticket_claim_intimation_report_history',
       localField: 'SupportTicketNo',
       foreignField: 'SupportTicketNo',
-      as: 'claimInfo'
-    }
+      as: 'claimInfo',
+    },
   },
 
-  // Agent info
   {
     $lookup: {
       from: 'csc_agent_master',
       localField: 'InsertUserID',
       foreignField: 'UserLoginID',
-      as: 'agentInfo'
-    }
+      as: 'agentInfo',
+    },
   },
 
-  // Comments (can have multiple rows)
+  // 🔴 Comment lookup (ticket_comment_journey)
+  /*
   {
     $lookup: {
       from: 'ticket_comment_journey',
       localField: 'SupportTicketNo',
       foreignField: 'SupportTicketNo',
-      as: 'ticket_comment_journey'
-    }
+      as: 'ticket_comment_journey',
+    },
   },
+  */
 
-  // 🟢 Remove duplicates per SupportTicketNo
-  {
-    $group: {
-      _id: '$SupportTicketNo',
-      doc: { $first: '$$ROOT' },
-      comments: { $push: '$ticket_comment_journey' }
-    }
-  },
-  {
-    $addFields: {
-      'doc.ticket_comment_journey': {
-        $reduce: {
-          input: '$comments',
-          initialValue: [],
-          in: { $concatArrays: ['$$value', '$$this'] }
-        }
-      }
-    }
-  },
-  { $replaceRoot: { newRoot: '$doc' } },
-
-  // Clean lookups (pick only one where needed)
   {
     $addFields: {
       ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
       claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
       agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
-      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
-    }
+      // ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
+    },
   },
 
-  // First projection
+  {
+    $group: {
+      _id: '$SupportTicketNo',
+      doc: { $first: '$$ROOT' },
+    },
+  },
+
+  { $replaceRoot: { newRoot: '$doc' } },
+
   {
     $project: {
       SupportTicketID: 1,
-      ticket_comment_journey: 1,
+      // ticket_comment_journey: 1,
       ApplicationNo: 1,
       InsurancePolicyNo: 1,
       TicketStatusID: 1,
@@ -873,21 +860,26 @@ export class TicketDashboardService {
       TicketDescription: 1,
       CallingUniqueID: 1,
       TicketDate: {
-        $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' }
+        $dateToString: {
+          format: '%Y-%m-%d %H:%M:%S',
+          date: '$Created',
+        },
       },
       StatusDate: {
-        $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$ticketHistory.StatusUpdateTime' }
+        $dateToString: {
+          format: '%Y-%m-%d %H:%M:%S',
+          date: '$StatusUpdateTime',
+        },
       },
       SupportTicketTypeName: '$TicketTypeName',
       SupportTicketNo: 1,
       InsuranceMasterName: '$InsuranceCompany',
       ReOpenDate: '$TicketReOpenDate',
       CallingUserID: '$agentInfo.UserID',
-      SchemeName: 1
-    }
+      SchemeName: 1,
+    },
   },
 
-  // Final projection (UI friendly fields)
   {
     $project: {
       _id: 0,
@@ -914,14 +906,13 @@ export class TicketDashboardService {
       'Mobile No': '$RequestorMobileNo',
       'Created By': '$CreatedBY',
       Description: '$TicketDescription',
-      ticket_comment_journey: '$ticket_comment_journey'
-    }
+      // ticket_comment_journey: '$ticket_comment_journey'
+    },
   },
 
   { $skip: (page - 1) * limit },
-  { $limit: limit }
+  { $limit: limit },
 ];
-
 
 
     let results = await db.collection('SLA_KRPH_SupportTickets_Records')
@@ -936,14 +927,11 @@ export class TicketDashboardService {
       };
     }
 
-    results = Array.isArray(results) ? results : [results];
-    console.log(results[0].ticket_comment_journey)
+   results = Array.isArray(results) ? results : [results];
 
-
-   results.forEach(doc => {
-  if (Array.isArray(doc.ticket_comment_journey)) {
+results.forEach(doc => {
+  if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
     const journey = doc.ticket_comment_journey;
-
     const seen = new Set();
 
     journey.forEach((commentObj, index) => {
@@ -959,10 +947,16 @@ export class TicketDashboardService {
         doc[`Comment ${index + 1}`] = cleanComment;
       }
     });
-
-    delete doc.ticket_comment_journey;
+  } else {
+    // Default NA values when no journey exists
+    doc[`Comment Date 1`] = "NA";
+    doc[`Comment 1`] = "NA";
   }
+
+  // Remove raw journey array if present
+  delete doc.ticket_comment_journey;
 });
+
 
 
 
