@@ -548,7 +548,7 @@ export class TicketDashboardService {
     //   { $limit: limit },
     // ];
 
-     const pipeline: any[] = [
+     const pipelinddde: any[] = [
       { $match: match },
 
       {
@@ -741,6 +741,173 @@ export class TicketDashboardService {
       { $skip: (page - 1) * limit },
       { $limit: limit },
     ];
+
+    const pipeline: any[] = [
+  { $match: match },
+
+  // Latest ticket history
+  {
+    $lookup: {
+      from: 'SLA_KRPH_SupportTicketsHistory_Records',
+      let: { ticketId: '$SupportTicketID' },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ['$SupportTicketID', '$$ticketId'] },
+                { $eq: ['$TicketStatusID', 109304] },
+              ],
+            },
+          },
+        },
+        { $sort: { TicketHistoryID: -1 } },
+        { $limit: 1 },
+      ],
+      as: 'ticketHistory',
+    },
+  },
+
+  // Claim info (only 1)
+  {
+    $lookup: {
+      from: 'support_ticket_claim_intimation_report_history',
+      let: { ticketNo: '$SupportTicketNo' },
+      pipeline: [
+        { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
+        { $limit: 1 },
+      ],
+      as: 'claimInfo',
+    },
+  },
+
+  // Agent info (only 1)
+  {
+    $lookup: {
+      from: 'csc_agent_master',
+      let: { userId: '$InsertUserID' },
+      pipeline: [
+        { $match: { $expr: { $eq: ['$UserLoginID', '$$userId'] } } },
+        { $limit: 1 },
+      ],
+      as: 'agentInfo',
+    },
+  },
+
+  // Ticket comments (latest first)
+  {
+    $lookup: {
+      from: 'ticket_comment_journey',
+      let: { ticketNo: '$SupportTicketNo' },
+      pipeline: [
+        { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
+        { $sort: { ResolvedDate: -1 } }, // latest comments first
+      ],
+      as: 'ticket_comment_journey',
+    },
+  },
+
+  // Flatten arrays
+  {
+    $addFields: {
+      ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
+      claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
+      agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
+      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] },
+    },
+  },
+
+  // Remove $group + $replaceRoot (already unique per SupportTicketNo)
+  // Project fields
+  {
+    $project: {
+      SupportTicketID: 1,
+      ticket_comment_journey: 1,
+      ApplicationNo: 1,
+      InsurancePolicyNo: 1,
+      TicketStatusID: 1,
+      TicketStatus: 1,
+      CallerContactNumber: 1,
+      RequestorName: 1,
+      RequestorMobileNo: 1,
+      StateMasterName: 1,
+      DistrictMasterName: 1,
+      SubDistrictName: 1,
+      TicketHeadName: 1,
+      TicketCategoryName: 1,
+      RequestSeason: 1,
+      RequestYear: 1,
+      ApplicationCropName: 1,
+      Relation: 1,
+      RelativeName: 1,
+      PolicyPremium: 1,
+      PolicyArea: 1,
+      PolicyType: 1,
+      LandSurveyNumber: 1,
+      LandDivisionNumber: 1,
+      IsSos: 1,
+      PlotStateName: 1,
+      PlotDistrictName: 1,
+      PlotVillageName: 1,
+      ApplicationSource: 1,
+      CropShare: 1,
+      IFSCCode: 1,
+      FarmerShare: 1,
+      SowingDate: 1,
+      LossDate: 1,
+      CreatedBY: 1,
+      CreatedAt: '$InsertDateTime',
+      Sos: 1,
+      NCIPDocketNo: '$TicketNCIPDocketNo',
+      TicketDescription: 1,
+      CallingUniqueID: 1,
+      TicketDate: { $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$Created' } },
+      StatusDate: { $dateToString: { format: '%Y-%m-%d %H:%M:%S', date: '$StatusUpdateTime' } },
+      SupportTicketTypeName: '$TicketTypeName',
+      SupportTicketNo: 1,
+      InsuranceMasterName: '$InsuranceCompany',
+      ReOpenDate: '$TicketReOpenDate',
+      CallingUserID: '$agentInfo.UserID',
+      SchemeName: 1,
+    },
+  },
+
+  // Final projection for Excel
+  {
+    $project: {
+      "_id": 0,
+      "Agent ID": "$CallingUserID",
+      "Calling ID": "$CallingUniqueID",
+      "NCIP Docket No": "$NCIPDocketNo",
+      "Ticket No": "$SupportTicketNo",
+      "Creation Date": "$CreatedAt",
+      "Re-Open Date": "$ReOpenDate",
+      "Ticket Status": "$TicketStatus",
+      "Status Date": "$StatusDate",
+      "State": "$StateMasterName",
+      "District": "$DistrictMasterName",
+      "Type": "$TicketHeadName",
+      "Category": "$SupportTicketTypeName",
+      "Sub Category": "$TicketCategoryName",
+      "Season": "$RequestSeason",
+      "Year": "$RequestYear",
+      "Insurance Company": "$InsuranceMasterName",
+      "Application No": "$ApplicationNo",
+      "Policy No": "$InsurancePolicyNo",
+      "Caller Mobile No": "$CallerContactNumber",
+      "Farmer Name": "$RequestorName",
+      "Mobile No": "$RequestorMobileNo",
+      "Created By": "$CreatedBY",
+      "Description": "$TicketDescription",
+      "ticket_comment_journey": "$ticket_comment_journey"
+    },
+  },
+
+  // Pagination
+  { $skip: (page - 1) * limit },
+  { $limit: limit },
+];
+
  
 
 
