@@ -267,8 +267,8 @@ const excelFilePath = path.join(folderPath, excelFileName);
   //       { $limit: CHUNK_SIZE },
   //     ];
 
-
-  const pipeline: any[] = [
+console.log("test")
+/*   const pipeline: any[] = [
   { $match: dailyMatch },
 
   // Lookup ticket history (latest record with TicketStatusID 109304)
@@ -329,6 +329,80 @@ const excelFilePath = path.join(folderPath, excelFileName);
     $group: {
       _id: '$SupportTicketNo',
       doc: { $first: '$$ROOT' } 
+    }
+  },
+
+  {
+    $replaceRoot: { newRoot: '$doc' }
+  },
+
+  { $skip: skip },
+  { $limit: CHUNK_SIZE },
+]; */
+
+
+const pipeline: any[] = [
+  { $match: dailyMatch },
+
+  // Lookup latest ticket history
+  {
+    $lookup: {
+      from: 'SLA_KRPH_SupportTicketsHistory_Records',
+      let: { ticketId: '$SupportTicketID' },
+      pipeline: [
+        { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
+        { $sort: { TicketHistoryID: -1 } },
+        { $limit: 1 }
+      ],
+      as: 'ticketHistory',
+    }
+  },
+
+  // Lookup claim info
+  {
+    $lookup: {
+      from: 'support_ticket_claim_intimation_report_history',
+      localField: 'SupportTicketNo',
+      foreignField: 'SupportTicketNo',
+      as: 'claimInfo',
+    }
+  },
+
+  // Lookup agent info
+  {
+    $lookup: {
+      from: 'csc_agent_master',
+      localField: 'InsertUserID',
+      foreignField: 'UserLoginID',
+      as: 'agentInfo',
+    }
+  },
+
+  // Lookup ticket comments journey
+  {
+    $lookup: {
+      from: 'ticket_comment_journey',
+      localField: 'SupportTicketNo',
+      foreignField: 'SupportTicketNo',
+      as: 'ticket_comment_journey',
+    }
+  },
+
+  // Flatten single-item arrays, keep comments as array
+  {
+    $addFields: {
+      ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
+      claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
+      agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
+      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } // keep all comments
+    }
+  },
+
+  // Ensure one document per ticket
+  {
+    $group: {
+      _id: '$SupportTicketNo',
+      doc: { $first: '$$ROOT' }
     }
   },
 
