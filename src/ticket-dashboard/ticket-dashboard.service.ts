@@ -988,7 +988,7 @@ export class TicketDashboardService {
 
 
 
-results.forEach(doc => {
+ results.forEach(doc => {
   if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
     const journey = doc.ticket_comment_journey;
     const seen = new Set();
@@ -1083,7 +1083,10 @@ results.forEach(doc => {
     // doc['ReOpen1Date'] = "NA";
     // doc['ReOpen1Comment'] = "NA";
   }
-});
+}); 
+
+
+
 
 
 
