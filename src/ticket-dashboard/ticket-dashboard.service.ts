@@ -1000,10 +1000,10 @@ results.forEach(doc => {
         const cleanInProgressComment = rawInProgressComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
 
         doc['In-Progress Date'] = inProgressDate;
-        doc['In-Progress'] = cleanInProgressComment === "" ? "NA" : cleanInProgressComment;
+        doc['In-Progress Comment'] = cleanInProgressComment === "" ? "NA" : cleanInProgressComment;
       } else {
         doc['In-Progress Date'] = "NA";
-        doc['In-Progress'] = "NA";
+        doc['In-Progress Comment'] = "NA";
       }
 
       if (commentObj.ResolvedDate && commentObj.ResolvedComment) {
@@ -1012,10 +1012,10 @@ results.forEach(doc => {
         const cleanResolvedComment = rawResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
 
         doc['Resolved-Date'] = resolvedDate;
-        doc['Resolved'] = cleanResolvedComment === "" ? "NA" : cleanResolvedComment;
+        doc['Resolved Comment'] = cleanResolvedComment === "" ? "NA" : cleanResolvedComment;
       } else {
         doc['Resolved-Date'] = "NA";
-        doc['Resolved'] = "NA";
+        doc['Resolved Comment'] = "NA";
       }
 
       if (commentObj.ReOpenDate && commentObj.ReOpenComment) {
@@ -1024,10 +1024,10 @@ results.forEach(doc => {
         const cleanReOpenComment = rawReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
 
         doc['Re-Open-Date'] = reOpenDate;
-        doc['Re-Open'] = cleanReOpenComment === "" ? "NA" : cleanReOpenComment;
+        doc['Re-Open Comment'] = cleanReOpenComment === "" ? "NA" : cleanReOpenComment;
       } else {
         doc['Re-Open-Date'] = "NA";
-        doc['Re-Open'] = "NA";
+        doc['Re-Open Comment'] = "NA";
       }
 
       // if (commentObj.Inprogress1Date && commentObj.Inprogress1Comment) {
@@ -1071,11 +1071,11 @@ results.forEach(doc => {
   } else {
     // Default NA values when no journey exists
     doc['In-Progress Date'] = "NA";
-    doc['In-Progress'] = "NA";
+    doc['In-Progress Comment'] = "NA";
     doc['Resolved-Date'] = "NA";
-    doc['Resolved'] = "NA";
+    doc['Resolved Comment'] = "NA";
     doc['Re-Open-Date'] = "NA";
-    doc['Re-Open'] = "NA";
+    doc['Re-Open Comment'] = "NA";
     // doc['Inprogress1Date'] = "NA";
     // doc['Inprogress1Comment'] = "NA";
     // doc['Resolved1Date'] = "NA";
