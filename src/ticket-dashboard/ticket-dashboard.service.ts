@@ -988,7 +988,7 @@ export class TicketDashboardService {
 
 
 
- results.forEach(doc => {
+/*  results.forEach(doc => {
   if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
     const journey = doc.ticket_comment_journey;
     const seen = new Set();
@@ -1083,7 +1083,156 @@ export class TicketDashboardService {
     // doc['ReOpen1Date'] = "NA";
     // doc['ReOpen1Comment'] = "NA";
   }
-}); 
+});  */
+
+
+
+results.forEach(doc => {
+  if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+    const journey = doc.ticket_comment_journey;
+
+    journey.forEach((commentObj) => {
+      // Handle Inprogress Date and Comment
+      if (commentObj.InprogressDate && commentObj.InprogressComment) {
+        const inProgressDate = this.formatToDDMMYYYY(commentObj.InprogressDate);
+        const rawInProgressComment = commentObj.InprogressComment || '';
+        const cleanInProgressComment = rawInProgressComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['In-Progress Date'] = inProgressDate;
+        doc['In-Progress Comment'] = cleanInProgressComment === "" ? "NA" : cleanInProgressComment;
+      } else {
+        doc['In-Progress Date'] = "NA";
+        doc['In-Progress Comment'] = "NA";
+      }
+
+      // Handle Resolved Date and Comment
+      if (commentObj.ResolvedDate && commentObj.ResolvedComment) {
+        const resolvedDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
+        const rawResolvedComment = commentObj.ResolvedComment || '';
+        const cleanResolvedComment = rawResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['Resolved-Date'] = resolvedDate;
+        doc['Resolved Comment'] = cleanResolvedComment === "" ? "NA" : cleanResolvedComment;
+      } else {
+        doc['Resolved-Date'] = "NA";
+        doc['Resolved Comment'] = "NA";
+      }
+
+      // Handle ReOpen Date and Comment
+      if (commentObj.ReOpenDate && commentObj.ReOpenComment) {
+        const reOpenDate = this.formatToDDMMYYYY(commentObj.ReOpenDate);
+        const rawReOpenComment = commentObj.ReOpenComment || '';
+        const cleanReOpenComment = rawReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['Re-Open-Date'] = reOpenDate;
+        doc['Re-Open Comment'] = cleanReOpenComment === "" ? "NA" : cleanReOpenComment;
+      } else {
+        doc['Re-Open-Date'] = "NA";
+        doc['Re-Open Comment'] = "NA";
+      }
+
+      // Handle Inprogress1 Date and Comment (with "1" suffix)
+      if (commentObj.Inprogress1Date && commentObj.Inprogress1Comment) {
+        const inProgress1Date = this.formatToDDMMYYYY(commentObj.Inprogress1Date);
+        const rawInProgress1Comment = commentObj.Inprogress1Comment || '';
+        const cleanInProgress1Comment = rawInProgress1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['In-Progress Date 1'] = inProgress1Date;
+        doc['In-Progress Comment 1'] = cleanInProgress1Comment === "" ? "NA" : cleanInProgress1Comment;
+      } else {
+        doc['In-Progress Date 1'] = "NA";
+        doc['In-Progress Comment 1'] = "NA";
+      }
+
+      // Handle Resolved1 Date and Comment (with "1" suffix)
+      if (commentObj.Resolved1Date && commentObj.Resolved1Comment) {
+        const resolved1Date = this.formatToDDMMYYYY(commentObj.Resolved1Date);
+        const rawResolved1Comment = commentObj.Resolved1Comment || '';
+        const cleanResolved1Comment = rawResolved1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['Resolved-Date 1'] = resolved1Date;
+        doc['Resolved Comment 1'] = cleanResolved1Comment === "" ? "NA" : cleanResolved1Comment;
+      } else {
+        doc['Resolved-Date 1'] = "NA";
+        doc['Resolved Comment 1'] = "NA";
+      }
+
+      // Handle ReOpen1 Date and Comment (with "1" suffix)
+      if (commentObj.ReOpen1Date && commentObj.ReOpen1Comment) {
+        const reOpen1Date = this.formatToDDMMYYYY(commentObj.ReOpen1Date);
+        const rawReOpen1Comment = commentObj.ReOpen1Comment || '';
+        const cleanReOpen1Comment = rawReOpen1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['Re-Open-Date 1'] = reOpen1Date;
+        doc['Re-Open Comment 1'] = cleanReOpen1Comment === "" ? "NA" : cleanReOpen1Comment;
+      } else {
+        doc['Re-Open-Date 1'] = "NA";
+        doc['Re-Open Comment 1'] = "NA";
+      }
+
+      // Handle Inprogress2 Date and Comment (with "2" suffix)
+      if (commentObj.Inprogress2Date && commentObj.Inprogress2Comment) {
+        const inProgress2Date = this.formatToDDMMYYYY(commentObj.Inprogress2Date);
+        const rawInProgress2Comment = commentObj.Inprogress2Comment || '';
+        const cleanInProgress2Comment = rawInProgress2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['In-Progress Date 2'] = inProgress2Date;
+        doc['In-Progress Comment 2'] = cleanInProgress2Comment === "" ? "NA" : cleanInProgress2Comment;
+      } else {
+        doc['In-Progress Date 2'] = "NA";
+        doc['In-Progress Comment 2'] = "NA";
+      }
+
+      // Handle Resolved2 Date and Comment (with "2" suffix)
+      if (commentObj.Resolved2Date && commentObj.Resolved2Comment) {
+        const resolved2Date = this.formatToDDMMYYYY(commentObj.Resolved2Date);
+        const rawResolved2Comment = commentObj.Resolved2Comment || '';
+        const cleanResolved2Comment = rawResolved2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['Resolved-Date 2'] = resolved2Date;
+        doc['Resolved Comment 2'] = cleanResolved2Comment === "" ? "NA" : cleanResolved2Comment;
+      } else {
+        doc['Resolved-Date 2'] = "NA";
+        doc['Resolved Comment 2'] = "NA";
+      }
+
+      // Handle ReOpen2 Date and Comment (with "2" suffix)
+      if (commentObj.ReOpen2Date && commentObj.ReOpen2Comment) {
+        const reOpen2Date = this.formatToDDMMYYYY(commentObj.ReOpen2Date);
+        const rawReOpen2Comment = commentObj.ReOpen2Comment || '';
+        const cleanReOpen2Comment = rawReOpen2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+        doc['Re-Open-Date 2'] = reOpen2Date;
+        doc['Re-Open Comment 2'] = cleanReOpen2Comment === "" ? "NA" : cleanReOpen2Comment;
+      } else {
+        doc['Re-Open-Date 2'] = "NA";
+        doc['Re-Open Comment 2'] = "NA";
+      }
+    });
+
+    delete doc.ticket_comment_journey;
+  } else {
+    // Default NA values when no journey exists
+    doc['In-Progress Date'] = "NA";
+    doc['In-Progress Comment'] = "NA";
+    doc['Resolved-Date'] = "NA";
+    doc['Resolved Comment'] = "NA";
+    doc['Re-Open-Date'] = "NA";
+    doc['Re-Open Comment'] = "NA";
+    doc['In-Progress Date 1'] = "NA";
+    doc['In-Progress Comment 1'] = "NA";
+    doc['Resolved-Date 1'] = "NA";
+    doc['Resolved Comment 1'] = "NA";
+    doc['Re-Open-Date 1'] = "NA";
+    doc['Re-Open Comment 1'] = "NA";
+    doc['In-Progress Date 2'] = "NA";
+    doc['In-Progress Comment 2'] = "NA";
+    doc['Resolved-Date 2'] = "NA";
+    doc['Resolved Comment 2'] = "NA";
+    doc['Re-Open-Date 2'] = "NA";
+    doc['Re-Open Comment 2'] = "NA";
+  }
+});
 
 
 
