@@ -320,16 +320,16 @@ export class TicketDashboardService {
     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
     if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
 
-    const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
-    const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
-    if (cachedData) {
-      return {
-        rcode: 1,
-        rmessage: 'Success',
-        data: cachedData.data,
-        pagination: cachedData.pagination,
-      };
-    }
+    // const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+    // const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+    // if (cachedData) {
+    //   return {
+    //     rcode: 1,
+    //     rmessage: 'Success',
+    //     data: cachedData.data,
+    //     pagination: cachedData.pagination,
+    //   };
+    // }
 
     const Delta = await this.getSupportTicketUserDetail(SPUserID);
     const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
@@ -932,7 +932,7 @@ export class TicketDashboardService {
       },
     };
 
-    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+    // await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
 
     return {
       rcode: 1,
