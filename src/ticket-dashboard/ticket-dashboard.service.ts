@@ -274,7 +274,6 @@ export class TicketDashboardService {
 
   async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], message: string, pagination: any }> {
     const result = await this.processTicketHistoryView(ticketPayload);
-    return
     return {
       data: result.data,
       message: result.rmessage || 'Success',
