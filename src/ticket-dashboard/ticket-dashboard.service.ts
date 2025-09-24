@@ -274,6 +274,7 @@ export class TicketDashboardService {
 
   async getSupportTicketHistotReport(ticketPayload: any): Promise<{ data: any[], message: string, pagination: any }> {
     const result = await this.processTicketHistoryView(ticketPayload);
+    return
     return {
       data: result.data,
       message: result.rmessage || 'Success',
@@ -427,7 +428,6 @@ export class TicketDashboardService {
       }
     }
 
-    console.log(match);
     // return; // Uncomment if you want to debug only
 
     const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
@@ -702,10 +702,9 @@ export class TicketDashboardService {
   { $skip: (page - 1) * limit },
   { $limit: limit },
 ];
-const pipeline: any[] = [
+const pipelinetest: any[] = [
   { $match: match },
 
-  // --- Ticket History Lookup (latest record only) ---
   {
     $lookup: {
       from: 'SLA_KRPH_SupportTicketsHistory_Records',
@@ -729,7 +728,6 @@ const pipeline: any[] = [
   },
   { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
 
-  // --- Claim Info Lookup (latest only) ---
   {
     $lookup: {
       from: 'support_ticket_claim_intimation_report_history',
@@ -744,7 +742,6 @@ const pipeline: any[] = [
   },
   { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
 
-  // --- Agent Info Lookup (latest only) ---
   {
     $lookup: {
       from: 'csc_agent_master',
@@ -758,7 +755,6 @@ const pipeline: any[] = [
   },
   { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
 
-  // --- Project only required fields early to reduce memory ---
   {
     $project: {
       SupportTicketID: 1,
@@ -815,7 +811,6 @@ const pipeline: any[] = [
     }
   },
 
-  // --- Final formatting project ---
   {
     $project: {
       "_id": 0,
@@ -849,10 +844,164 @@ const pipeline: any[] = [
   { $limit: limit }
 ];
 
+const pipeline: any[] = [
+  { $match: match },
+
+  // ✅ Deduplicate early: keep only the latest per SupportTicketNo
+  { $sort: { InsertDateTime: -1 } },
+  {
+    $group: {
+      _id: "$SupportTicketNo",
+      doc: { $first: "$$ROOT" }
+    }
+  },
+  { $replaceRoot: { newRoot: "$doc" } },
+
+  {
+    $lookup: {
+      from: 'SLA_KRPH_SupportTicketsHistory_Records',
+      let: { ticketId: '$SupportTicketID' },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ['$SupportTicketID', '$$ticketId'] },
+                { $eq: ['$TicketStatusID', 109304] }
+              ]
+            }
+          }
+        },
+        { $sort: { TicketHistoryID: -1 } },
+        { $limit: 1 }
+      ],
+      as: 'ticketHistory'
+    }
+  },
+  { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+
+  {
+    $lookup: {
+      from: 'support_ticket_claim_intimation_report_history',
+      let: { ticketNo: '$SupportTicketNo' },
+      pipeline: [
+        { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
+        { $sort: { InsertDateTime: -1 } },
+        { $limit: 1 }
+      ],
+      as: 'claimInfo'
+    }
+  },
+  { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+
+  {
+    $lookup: {
+      from: 'csc_agent_master',
+      let: { userLoginId: '$InsertUserID' },
+      pipeline: [
+        { $match: { $expr: { $eq: ['$UserLoginID', '$$userLoginId'] } } },
+        { $limit: 1 }
+      ],
+      as: 'agentInfo'
+    }
+  },
+  { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+
+  {
+    $project: {
+      SupportTicketID: 1,
+      SupportTicketNo: 1,
+      InsertUserID: 1,
+      Created: 1,
+      StatusUpdateTime: 1,
+      TicketStatusID: 1,
+      TicketStatus: 1,
+      ApplicationNo: 1,
+      InsurancePolicyNo: 1,
+      CallerContactNumber: 1,
+      RequestorName: 1,
+      RequestorMobileNo: 1,
+      StateMasterName: 1,
+      DistrictMasterName: 1,
+      SubDistrictName: 1,
+      TicketHeadName: 1,
+      TicketCategoryName: 1,
+      RequestSeason: 1,
+      RequestYear: 1,
+      ApplicationCropName: 1,
+      Relation: 1,
+      RelativeName: 1,
+      PolicyPremium: 1,
+      PolicyArea: 1,
+      PolicyType: 1,
+      LandSurveyNumber: 1,
+      LandDivisionNumber: 1,
+      IsSos: 1,
+      PlotStateName: 1,
+      PlotDistrictName: 1,
+      PlotVillageName: 1,
+      ApplicationSource: 1,
+      CropShare: 1,
+      IFSCCode: 1,
+      FarmerShare: 1,
+      SowingDate: 1,
+      LossDate: 1,
+      CreatedBY: 1,
+      InsertDateTime: 1,
+      Sos: 1,
+      TicketNCIPDocketNo: 1,
+      TicketDescription: 1,
+      CallingUniqueID: 1,
+      TicketTypeName: 1,
+      TicketReOpenDate: 1,
+      InsuranceCompany: 1,
+      SchemeName: 1,
+      // Unwinded lookups
+      ticketHistory: 1,
+      claimInfo: 1,
+      agentInfo: 1
+    }
+  },
+
+  {
+    $project: {
+      _id: 0,
+      "Agent ID": "$agentInfo.UserID",
+      "Calling ID": "$CallingUniqueID",
+      "NCIP Docket No": "$TicketNCIPDocketNo",
+      "Ticket No": "$SupportTicketNo",
+      "Creation Date": "$InsertDateTime",
+      "Re-Open Date": "$TicketReOpenDate",
+      "Ticket Status": "$TicketStatus",
+      "Status Date": "$StatusUpdateTime",
+      "State": "$StateMasterName",
+      "District": "$DistrictMasterName",
+      "Type": "$TicketHeadName",
+      "Category": "$TicketTypeName",
+      "Sub Category": "$TicketCategoryName",
+      "Season": "$RequestSeason",
+      "Year": "$RequestYear",
+      "Insurance Company": "$InsuranceCompany",
+      "Application No": "$ApplicationNo",
+      "Policy No": "$InsurancePolicyNo",
+      "Caller Mobile No": "$CallerContactNumber",
+      "Farmer Name": "$RequestorName",
+      "Mobile No": "$RequestorMobileNo",
+      "Created By": "$CreatedBY",
+      "Description": "$TicketDescription"
+    }
+  },
+
+  { $skip: (page - 1) * limit },
+  { $limit: limit }
+];
+
+
 
  
 
-
+console.log(JSON.stringify(pipeline), "testPipeline");
+return
 
 
 //     const pipeline: any[] = [
