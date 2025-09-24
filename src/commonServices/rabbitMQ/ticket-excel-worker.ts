@@ -78,9 +78,6 @@ async function processTicketHistory(ticketPayload: any) {
     );
     return cachedData;
   }
-
-  // ===== User detail auth =====
-//   const Delta = await (ticketPayload as any).getSupportTicketUserDetail(SPUserID);
   const Delta = await getSupportTicketUserDetail(SPUserID);
   const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
   const item = (responseInfo.data as any)?.user?.[0];
@@ -189,8 +186,25 @@ const excelFilePath = path.join(folderPath, excelFileName);
     { header: 'Created By', key: 'CreatedBY', width: 20 },
     { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
   ];
-  worksheet.columns = staticColumns;
 
+  const dynamicColumns = [];
+for (let i = 1; i <= 3; i++) {
+  dynamicColumns.push(
+    { header: `In-Progress Date ${i}`, key: `In-Progress Date ${i}`, width: 25 },
+    { header: `In-Progress Comment ${i}`, key: `In-Progress Comment ${i}`, width: 50 },
+    { header: `Resolved-Date ${i}`, key: `Resolved-Date ${i}`, width: 25 },
+    { header: `Resolved Comment ${i}`, key: `Resolved Comment ${i}`, width: 50 },
+    { header: `Re-Open-Date ${i}`, key: `Re-Open-Date ${i}`, width: 25 },
+    { header: `Re-Open Comment ${i}`, key: `Re-Open Comment ${i}`, width: 50 },
+    { header: `In-Progress1 Date ${i}`, key: `In-Progress1 Date ${i}`, width: 25 },
+    { header: `Resolved1 Date ${i}`, key: `Resolved1 Date ${i}`, width: 25 },
+    { header: `Re-Open1 Date ${i}`, key: `Re-Open1 Date ${i}`, width: 25 },
+    { header: `In-Progress1 Comment ${i}`, key: `In-Progress1 Comment ${i}`, width: 50 },
+    { header: `Resolved1 Comment ${i}`, key: `Resolved1 Comment ${i}`, width: 50 },
+    { header: `Re-Open1 Comment ${i}`, key: `Re-Open1 Comment ${i}`, width: 50 }
+  );
+}
+worksheet.columns = staticColumns.concat(dynamicColumns);
   function formatToDDMMYYYY(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -215,133 +229,7 @@ const excelFilePath = path.join(folderPath, excelFileName);
 
     while (hasMore) {
       const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
-  //     const pipeline: any[] = [
-  //       { $match: dailyMatch },
-  //       {
-  //         $lookup: {
-  //           from: 'SLA_KRPH_SupportTicketsHistory_Records',
-  //           let: { ticketId: '$SupportTicketID' },
-  //           pipeline: [
-  //             { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
-  //             { $sort: { TicketHistoryID: -1 } },
-  //             { $limit: 1 }
-  //           ],
-  //           as: 'ticketHistory',
-  //         }
-  //       },
-  //       {
-  //         $lookup: {
-  //           from: 'support_ticket_claim_intimation_report_history',
-  //           localField: 'SupportTicketNo',
-  //           foreignField: 'SupportTicketNo',
-  //           as: 'claimInfo',
-  //         }
-  //       },
-  //       {
-  //         $lookup: {
-  //           from: 'csc_agent_master',
-  //           localField: 'InsertUserID',
-  //           foreignField: 'UserLoginID',
-  //           as: 'agentInfo',
-  //         }
-  //       },
-  //       {
-  //         $lookup: {
-  //           from: 'ticket_comment_journey',
-  //           localField: 'SupportTicketNo',
-  //           foreignField: 'SupportTicketNo',
-  //           as: 'ticket_comment_journey',
-  //         },
-  //       },
-
-  //        {
-  //   $addFields: {
-  //     ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
-  //     claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
-  //     agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
-  //     ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
-  //   }
-  // },
-        
-  //       { $skip: skip },
-  //       { $limit: CHUNK_SIZE },
-  //     ];
-
-console.log("test")
-/*   const pipeline: any[] = [
-  { $match: dailyMatch },
-
-  // Lookup ticket history (latest record with TicketStatusID 109304)
-  {
-    $lookup: {
-      from: 'SLA_KRPH_SupportTicketsHistory_Records',
-      let: { ticketId: '$SupportTicketID' },
-      pipeline: [
-        { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
-        { $sort: { TicketHistoryID: -1 } },
-        { $limit: 1 }
-      ],
-      as: 'ticketHistory',
-    }
-  },
-
-  // Lookup claim info
-  {
-    $lookup: {
-      from: 'support_ticket_claim_intimation_report_history',
-      localField: 'SupportTicketNo',
-      foreignField: 'SupportTicketNo',
-      as: 'claimInfo',
-    }
-  },
-
-  // Lookup agent info
-  {
-    $lookup: {
-      from: 'csc_agent_master',
-      localField: 'InsertUserID',
-      foreignField: 'UserLoginID',
-      as: 'agentInfo',
-    }
-  },
-
-  // Lookup ticket comments journey
-  {
-    $lookup: {
-      from: 'ticket_comment_journey',
-      localField: 'SupportTicketNo',
-      foreignField: 'SupportTicketNo',
-      as: 'ticket_comment_journey',
-    },
-  },
-
-  // Flatten arrays and handle nulls
-  {
-    $addFields: {
-      ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
-      claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
-      agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
-      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
-    }
-  },
-
-  {
-    $group: {
-      _id: '$SupportTicketNo',
-      doc: { $first: '$$ROOT' } 
-    }
-  },
-
-  {
-    $replaceRoot: { newRoot: '$doc' }
-  },
-
-  { $skip: skip },
-  { $limit: CHUNK_SIZE },
-]; */
-
-
-const pipeline: any[] = [
+      const pipeline: any[] = [
   { $match: dailyMatch },
    { "$sort": { "InsertDateTime": -1 } },
 
@@ -451,7 +339,7 @@ const pipeline: any[] = [
 
       const docs = await cursor.toArray();
 
-      for (const doc of docs) {
+    /*   for (const doc of docs) {
         const dynamicColumnsBatch: any = {};
         if (Array.isArray(doc.ticket_comment_journey)) {
           const seen = new Set();
@@ -511,7 +399,125 @@ const pipeline: any[] = [
           TicketDescription: doc.TicketDescription || '',
           ...dynamicColumnsBatch
         }).commit();
-      }
+      }  */
+for (const doc of docs) {
+  const dynamicColumnsBatch = {};
+
+  if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+    const journey = doc.ticket_comment_journey;
+
+    for (let idx = 0; idx < 3; idx++) {
+      const commentObj = journey[idx] || {}; 
+
+      const inProgressDate = commentObj.InprogressDate ? formatToDDMMYYYY(commentObj.InprogressDate) : 'NA';
+      const inProgressComment = commentObj.InprogressComment
+        ? commentObj.InprogressComment.replace(/<\/?[^>]+(>|$)/g, '').trim()  // Remove HTML tags
+        : 'NA';
+      dynamicColumnsBatch[`In-Progress Date ${idx + 1}`] = inProgressDate;
+      dynamicColumnsBatch[`In-Progress Comment ${idx + 1}`] = inProgressComment;
+
+      const resolvedDate = commentObj.ResolvedDate ? formatToDDMMYYYY(commentObj.ResolvedDate) : 'NA';
+      const resolvedComment = commentObj.ResolvedComment
+        ? commentObj.ResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim()  
+        : 'NA';
+      dynamicColumnsBatch[`Resolved-Date ${idx + 1}`] = resolvedDate;
+      dynamicColumnsBatch[`Resolved Comment ${idx + 1}`] = resolvedComment;
+
+      const reOpenDate = commentObj.ReOpenDate ? formatToDDMMYYYY(commentObj.ReOpenDate) : 'NA';
+      const reOpenComment = commentObj.ReOpenComment
+        ? commentObj.ReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim()  
+        : 'NA';
+      dynamicColumnsBatch[`Re-Open-Date ${idx + 1}`] = reOpenDate;
+      dynamicColumnsBatch[`Re-Open Comment ${idx + 1}`] = reOpenComment;
+
+      const inProgress1Date = commentObj.Inprogress1Date ? formatToDDMMYYYY(commentObj.Inprogress1Date) : 'NA';
+      const resolved1Date = commentObj.Resolved1Date ? formatToDDMMYYYY(commentObj.Resolved1Date) : 'NA';
+      const reOpen1Date = commentObj.ReOpen1Date ? formatToDDMMYYYY(commentObj.ReOpen1Date) : 'NA';
+
+      const inProgress1Comment = commentObj.Inprogress1Comment
+        ? commentObj.Inprogress1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim()
+        : 'NA';
+      const resolved1Comment = commentObj.Resolved1Comment
+        ? commentObj.Resolved1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim()
+        : 'NA';
+      const reOpen1Comment = commentObj.ReOpen1Comment
+        ? commentObj.ReOpen1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim()
+        : 'NA';
+
+      dynamicColumnsBatch[`In-Progress1 Date ${idx + 1}`] = inProgress1Date;
+      dynamicColumnsBatch[`Resolved1 Date ${idx + 1}`] = resolved1Date;
+      dynamicColumnsBatch[`Re-Open1 Date ${idx + 1}`] = reOpen1Date;
+
+      dynamicColumnsBatch[`In-Progress1 Comment ${idx + 1}`] = inProgress1Comment;
+      dynamicColumnsBatch[`Resolved1 Comment ${idx + 1}`] = resolved1Comment;
+      dynamicColumnsBatch[`Re-Open1 Comment ${idx + 1}`] = reOpen1Comment;
+    }
+
+  } else {
+    for (let i = 1; i <= 3; i++) {
+      dynamicColumnsBatch[`In-Progress Date ${i}`] = 'NA';
+      dynamicColumnsBatch[`In-Progress Comment ${i}`] = 'NA';
+      dynamicColumnsBatch[`Resolved-Date ${i}`] = 'NA';
+      dynamicColumnsBatch[`Resolved Comment ${i}`] = 'NA';
+      dynamicColumnsBatch[`Re-Open-Date ${i}`] = 'NA';
+      dynamicColumnsBatch[`Re-Open Comment ${i}`] = 'NA';
+
+      dynamicColumnsBatch[`In-Progress1 Date ${i}`] = 'NA';
+      dynamicColumnsBatch[`Resolved1 Date ${i}`] = 'NA';
+      dynamicColumnsBatch[`Re-Open1 Date ${i}`] = 'NA';
+
+      dynamicColumnsBatch[`In-Progress1 Comment ${i}`] = 'NA';
+      dynamicColumnsBatch[`Resolved1 Comment ${i}`] = 'NA';
+      dynamicColumnsBatch[`Re-Open1 Comment ${i}`] = 'NA';
+    }
+  }
+
+  console.log('Dynamic Columns for Ticket:', dynamicColumnsBatch);
+
+  worksheet.addRow({
+    AgentID: doc.agentInfo?.UserID?.toString() || '',
+    CallingUniqueID: doc.CallingUniqueID || '',
+    TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
+    SupportTicketNo: doc.SupportTicketNo?.toString() || '',
+    Created: doc.Created ? formatDate(doc.Created) : '',
+    TicketReOpenDate: doc.TicketReOpenDate || '',
+    TicketStatus: doc.TicketStatus || '',
+    StatusUpdateTime: doc.StatusUpdateTime ? formatDate(doc.StatusUpdateTime) : '',
+    StateMasterName: doc.StateMasterName || '',
+    DistrictMasterName: doc.DistrictMasterName || '',
+    SubDistrictName: doc.SubDistrictName || '',
+    TicketHeadName: doc.TicketHeadName || '',
+    TicketTypeName: doc.TicketTypeName || '',
+    TicketCategoryName: doc.TicketCategoryName || '',
+    CropSeasonName: doc.CropSeasonName || '',
+    RequestYear: doc.RequestYear || '',
+    InsuranceCompany: doc.InsuranceCompany || '',
+    ApplicationNo: doc.ApplicationNo || '',
+    InsurancePolicyNo: doc.InsurancePolicyNo || '',
+    CallerContactNumber: doc.CallerContactNumber || '',
+    RequestorName: doc.RequestorName || '',
+    RequestorMobileNo: doc.RequestorMobileNo || '',
+    Relation: doc.Relation || '',
+    RelativeName: doc.RelativeName || '',
+    PolicyPremium: doc.PolicyPremium || '',
+    PolicyArea: doc.PolicyArea || '',
+    PolicyType: doc.PolicyType || '',
+    LandSurveyNumber: doc.LandSurveyNumber || '',
+    LandDivisionNumber: doc.LandDivisionNumber || '',
+    PlotStateName: doc.PlotStateName || '',
+    PlotDistrictName: doc.PlotDistrictName || '',
+    PlotVillageName: doc.PlotVillageName || '',
+    ApplicationSource: doc.ApplicationSource || '',
+    CropShare: doc.CropShare || '',
+    IFSCCode: doc.IFSCCode || '',
+    FarmerShare: doc.FarmerShare || '',
+    SowingDate: doc.SowingDate || '',
+    CreatedBY: doc.CreatedBY || '',
+    TicketDescription: doc.TicketDescription || '',
+    ...dynamicColumnsBatch  
+  }).commit();
+}
+
 
       hasMore = docs.length === CHUNK_SIZE;
       skip += CHUNK_SIZE;
