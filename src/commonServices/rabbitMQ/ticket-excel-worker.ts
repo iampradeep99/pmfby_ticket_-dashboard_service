@@ -343,72 +343,105 @@ console.log("test")
 
 const pipeline: any[] = [
   { $match: dailyMatch },
+   { "$sort": { "InsertDateTime": -1 } },
 
-  // Lookup latest ticket history
-  {
-    $lookup: {
-      from: 'SLA_KRPH_SupportTicketsHistory_Records',
-      let: { ticketId: '$SupportTicketID' },
-      pipeline: [
-        { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
-        { $sort: { TicketHistoryID: -1 } },
-        { $limit: 1 }
+    {
+    "$group": {
+      "_id": "$SupportTicketNo",
+      "doc": { "$first": "$$ROOT" }
+    }
+  },
+  { "$replaceRoot": { "newRoot": "$doc" } },
+
+ {
+    "$lookup": {
+      "from": "SLA_KRPH_SupportTicketsHistory_Records",
+      "let": { "ticketId": "$SupportTicketID" },
+      "pipeline": [
+        {
+          "$match": {
+            "$expr": {
+              "$and": [
+                { "$eq": ["$SupportTicketID", "$$ticketId"] },
+                { "$eq": ["$TicketStatusID", 109304] }
+              ]
+            }
+          }
+        },
+        { "$sort": { "TicketHistoryID": -1 } },
+        { "$limit": 1 }
       ],
-      as: 'ticketHistory',
+      "as": "ticketHistory"
+    }
+  },
+  {
+    "$unwind": {
+      "path": "$ticketHistory",
+      "preserveNullAndEmptyArrays": true
     }
   },
 
-  // Lookup claim info
+ {
+    "$lookup": {
+      "from": "support_ticket_claim_intimation_report_history",
+      "let": { "ticketNo": "$SupportTicketNo" },
+      "pipeline": [
+        {
+          "$match": {
+            "$expr": { "$eq": ["$SupportTicketNo", "$$ticketNo"] }
+          }
+        },
+        { "$sort": { "InsertDateTime": -1 } },
+        { "$limit": 1 }
+      ],
+      "as": "claimInfo"
+    }
+  },
   {
-    $lookup: {
-      from: 'support_ticket_claim_intimation_report_history',
-      localField: 'SupportTicketNo',
-      foreignField: 'SupportTicketNo',
-      as: 'claimInfo',
+    "$unwind": {
+      "path": "$claimInfo",
+      "preserveNullAndEmptyArrays": true
     }
   },
 
-  // Lookup agent info
-  {
-    $lookup: {
-      from: 'csc_agent_master',
-      localField: 'InsertUserID',
-      foreignField: 'UserLoginID',
-      as: 'agentInfo',
+   {
+    "$lookup": {
+      "from": "csc_agent_master",
+      "let": { "userLoginId": "$InsertUserID" },
+      "pipeline": [
+        { "$match": { "$expr": { "$eq": ["$UserLoginID", "$$userLoginId"] } } },
+        { "$limit": 1 }
+      ],
+      "as": "agentInfo"
     }
   },
-
-  // Lookup ticket comments journey
   {
-    $lookup: {
-      from: 'ticket_comment_journey',
-      localField: 'SupportTicketNo',
-      foreignField: 'SupportTicketNo',
-      as: 'ticket_comment_journey',
-    }
-  },
-
-  // Flatten single-item arrays, keep comments as array
-  {
-    $addFields: {
-      ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
-      claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
-      agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
-      ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } // keep all comments
-    }
-  },
-
-  // Ensure one document per ticket
-  {
-    $group: {
-      _id: '$SupportTicketNo',
-      doc: { $first: '$$ROOT' }
+    "$unwind": {
+      "path": "$agentInfo",
+      "preserveNullAndEmptyArrays": true
     }
   },
 
   {
-    $replaceRoot: { newRoot: '$doc' }
-  },
+  "$lookup": {
+    "from": "ticket_comment_journey",
+    "localField": "SupportTicketNo",
+    "foreignField": "SupportTicketNo",
+    "as": "ticket_comment_journey",
+    "pipeline": [
+       { "$sort": { "CreatedDate": -1 } }, 
+      {
+        "$group": {
+          "_id": "$ResolvedComment", 
+          "unique_comments": { "$first": "$$ROOT" }  
+        }
+      },
+      { "$replaceRoot": { "newRoot": "$unique_comments" } } 
+    ]
+  }
+},
+
+
 
   { $skip: skip },
   { $limit: CHUNK_SIZE },
@@ -416,7 +449,6 @@ const pipeline: any[] = [
 
       const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
 
-    //   console.log(cursor[0])
       const docs = await cursor.toArray();
 
       for (const doc of docs) {
