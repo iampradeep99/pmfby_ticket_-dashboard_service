@@ -373,9 +373,9 @@ export class TicketDashboardService {
     if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
       const requestedInsuranceIDs = SPInsuranceCompanyID
         .split(',')
-        .map(id => Number(id.trim())); // convert to integer
+        .map(id => Number(id.trim()));
 
-      const allowedInsuranceIDs = InsuranceCompanyID.map(Number); // from user profile (ensure integers)
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
 
       const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
         allowedInsuranceIDs.includes(id)
@@ -387,21 +387,21 @@ export class TicketDashboardService {
 
       match.InsuranceCompanyID = { $in: validInsuranceIDs };
     } else {
-      // If #ALL, limit to allowed insurance companies
+
       if (InsuranceCompanyID?.length) {
         match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }; // force integers
       }
     }
 
 
-    // STATE FILTER
+
     if (SPStateID && SPStateID !== '#ALL') {
       const requestedStateIDs = SPStateID
         .split(',')
-        .map(id => Number(id.trim())); // convert to number
+        .map(id => Number(id.trim()));
 
       const validStateIDs = requestedStateIDs.filter(id =>
-        StateMasterID.map(Number).includes(id) // compare as numbers
+        StateMasterID.map(Number).includes(id)
       );
 
       if (validStateIDs.length === 0) {
@@ -410,7 +410,7 @@ export class TicketDashboardService {
 
       match.FilterStateID = { $in: validStateIDs };
     } else if (StateMasterID?.length && LocationTypeID !== 2) {
-      match.FilterStateID = { $in: StateMasterID.map(Number) }; // ensure integers
+      match.FilterStateID = { $in: StateMasterID.map(Number) };
     }
 
 
@@ -427,12 +427,186 @@ export class TicketDashboardService {
       }
     }
 
-    // return; // Uncomment if you want to debug only
+
 
     const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
     const totalPages = Math.ceil(totalCount / limit);
+    const pipeline: any[] = [
+      { $match: match },
 
-    // const pipeline: any[] = [
+      { $sort: { InsertDateTime: -1 } },
+      {
+        $group: {
+          _id: "$SupportTicketNo",
+          doc: { $first: "$$ROOT" }
+        }
+      },
+      { $replaceRoot: { newRoot: "$doc" } },
+
+      {
+        $lookup: {
+          from: 'SLA_KRPH_SupportTicketsHistory_Records',
+          let: { ticketId: '$SupportTicketID' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$SupportTicketID', '$$ticketId'] },
+                    { $eq: ['$TicketStatusID', 109304] }
+                  ]
+                }
+              }
+            },
+            { $sort: { TicketHistoryID: -1 } },
+            { $limit: 1 }
+          ],
+          as: 'ticketHistory'
+        }
+      },
+      { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: 'support_ticket_claim_intimation_report_history',
+          let: { ticketNo: '$SupportTicketNo' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
+            { $sort: { InsertDateTime: -1 } },
+            { $limit: 1 }
+          ],
+          as: 'claimInfo'
+        }
+      },
+      { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: 'csc_agent_master',
+          let: { userLoginId: '$InsertUserID' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$UserLoginID', '$$userLoginId'] } } },
+            { $limit: 1 }
+          ],
+          as: 'agentInfo'
+        }
+      },
+      { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+      {
+        "$lookup": {
+          "from": "ticket_comment_journey",
+          "localField": "SupportTicketNo",
+          "foreignField": "SupportTicketNo",
+          "as": "ticket_comment_journey",
+          "pipeline": [
+            { "$sort": { "CreatedDate": -1 } },
+            {
+              "$group": {
+                "_id": "$ResolvedComment",
+                "unique_comments": { "$first": "$$ROOT" }
+              }
+            },
+            { "$replaceRoot": { "newRoot": "$unique_comments" } }
+          ]
+        }
+      },
+
+      {
+        $project: {
+          SupportTicketID: 1,
+          SupportTicketNo: 1,
+          InsertUserID: 1,
+          Created: 1,
+          StatusUpdateTime: 1,
+          TicketStatusID: 1,
+          TicketStatus: 1,
+          ApplicationNo: 1,
+          InsurancePolicyNo: 1,
+          CallerContactNumber: 1,
+          RequestorName: 1,
+          RequestorMobileNo: 1,
+          StateMasterName: 1,
+          DistrictMasterName: 1,
+          SubDistrictName: 1,
+          TicketHeadName: 1,
+          TicketCategoryName: 1,
+          RequestSeason: 1,
+          RequestYear: 1,
+          ApplicationCropName: 1,
+          Relation: 1,
+          RelativeName: 1,
+          PolicyPremium: 1,
+          PolicyArea: 1,
+          PolicyType: 1,
+          LandSurveyNumber: 1,
+          LandDivisionNumber: 1,
+          IsSos: 1,
+          PlotStateName: 1,
+          PlotDistrictName: 1,
+          PlotVillageName: 1,
+          ApplicationSource: 1,
+          CropShare: 1,
+          IFSCCode: 1,
+          FarmerShare: 1,
+          SowingDate: 1,
+          LossDate: 1,
+          CreatedBY: 1,
+          InsertDateTime: 1,
+          Sos: 1,
+          TicketNCIPDocketNo: 1,
+          TicketDescription: 1,
+          CallingUniqueID: 1,
+          TicketTypeName: 1,
+          TicketReOpenDate: 1,
+          InsuranceCompany: 1,
+          SchemeName: 1,
+          // Unwinded lookups
+          ticketHistory: 1,
+          claimInfo: 1,
+          agentInfo: 1,
+          ticket_comment_journey: 1
+        }
+      },
+
+      {
+        $project: {
+          _id: 0,
+          "Agent ID": "$agentInfo.UserID",
+          "Calling ID": "$CallingUniqueID",
+          "NCIP Docket No": "$TicketNCIPDocketNo",
+          "Ticket No": "$SupportTicketNo",
+          "Creation Date": "$InsertDateTime",
+          "Re-Open Date": "$TicketReOpenDate",
+          "Ticket Status": "$TicketStatus",
+          "Status Date": "$StatusUpdateTime",
+          "State": "$StateMasterName",
+          "District": "$DistrictMasterName",
+          "Type": "$TicketHeadName",
+          "Category": "$TicketTypeName",
+          "Sub Category": "$TicketCategoryName",
+          "Season": "$RequestSeason",
+          "Year": "$RequestYear",
+          "Insurance Company": "$InsuranceCompany",
+          "Application No": "$ApplicationNo",
+          "Policy No": "$InsurancePolicyNo",
+          "Caller Mobile No": "$CallerContactNumber",
+          "Farmer Name": "$RequestorName",
+          "Mobile No": "$RequestorMobileNo",
+          "Created By": "$CreatedBY",
+          "Description": "$TicketDescription",
+          "ticket_comment_journey": "$ticket_comment_journey"
+        }
+      },
+
+      { $skip: (page - 1) * limit },
+      { $limit: limit }
+    ];
+
+
+
+
+
+    //     const pipeline: any[] = [
     //   { $match: match },
 
     //   {
@@ -445,13 +619,13 @@ export class TicketDashboardService {
     //             $expr: {
     //               $and: [
     //                 { $eq: ['$SupportTicketID', '$$ticketId'] },
-    //                 { $eq: ['$TicketStatusID', 109304] }
-    //               ]
-    //             }
-    //           }
+    //                 { $eq: ['$TicketStatusID', 109304] },
+    //               ],
+    //             },
+    //           },
     //         },
     //         { $sort: { TicketHistoryID: -1 } },
-    //         { $limit: 1 }
+    //         { $limit: 1 },
     //       ],
     //       as: 'ticketHistory',
     //     },
@@ -475,15 +649,40 @@ export class TicketDashboardService {
     //     },
     //   },
 
+    //   // 🔴 Comment lookup (ticket_comment_journey)
+    //   /*
+    //   {
+    //     $lookup: {
+    //       from: 'ticket_comment_journey',
+    //       localField: 'SupportTicketNo',
+    //       foreignField: 'SupportTicketNo',
+    //       as: 'ticket_comment_journey',
+    //     },
+    //   },
+    //   */
 
-    //   { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-    //   { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-    //   { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+    //   {
+    //     $addFields: {
+    //       ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
+    //       claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
+    //       agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
+    //       // ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
+    //     },
+    //   },
+
+    //   {
+    //     $group: {
+    //       _id: '$SupportTicketNo',
+    //       doc: { $first: '$$ROOT' },
+    //     },
+    //   },
+
+    //   { $replaceRoot: { newRoot: '$doc' } },
 
     //   {
     //     $project: {
     //       SupportTicketID: 1,
-
+    //       // ticket_comment_journey: 1,
     //       ApplicationNo: 1,
     //       InsurancePolicyNo: 1,
     //       TicketStatusID: 1,
@@ -517,657 +716,65 @@ export class TicketDashboardService {
     //       SowingDate: 1,
     //       LossDate: 1,
     //       CreatedBY: 1,
-    //       CreatedAt: "$InsertDateTime",
+    //       CreatedAt: '$InsertDateTime',
     //       Sos: 1,
-    //       NCIPDocketNo: "$TicketNCIPDocketNo",
+    //       NCIPDocketNo: '$TicketNCIPDocketNo',
     //       TicketDescription: 1,
     //       CallingUniqueID: 1,
     //       TicketDate: {
     //         $dateToString: {
-    //           format: "%Y-%m-%d %H:%M:%S",
-    //           date: "$Created"
-    //         }
+    //           format: '%Y-%m-%d %H:%M:%S',
+    //           date: '$Created',
+    //         },
     //       },
     //       StatusDate: {
     //         $dateToString: {
-    //           format: "%Y-%m-%d %H:%M:%S",
-    //           date: "$StatusUpdateTime"
-    //         }
+    //           format: '%Y-%m-%d %H:%M:%S',
+    //           date: '$StatusUpdateTime',
+    //         },
     //       },
-    //       SupportTicketTypeName: "$TicketTypeName",
+    //       SupportTicketTypeName: '$TicketTypeName',
     //       SupportTicketNo: 1,
-    //       InsuranceMasterName: "$InsuranceCompany",
-    //       ReOpenDate: "$TicketReOpenDate",
-    //       CallingUserID: "$agentInfo.UserID",
+    //       InsuranceMasterName: '$InsuranceCompany',
+    //       ReOpenDate: '$TicketReOpenDate',
+    //       CallingUserID: '$agentInfo.UserID',
     //       SchemeName: 1,
-    //     }
+    //     },
+    //   },
+
+    //   {
+    //     $project: {
+    //       _id: 0,
+    //       'Agent ID': '$CallingUserID',
+    //       'Calling ID': '$CallingUniqueID',
+    //       'NCIP Docket No': '$NCIPDocketNo',
+    //       'Ticket No': '$SupportTicketNo',
+    //       'Creation Date': '$CreatedAt',
+    //       'Re-Open Date': '$ReOpenDate',
+    //       'Ticket Status': '$TicketStatus',
+    //       'Status Date': '$StatusDate',
+    //       State: '$StateMasterName',
+    //       District: '$DistrictMasterName',
+    //       Type: '$TicketHeadName',
+    //       Category: '$SupportTicketTypeName',
+    //       'Sub Category': '$TicketCategoryName',
+    //       Season: '$RequestSeason',
+    //       Year: '$RequestYear',
+    //       'Insurance Company': '$InsuranceMasterName',
+    //       'Application No': '$ApplicationNo',
+    //       'Policy No': '$InsurancePolicyNo',
+    //       'Caller Mobile No': '$CallerContactNumber',
+    //       'Farmer Name': '$RequestorName',
+    //       'Mobile No': '$RequestorMobileNo',
+    //       'Created By': '$CreatedBY',
+    //       Description: '$TicketDescription',
+    //       // ticket_comment_journey: '$ticket_comment_journey'
+    //     },
     //   },
 
     //   { $skip: (page - 1) * limit },
     //   { $limit: limit },
     // ];
-
-    const pipelines: any[] = [
-  { $match: match },
-
-  {
-    $lookup: {
-      from: 'SLA_KRPH_SupportTicketsHistory_Records',
-      let: { ticketId: '$SupportTicketID' },
-      pipeline: [
-        {
-          $match: {
-            $expr: {
-              $and: [
-                { $eq: ['$SupportTicketID', '$$ticketId'] },
-                { $eq: ['$TicketStatusID', 109304] },
-              ],
-            },
-          },
-        },
-        { $sort: { TicketHistoryID: -1 } },
-        { $limit: 1 },
-      ],
-      as: 'ticketHistory',
-    },
-  },
-
-  {
-    $lookup: {
-      from: 'support_ticket_claim_intimation_report_history',
-      localField: 'SupportTicketNo',
-      foreignField: 'SupportTicketNo',
-      as: 'claimInfo',
-    },
-  },
-
-  {
-    $lookup: {
-      from: 'csc_agent_master',
-      localField: 'InsertUserID',
-      foreignField: 'UserLoginID',
-      as: 'agentInfo',
-    },
-  },
-
-  {
-    $addFields: {
-      ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
-      claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
-      agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
-    },
-  },
-
-  {
-    $group: {
-      _id: '$SupportTicketNo',
-      doc: { $first: '$$ROOT' } // pick the first document per ticket
-    }
-  },
-
-  { $replaceRoot: { newRoot: '$doc' } },
-
-  {
-    $project: {
-      SupportTicketID: 1,
-      ApplicationNo: 1,
-      InsurancePolicyNo: 1,
-      TicketStatusID: 1,
-      TicketStatus: 1,
-      CallerContactNumber: 1,
-      RequestorName: 1,
-      RequestorMobileNo: 1,
-      StateMasterName: 1,
-      DistrictMasterName: 1,
-      SubDistrictName: 1,
-      TicketHeadName: 1,
-      TicketCategoryName: 1,
-      RequestSeason: 1,
-      RequestYear: 1,
-      ApplicationCropName: 1,
-      Relation: 1,
-      RelativeName: 1,
-      PolicyPremium: 1,
-      PolicyArea: 1,
-      PolicyType: 1,
-      LandSurveyNumber: 1,
-      LandDivisionNumber: 1,
-      IsSos: 1,
-      PlotStateName: 1,
-      PlotDistrictName: 1,
-      PlotVillageName: 1,
-      ApplicationSource: 1,
-      CropShare: 1,
-      IFSCCode: 1,
-      FarmerShare: 1,
-      SowingDate: 1,
-      LossDate: 1,
-      CreatedBY: 1,
-      CreatedAt: '$InsertDateTime',
-      Sos: 1,
-      NCIPDocketNo: '$TicketNCIPDocketNo',
-      TicketDescription: 1,
-      CallingUniqueID: 1,
-      TicketDate: {
-        $dateToString: {
-          format: '%Y-%m-%d %H:%M:%S',
-          date: '$Created',
-        },
-      },
-      StatusDate: {
-        $dateToString: {
-          format: '%Y-%m-%d %H:%M:%S',
-          date: '$StatusUpdateTime',
-        },
-      },
-      SupportTicketTypeName: '$TicketTypeName',
-      SupportTicketNo: 1,
-      InsuranceMasterName: '$InsuranceCompany',
-      ReOpenDate: '$TicketReOpenDate',
-      CallingUserID: '$agentInfo.UserID',
-      SchemeName: 1,
-    },
-  },
-
-  {
-    $project: {
-      "_id": 0,
-      "Agent ID": "$CallingUserID",
-      "Calling ID": "$CallingUniqueID",
-      "NCIP Docket No": "$NCIPDocketNo",
-      "Ticket No": "$SupportTicketNo",
-      "Creation Date": "$CreatedAt",
-      "Re-Open Date": "$ReOpenDate",
-      "Ticket Status": "$TicketStatus",
-      "Status Date": "$StatusDate",
-      "State": "$StateMasterName",
-      "District": "$DistrictMasterName",
-      "Type": "$TicketHeadName",
-      "Category": "$SupportTicketTypeName",
-      "Sub Category": "$TicketCategoryName",
-      "Season": "$RequestSeason",
-      "Year": "$RequestYear",
-      "Insurance Company": "$InsuranceMasterName",
-      "Application No": "$ApplicationNo",
-      "Policy No": "$InsurancePolicyNo",
-      "Caller Mobile No": "$CallerContactNumber",
-      "Farmer Name": "$RequestorName",
-      "Mobile No": "$RequestorMobileNo",
-      "Created By": "$CreatedBY",
-      "Description": "$TicketDescription",
-    }
-  },
-
-  { $skip: (page - 1) * limit },
-  { $limit: limit },
-];
-const pipelinetest: any[] = [
-  { $match: match },
-
-  {
-    $lookup: {
-      from: 'SLA_KRPH_SupportTicketsHistory_Records',
-      let: { ticketId: '$SupportTicketID' },
-      pipeline: [
-        {
-          $match: {
-            $expr: {
-              $and: [
-                { $eq: ['$SupportTicketID', '$$ticketId'] },
-                { $eq: ['$TicketStatusID', 109304] }
-              ]
-            }
-          }
-        },
-        { $sort: { TicketHistoryID: -1 } },
-        { $limit: 1 }
-      ],
-      as: 'ticketHistory'
-    }
-  },
-  { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-
-  {
-    $lookup: {
-      from: 'support_ticket_claim_intimation_report_history',
-      let: { ticketNo: '$SupportTicketNo' },
-      pipeline: [
-        { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
-        { $sort: { InsertDateTime: -1 } },
-        { $limit: 1 }
-      ],
-      as: 'claimInfo'
-    }
-  },
-  { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-
-  {
-    $lookup: {
-      from: 'csc_agent_master',
-      let: { userLoginId: '$InsertUserID' },
-      pipeline: [
-        { $match: { $expr: { $eq: ['$UserLoginID', '$$userLoginId'] } } },
-        { $limit: 1 }
-      ],
-      as: 'agentInfo'
-    }
-  },
-  { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-
-  {
-    $project: {
-      SupportTicketID: 1,
-      SupportTicketNo: 1,
-      InsertUserID: 1,
-      Created: 1,
-      StatusUpdateTime: 1,
-      TicketStatusID: 1,
-      TicketStatus: 1,
-      ApplicationNo: 1,
-      InsurancePolicyNo: 1,
-      CallerContactNumber: 1,
-      RequestorName: 1,
-      RequestorMobileNo: 1,
-      StateMasterName: 1,
-      DistrictMasterName: 1,
-      SubDistrictName: 1,
-      TicketHeadName: 1,
-      TicketCategoryName: 1,
-      RequestSeason: 1,
-      RequestYear: 1,
-      ApplicationCropName: 1,
-      Relation: 1,
-      RelativeName: 1,
-      PolicyPremium: 1,
-      PolicyArea: 1,
-      PolicyType: 1,
-      LandSurveyNumber: 1,
-      LandDivisionNumber: 1,
-      IsSos: 1,
-      PlotStateName: 1,
-      PlotDistrictName: 1,
-      PlotVillageName: 1,
-      ApplicationSource: 1,
-      CropShare: 1,
-      IFSCCode: 1,
-      FarmerShare: 1,
-      SowingDate: 1,
-      LossDate: 1,
-      CreatedBY: 1,
-      InsertDateTime: 1,
-      Sos: 1,
-      TicketNCIPDocketNo: 1,
-      TicketDescription: 1,
-      CallingUniqueID: 1,
-      TicketTypeName: 1,
-      TicketReOpenDate: 1,
-      InsuranceCompany: 1,
-      SchemeName: 1,
-      // Unwinded lookups
-      ticketHistory: 1,
-      claimInfo: 1,
-      agentInfo: 1
-    }
-  },
-
-  {
-    $project: {
-      "_id": 0,
-      "Agent ID": "$agentInfo.UserID",
-      "Calling ID": "$CallingUniqueID",
-      "NCIP Docket No": "$TicketNCIPDocketNo",
-      "Ticket No": "$SupportTicketNo",
-      "Creation Date": "$InsertDateTime",
-      "Re-Open Date": "$TicketReOpenDate",
-      "Ticket Status": "$TicketStatus",
-      "Status Date": "$StatusUpdateTime",
-      "State": "$StateMasterName",
-      "District": "$DistrictMasterName",
-      "Type": "$TicketHeadName",
-      "Category": "$TicketTypeName",
-      "Sub Category": "$TicketCategoryName",
-      "Season": "$RequestSeason",
-      "Year": "$RequestYear",
-      "Insurance Company": "$InsuranceCompany",
-      "Application No": "$ApplicationNo",
-      "Policy No": "$InsurancePolicyNo",
-      "Caller Mobile No": "$CallerContactNumber",
-      "Farmer Name": "$RequestorName",
-      "Mobile No": "$RequestorMobileNo",
-      "Created By": "$CreatedBY",
-      "Description": "$TicketDescription",
-    }
-  },
-
-  { $skip: (page - 1) * limit },
-  { $limit: limit }
-];
-
-const pipeline: any[] = [
-  { $match: match },
-
-  // ✅ Deduplicate early: keep only the latest per SupportTicketNo
-  { $sort: { InsertDateTime: -1 } },
-  {
-    $group: {
-      _id: "$SupportTicketNo",
-      doc: { $first: "$$ROOT" }
-    }
-  },
-  { $replaceRoot: { newRoot: "$doc" } },
-
-  {
-    $lookup: {
-      from: 'SLA_KRPH_SupportTicketsHistory_Records',
-      let: { ticketId: '$SupportTicketID' },
-      pipeline: [
-        {
-          $match: {
-            $expr: {
-              $and: [
-                { $eq: ['$SupportTicketID', '$$ticketId'] },
-                { $eq: ['$TicketStatusID', 109304] }
-              ]
-            }
-          }
-        },
-        { $sort: { TicketHistoryID: -1 } },
-        { $limit: 1 }
-      ],
-      as: 'ticketHistory'
-    }
-  },
-  { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-
-  {
-    $lookup: {
-      from: 'support_ticket_claim_intimation_report_history',
-      let: { ticketNo: '$SupportTicketNo' },
-      pipeline: [
-        { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
-        { $sort: { InsertDateTime: -1 } },
-        { $limit: 1 }
-      ],
-      as: 'claimInfo'
-    }
-  },
-  { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-
-  {
-    $lookup: {
-      from: 'csc_agent_master',
-      let: { userLoginId: '$InsertUserID' },
-      pipeline: [
-        { $match: { $expr: { $eq: ['$UserLoginID', '$$userLoginId'] } } },
-        { $limit: 1 }
-      ],
-      as: 'agentInfo'
-    }
-  },
-  { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-
-  {
-    $project: {
-      SupportTicketID: 1,
-      SupportTicketNo: 1,
-      InsertUserID: 1,
-      Created: 1,
-      StatusUpdateTime: 1,
-      TicketStatusID: 1,
-      TicketStatus: 1,
-      ApplicationNo: 1,
-      InsurancePolicyNo: 1,
-      CallerContactNumber: 1,
-      RequestorName: 1,
-      RequestorMobileNo: 1,
-      StateMasterName: 1,
-      DistrictMasterName: 1,
-      SubDistrictName: 1,
-      TicketHeadName: 1,
-      TicketCategoryName: 1,
-      RequestSeason: 1,
-      RequestYear: 1,
-      ApplicationCropName: 1,
-      Relation: 1,
-      RelativeName: 1,
-      PolicyPremium: 1,
-      PolicyArea: 1,
-      PolicyType: 1,
-      LandSurveyNumber: 1,
-      LandDivisionNumber: 1,
-      IsSos: 1,
-      PlotStateName: 1,
-      PlotDistrictName: 1,
-      PlotVillageName: 1,
-      ApplicationSource: 1,
-      CropShare: 1,
-      IFSCCode: 1,
-      FarmerShare: 1,
-      SowingDate: 1,
-      LossDate: 1,
-      CreatedBY: 1,
-      InsertDateTime: 1,
-      Sos: 1,
-      TicketNCIPDocketNo: 1,
-      TicketDescription: 1,
-      CallingUniqueID: 1,
-      TicketTypeName: 1,
-      TicketReOpenDate: 1,
-      InsuranceCompany: 1,
-      SchemeName: 1,
-      // Unwinded lookups
-      ticketHistory: 1,
-      claimInfo: 1,
-      agentInfo: 1
-    }
-  },
-
-  {
-    $project: {
-      _id: 0,
-      "Agent ID": "$agentInfo.UserID",
-      "Calling ID": "$CallingUniqueID",
-      "NCIP Docket No": "$TicketNCIPDocketNo",
-      "Ticket No": "$SupportTicketNo",
-      "Creation Date": "$InsertDateTime",
-      "Re-Open Date": "$TicketReOpenDate",
-      "Ticket Status": "$TicketStatus",
-      "Status Date": "$StatusUpdateTime",
-      "State": "$StateMasterName",
-      "District": "$DistrictMasterName",
-      "Type": "$TicketHeadName",
-      "Category": "$TicketTypeName",
-      "Sub Category": "$TicketCategoryName",
-      "Season": "$RequestSeason",
-      "Year": "$RequestYear",
-      "Insurance Company": "$InsuranceCompany",
-      "Application No": "$ApplicationNo",
-      "Policy No": "$InsurancePolicyNo",
-      "Caller Mobile No": "$CallerContactNumber",
-      "Farmer Name": "$RequestorName",
-      "Mobile No": "$RequestorMobileNo",
-      "Created By": "$CreatedBY",
-      "Description": "$TicketDescription"
-    }
-  },
-
-  { $skip: (page - 1) * limit },
-  { $limit: limit }
-];
-
-
-
-
-
-//     const pipeline: any[] = [
-//   { $match: match },
-
-//   {
-//     $lookup: {
-//       from: 'SLA_KRPH_SupportTicketsHistory_Records',
-//       let: { ticketId: '$SupportTicketID' },
-//       pipeline: [
-//         {
-//           $match: {
-//             $expr: {
-//               $and: [
-//                 { $eq: ['$SupportTicketID', '$$ticketId'] },
-//                 { $eq: ['$TicketStatusID', 109304] },
-//               ],
-//             },
-//           },
-//         },
-//         { $sort: { TicketHistoryID: -1 } },
-//         { $limit: 1 },
-//       ],
-//       as: 'ticketHistory',
-//     },
-//   },
-
-//   {
-//     $lookup: {
-//       from: 'support_ticket_claim_intimation_report_history',
-//       localField: 'SupportTicketNo',
-//       foreignField: 'SupportTicketNo',
-//       as: 'claimInfo',
-//     },
-//   },
-
-//   {
-//     $lookup: {
-//       from: 'csc_agent_master',
-//       localField: 'InsertUserID',
-//       foreignField: 'UserLoginID',
-//       as: 'agentInfo',
-//     },
-//   },
-
-//   // 🔴 Comment lookup (ticket_comment_journey)
-//   /*
-//   {
-//     $lookup: {
-//       from: 'ticket_comment_journey',
-//       localField: 'SupportTicketNo',
-//       foreignField: 'SupportTicketNo',
-//       as: 'ticket_comment_journey',
-//     },
-//   },
-//   */
-
-//   {
-//     $addFields: {
-//       ticketHistory: { $arrayElemAt: ['$ticketHistory', 0] },
-//       claimInfo: { $arrayElemAt: ['$claimInfo', 0] },
-//       agentInfo: { $arrayElemAt: ['$agentInfo', 0] },
-//       // ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] }
-//     },
-//   },
-
-//   {
-//     $group: {
-//       _id: '$SupportTicketNo',
-//       doc: { $first: '$$ROOT' },
-//     },
-//   },
-
-//   { $replaceRoot: { newRoot: '$doc' } },
-
-//   {
-//     $project: {
-//       SupportTicketID: 1,
-//       // ticket_comment_journey: 1,
-//       ApplicationNo: 1,
-//       InsurancePolicyNo: 1,
-//       TicketStatusID: 1,
-//       TicketStatus: 1,
-//       CallerContactNumber: 1,
-//       RequestorName: 1,
-//       RequestorMobileNo: 1,
-//       StateMasterName: 1,
-//       DistrictMasterName: 1,
-//       SubDistrictName: 1,
-//       TicketHeadName: 1,
-//       TicketCategoryName: 1,
-//       RequestSeason: 1,
-//       RequestYear: 1,
-//       ApplicationCropName: 1,
-//       Relation: 1,
-//       RelativeName: 1,
-//       PolicyPremium: 1,
-//       PolicyArea: 1,
-//       PolicyType: 1,
-//       LandSurveyNumber: 1,
-//       LandDivisionNumber: 1,
-//       IsSos: 1,
-//       PlotStateName: 1,
-//       PlotDistrictName: 1,
-//       PlotVillageName: 1,
-//       ApplicationSource: 1,
-//       CropShare: 1,
-//       IFSCCode: 1,
-//       FarmerShare: 1,
-//       SowingDate: 1,
-//       LossDate: 1,
-//       CreatedBY: 1,
-//       CreatedAt: '$InsertDateTime',
-//       Sos: 1,
-//       NCIPDocketNo: '$TicketNCIPDocketNo',
-//       TicketDescription: 1,
-//       CallingUniqueID: 1,
-//       TicketDate: {
-//         $dateToString: {
-//           format: '%Y-%m-%d %H:%M:%S',
-//           date: '$Created',
-//         },
-//       },
-//       StatusDate: {
-//         $dateToString: {
-//           format: '%Y-%m-%d %H:%M:%S',
-//           date: '$StatusUpdateTime',
-//         },
-//       },
-//       SupportTicketTypeName: '$TicketTypeName',
-//       SupportTicketNo: 1,
-//       InsuranceMasterName: '$InsuranceCompany',
-//       ReOpenDate: '$TicketReOpenDate',
-//       CallingUserID: '$agentInfo.UserID',
-//       SchemeName: 1,
-//     },
-//   },
-
-//   {
-//     $project: {
-//       _id: 0,
-//       'Agent ID': '$CallingUserID',
-//       'Calling ID': '$CallingUniqueID',
-//       'NCIP Docket No': '$NCIPDocketNo',
-//       'Ticket No': '$SupportTicketNo',
-//       'Creation Date': '$CreatedAt',
-//       'Re-Open Date': '$ReOpenDate',
-//       'Ticket Status': '$TicketStatus',
-//       'Status Date': '$StatusDate',
-//       State: '$StateMasterName',
-//       District: '$DistrictMasterName',
-//       Type: '$TicketHeadName',
-//       Category: '$SupportTicketTypeName',
-//       'Sub Category': '$TicketCategoryName',
-//       Season: '$RequestSeason',
-//       Year: '$RequestYear',
-//       'Insurance Company': '$InsuranceMasterName',
-//       'Application No': '$ApplicationNo',
-//       'Policy No': '$InsurancePolicyNo',
-//       'Caller Mobile No': '$CallerContactNumber',
-//       'Farmer Name': '$RequestorName',
-//       'Mobile No': '$RequestorMobileNo',
-//       'Created By': '$CreatedBY',
-//       Description: '$TicketDescription',
-//       // ticket_comment_journey: '$ticket_comment_journey'
-//     },
-//   },
-
-//   { $skip: (page - 1) * limit },
-//   { $limit: limit },
-// ];
 
 
     let results = await db.collection('SLA_KRPH_SupportTickets_Records')
@@ -1182,35 +789,35 @@ const pipeline: any[] = [
       };
     }
 
-//    results = Array.isArray(results) ? results : [results];
+    results = Array.isArray(results) ? results : [results];
 
-// results.forEach(doc => {
-//   if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
-//     const journey = doc.ticket_comment_journey;
-//     const seen = new Set();
+    results.forEach(doc => {
+      if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+        const journey = doc.ticket_comment_journey;
+        const seen = new Set();
 
-//     journey.forEach((commentObj, index) => {
-//       const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
+        journey.forEach((commentObj, index) => {
+          const commentDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
 
-//       const rawComment = commentObj.ResolvedComment || '';
-//       const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
+          const rawComment = commentObj.ResolvedComment || '';
+          const cleanComment = rawComment.replace(/<\/?[^>]+(>|$)/g, '').trim();
 
-//       const uniqueKey = `${commentDate}-${cleanComment}`;
-//       if (!seen.has(uniqueKey)) {
-//         seen.add(uniqueKey);
-//         doc[`Comment Date ${index + 1}`] = commentDate;
-//         doc[`Comment ${index + 1}`] = cleanComment;
-//       }
-//     });
-//   } else {
-//     // Default NA values when no journey exists
-//     doc[`Comment Date 1`] = "NA";
-//     doc[`Comment 1`] = "NA";
-//   }
+          const uniqueKey = `${commentDate}-${cleanComment}`;
+          if (!seen.has(uniqueKey)) {
+            seen.add(uniqueKey);
+            doc[`Comment Date ${index + 1}`] = commentDate;
+            doc[`Comment ${index + 1}`] = cleanComment;
+          }
+        });
+      } else {
+        // Default NA values when no journey exists
+        doc[`Comment Date 1`] = "NA";
+        doc[`Comment 1`] = "NA";
+      }
 
-//   // Remove raw journey array if present
-//   delete doc.ticket_comment_journey;
-// });
+      // Remove raw journey array if present
+      delete doc.ticket_comment_journey;
+    });
 
 
 
@@ -2077,1503 +1684,1503 @@ const pipeline: any[] = [
   }
 
   async processTicketHistoryAndGenerateZipPreviousWorkingWothoutComment(ticketPayload: any) {
-  let {
-    SPFROMDATE,
-    SPTODATE,
-    SPInsuranceCompanyID,
-    SPStateID,
-    SPTicketHeaderID,
-    SPUserID,
-    page = 1,
-    limit = 1000000000,
-    userEmail,
-  } = ticketPayload;
+    let {
+      SPFROMDATE,
+      SPTODATE,
+      SPInsuranceCompanyID,
+      SPStateID,
+      SPTicketHeaderID,
+      SPUserID,
+      page = 1,
+      limit = 1000000000,
+      userEmail,
+    } = ticketPayload;
 
-  const db = this.db;
-  SPTicketHeaderID = Number(SPTicketHeaderID);
+    const db = this.db;
+    SPTicketHeaderID = Number(SPTicketHeaderID);
 
-  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
-  if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+    if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+    if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
 
-  const RequestDateTime = await getCurrentFormattedDateTime();
-  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
-  const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
-  if (cachedData) {
-    console.log('Using cached data');
-    await this.db.collection('support_ticket_download_logs').updateOne(
-      { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
-      {
-        $set: {
-          downloadUrl: cachedData.downloadUrl || '',
-          zipFileName: cachedData.zipFileName || '',
-          updatedAt: new Date()
-        },
-        $setOnInsert: { createdAt: new Date() }
-      },
-      { upsert: true }
-    );
-    // Maybe return cachedData? You had commented that out.
-  }
-
-  const Delta = await this.getSupportTicketUserDetail(SPUserID);
-  const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
-  const item = (responseInfo.data as any)?.user?.[0];
-  if (!item) return { rcode: 0, rmessage: 'User details not found.' };
-
-  const userDetail = {
-    InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
-    StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
-    BRHeadTypeID: item.BRHeadTypeID,
-    LocationTypeID: item.LocationTypeID,
-  };
-  const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
-
-  let locationFilter: any = {};
-  if (LocationTypeID === 1 && StateMasterID?.length)
-    locationFilter = { FilterStateID: { $in: StateMasterID } };
-  else if (LocationTypeID === 2 && item.DistrictIDs?.length)
-    locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
-
-  const baseMatch: any = { ...locationFilter };
-  if (SPTicketHeaderID && SPTicketHeaderID !== 0) baseMatch.TicketHeaderID = SPTicketHeaderID;
-
-  if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
-    const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map((id) => Number(id.trim()));
-    const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
-    const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id));
-    if (!validInsuranceIDs.length)
-      return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
-    baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs };
-  } else if (InsuranceCompanyID?.length) {
-    baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
-  }
-
-  if (SPStateID && SPStateID !== '#ALL') {
-    const requestedStateIDs = SPStateID.split(',').map((id) => id.trim());
-    const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id));
-    if (!validStateIDs.length)
-      return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
-    baseMatch.FilterStateID = { $in: validStateIDs };
-  } else if (StateMasterID?.length && LocationTypeID !== 2) {
-    baseMatch.FilterStateID = { $in: StateMasterID };
-  }
-
-  const folderPath = path.join(process.cwd(), 'downloads');
-  await fs.promises.mkdir(folderPath, { recursive: true });
-
-  // ====== Filename Logic Based on SPTicketHeaderID ======
-
-  const headerTypeMap: Record<number, string> = {
-    1: 'Grievance',
-    2: 'Information',
-    4: 'Crop_Loss',
-  };
-  const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
-  const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');  // "dd_mm_yyyy"
-
-  const excelFileName = `Support_ticket_data_${ticketTypeName}_${currentDateStr}.xlsx`;
-  const excelFilePath = path.join(folderPath, excelFileName);
-
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
-  const worksheet = workbook.addWorksheet('Support Tickets');
-
-  worksheet.columns = [
-    { header: 'Agent ID', key: 'AgentID', width: 20 },
-    { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
-    { header: 'NCIP Docket No', key: 'TicketNCIPDocketNo', width: 30 },
-    { header: 'Ticket No', key: 'SupportTicketNo', width: 30 },
-    { header: 'Creation Date', key: 'Created', width: 25 },
-    { header: 'Re-Open Date', key: 'TicketReOpenDate', width: 25 },
-    { header: 'Ticket Status', key: 'TicketStatus', width: 20 },
-    { header: 'Status Date', key: 'StatusUpdateTime', width: 25 },
-    { header: 'State', key: 'StateMasterName', width: 20 },
-    { header: 'District', key: 'DistrictMasterName', width: 20 },
-    { header: 'Sub District', key: 'SubDistrictName', width: 20 },
-    { header: 'Type', key: 'TicketHeadName', width: 20 },
-    { header: 'Category', key: 'TicketTypeName', width: 20 },
-    { header: 'Sub Category', key: 'TicketCategoryName', width: 20 },
-    { header: 'Season', key: 'CropSeasonName', width: 15 },
-    { header: 'Year', key: 'RequestYear', width: 10 },
-    { header: 'Insurance Company', key: 'InsuranceCompany', width: 30 },
-    { header: 'Application No', key: 'ApplicationNo', width: 25 },
-    { header: 'Policy No', key: 'InsurancePolicyNo', width: 25 },
-    { header: 'Caller Mobile No', key: 'CallerContactNumber', width: 20 },
-    { header: 'Farmer Name', key: 'RequestorName', width: 25 },
-    { header: 'Mobile No', key: 'RequestorMobileNo', width: 20 },
-    { header: 'Relation', key: 'Relation', width: 15 },
-    { header: 'Relative Name', key: 'RelativeName', width: 25 },
-    { header: 'Policy Premium', key: 'PolicyPremium', width: 15 },
-    { header: 'Policy Area', key: 'PolicyArea', width: 15 },
-    { header: 'Policy Type', key: 'PolicyType', width: 20 },
-    { header: 'Land Survey Number', key: 'LandSurveyNumber', width: 25 },
-    { header: 'Land Division Number', key: 'LandDivisionNumber', width: 25 },
-    { header: 'Plot State', key: 'PlotStateName', width: 20 },
-    { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
-    { header: 'Plot Village', key: 'PlotVillageName', width: 25 },
-    { header: 'Application Source', key: 'ApplicationSource', width: 20 },
-    { header: 'Crop Share', key: 'CropShare', width: 15 },
-    { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
-    { header: 'Farmer Share', key: 'FarmerShare', width: 15 },
-    { header: 'Sowing Date', key: 'SowingDate', width: 20 },
-    { header: 'Created By', key: 'CreatedBY', width: 20 },
-    { header: 'Description', key: 'TicketDescription', width: 50 },
-  ];
-
-  await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
-
-  const CHUNK_SIZE = 10000;
-
-  async function processDateWithChunking(currentDate: Date, endDate: Date) {
-    if (currentDate > endDate) return;
-
-    const startOfDay = new Date(currentDate);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(currentDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
-
-    let skip = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
-      const pipeline: any[] = [
-        { $match: dailyMatch },
+    const RequestDateTime = await getCurrentFormattedDateTime();
+    const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+    if (cachedData) {
+      console.log('Using cached data');
+      await this.db.collection('support_ticket_download_logs').updateOne(
+        { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
         {
-          $lookup: {
-            from: 'SLA_KRPH_SupportTicketsHistory_Records',
-            let: { ticketId: '$SupportTicketID' },
-            pipeline: [
-              { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
-              { $sort: { TicketHistoryID: -1 } },
-              { $limit: 1 }
-            ],
-            as: 'ticketHistory',
-          }
-        },
-        {
-          $lookup: {
-            from: 'support_ticket_claim_intimation_report_history',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'claimInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'csc_agent_master',
-            localField: 'InsertUserID',
-            foreignField: 'UserLoginID',
-            as: 'agentInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'ticket_comment_journey',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'ticket_comment_journey',
+          $set: {
+            downloadUrl: cachedData.downloadUrl || '',
+            zipFileName: cachedData.zipFileName || '',
+            updatedAt: new Date()
           },
+          $setOnInsert: { createdAt: new Date() }
         },
-
-        { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-        { $skip: skip },
-        { $limit: CHUNK_SIZE },
-        {
-          $project: {
-            agentInfo: 1,
-            TicketComments: {
-              $arrayToObject: {
-                $map: {
-                  input: {
-                    $filter: {
-                      input: '$ticket_comment_journey',
-                      as: 'comment',
-                      cond: {
-                        $and: [
-                          { $ne: ['$$comment.ResolvedDate', null] },
-                          { $ne: ['$$comment.ResolvedComment', null] }
-                        ]
-                      }
-                    }
-                  },
-                  as: 'comment',
-                  in: {
-                    k: {
-                      $concat: [
-                        'Comment (',
-                        {
-                          $dateToString: {
-                            format: '%Y-%m-%d',
-                            date: '$$comment.ResolvedDate',
-                          },
-                        },
-                        ')',
-                      ],
-                    },
-                    v: '$$comment.ResolvedComment',
-                  },
-                }
-              }
-            },
-
-            CallingUniqueID: 1,
-            TicketNCIPDocketNo: 1,
-            SupportTicketNo: 1,
-            Created: 1,
-            TicketReOpenDate: 1,
-            TicketStatus: 1,
-            StatusUpdateTime: 1,
-            StateMasterName: 1,
-            DistrictMasterName: 1,
-            SubDistrictName: 1,
-            TicketHeadName: 1,
-            TicketTypeName: 1,
-            TicketCategoryName: 1,
-            CropSeasonName: 1,
-            RequestYear: 1,
-            InsuranceCompany: 1,
-            ApplicationNo: 1,
-            InsurancePolicyNo: 1,
-            CallerContactNumber: 1,
-            RequestorName: 1,
-            RequestorMobileNo: 1,
-            Relation: 1,
-            RelativeName: 1,
-            PolicyPremium: 1,
-            PolicyArea: 1,
-            PolicyType: 1,
-            LandSurveyNumber: 1,
-            LandDivisionNumber: 1,
-            PlotStateName: 1,
-            PlotDistrictName: 1,
-            PlotVillageName: 1,
-            ApplicationSource: 1,
-            CropShare: 1,
-            IFSCCode: 1,
-            FarmerShare: 1,
-            SowingDate: 1,
-            CreatedBY: 1,
-            TicketDescription: 1
-          }
-        },
-      ];
-
-      const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
-      const docs = await cursor.toArray();
-
-      docs.forEach(doc => {
-        if (doc.TicketComments) {
-          for (const [key, value] of Object.entries(doc.TicketComments)) {
-            doc[key] = value;
-          }
-          delete doc.TicketComments;
-        }
-
-        worksheet.addRow({
-          AgentID: doc.agentInfo?.UserID?.toString() || '',
-          CallingUniqueID: doc.CallingUniqueID || '',
-          TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
-          SupportTicketNo: doc.SupportTicketNo?.toString() || '',
-          Created: doc.Created ? new Date(doc.Created).toISOString() : '',
-          TicketReOpenDate: doc.TicketReOpenDate || '',
-          TicketStatus: doc.TicketStatus || '',
-          StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
-          StateMasterName: doc.StateMasterName || '',
-          DistrictMasterName: doc.DistrictMasterName || '',
-          SubDistrictName: doc.SubDistrictName || '',
-          TicketHeadName: doc.TicketHeadName || '',
-          TicketTypeName: doc.TicketTypeName || '',
-          TicketCategoryName: doc.TicketCategoryName || '',
-          CropSeasonName: doc.CropSeasonName || '',
-          RequestYear: doc.RequestYear || '',
-          InsuranceCompany: doc.InsuranceCompany || '',
-          ApplicationNo: doc.ApplicationNo || '',
-          InsurancePolicyNo: doc.InsurancePolicyNo || '',
-          CallerContactNumber: doc.CallerContactNumber || '',
-          RequestorName: doc.RequestorName || '',
-          RequestorMobileNo: doc.RequestorMobileNo || '',
-          Relation: doc.Relation || '',
-          RelativeName: doc.RelativeName || '',
-          PolicyPremium: doc.PolicyPremium || '',
-          PolicyArea: doc.PolicyArea || '',
-          PolicyType: doc.PolicyType || '',
-          LandSurveyNumber: doc.LandSurveyNumber || '',
-          LandDivisionNumber: doc.LandDivisionNumber || '',
-          PlotStateName: doc.PlotStateName || '',
-          PlotDistrictName: doc.PlotDistrictName || '',
-          PlotVillageName: doc.PlotVillageName || '',
-          ApplicationSource: doc.ApplicationSource || '',
-          CropShare: doc.CropShare || '',
-          IFSCCode: doc.IFSCCode || '',
-          FarmerShare: doc.FarmerShare || '',
-          SowingDate: doc.SowingDate || '',
-          CreatedBY: doc.CreatedBY || '',
-          TicketDescription: doc.TicketDescription || ''
-        }).commit();
-      });
-
-      if (docs.length < CHUNK_SIZE) hasMore = false;
-      else skip += CHUNK_SIZE;
+        { upsert: true }
+      );
+      // Maybe return cachedData? You had commented that out.
     }
 
-    const nextDate = new Date(currentDate);
-    nextDate.setDate(nextDate.getDate() + 1);
-    await processDateWithChunking(nextDate, endDate);
-  }
+    const Delta = await this.getSupportTicketUserDetail(SPUserID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+    if (!item) return { rcode: 0, rmessage: 'User details not found.' };
 
-  await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+    };
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
 
-  await workbook.commit();
-  console.log(`Excel file created at: ${excelFilePath}`);
+    let locationFilter: any = {};
+    if (LocationTypeID === 1 && StateMasterID?.length)
+      locationFilter = { FilterStateID: { $in: StateMasterID } };
+    else if (LocationTypeID === 2 && item.DistrictIDs?.length)
+      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
 
-  // Create ZIP
-  const zipFileName = excelFileName.replace('.xlsx', '.zip');
-  const zipFilePath = path.join(folderPath, zipFileName);
-  const output = fs.createWriteStream(zipFilePath);
-  const archive = archiver('zip', { zlib: { level: 9 } });
-  archive.pipe(output);
-  archive.file(excelFilePath, { name: excelFileName });
-  await archive.finalize();
-  await new Promise<void>((resolve, reject) => {
-    output.on('close', resolve);
-    output.on('error', reject);
-  });
-  await fs.promises.unlink(excelFilePath).catch(console.error);
+    const baseMatch: any = { ...locationFilter };
+    if (SPTicketHeaderID && SPTicketHeaderID !== 0) baseMatch.TicketHeaderID = SPTicketHeaderID;
 
-  // Upload to GCP
-  const gcpService = new GCPServices();
-  const fileBuffer = await fs.promises.readFile(zipFilePath);
-  const uploadResult = await gcpService.uploadFileToGCP({
-    filePath: 'krph/reports/',
-    uploadedBy: 'KRPH',
-    file: { buffer: fileBuffer, originalname: zipFileName },
-  });
-  const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
-  if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+    if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+      const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map((id) => Number(id.trim()));
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+      const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id));
+      if (!validInsuranceIDs.length)
+        return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+      baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs };
+    } else if (InsuranceCompanyID?.length) {
+      baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
 
-  await this.insertOrUpdateDownloadLog(
-    SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
-    SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, this.db
-  );
+    if (SPStateID && SPStateID !== '#ALL') {
+      const requestedStateIDs = SPStateID.split(',').map((id) => id.trim());
+      const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id));
+      if (!validStateIDs.length)
+        return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+      baseMatch.FilterStateID = { $in: validStateIDs };
+    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+      baseMatch.FilterStateID = { $in: StateMasterID };
+    }
 
-  const responsePayload = {
-    data: [],
-    pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
-    downloadUrl: gcpDownloadUrl,
-    zipFileName: zipFileName
-  };
+    const folderPath = path.join(process.cwd(), 'downloads');
+    await fs.promises.mkdir(folderPath, { recursive: true });
 
-  const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
-  try {
-    await this.mailService.sendMail({
-      to: userEmail,
-      subject: 'Support Ticket History Report Download Service',
-      text: 'Support Ticket History Report',
-      html: supportTicketTemplate
-    });
-    console.log("Mail sent successfully");
-  } catch (err) {
-    console.error(`Failed to send email to ${userEmail}:`, err);
-  }
+    // ====== Filename Logic Based on SPTicketHeaderID ======
 
-  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+    const headerTypeMap: Record<number, string> = {
+      1: 'Grievance',
+      2: 'Information',
+      4: 'Crop_Loss',
+    };
+    const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
+    const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');  // "dd_mm_yyyy"
 
-  // return responsePayload;   <-- optionally return
-}
+    const excelFileName = `Support_ticket_data_${ticketTypeName}_${currentDateStr}.xlsx`;
+    const excelFilePath = path.join(folderPath, excelFileName);
 
-//Upgraded code Previoud
-/* async processTicketHistoryAndGenerateZip(ticketPayload: any) {
-  let {
-    SPFROMDATE,
-    SPTODATE,
-    SPInsuranceCompanyID,
-    SPStateID,
-    SPTicketHeaderID,
-    SPUserID,
-    page = 1,
-    limit = 1000000000,
-    userEmail,
-  } = ticketPayload;
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
+    const worksheet = workbook.addWorksheet('Support Tickets');
 
-  const db = this.db;
-  SPTicketHeaderID = Number(SPTicketHeaderID);
+    worksheet.columns = [
+      { header: 'Agent ID', key: 'AgentID', width: 20 },
+      { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
+      { header: 'NCIP Docket No', key: 'TicketNCIPDocketNo', width: 30 },
+      { header: 'Ticket No', key: 'SupportTicketNo', width: 30 },
+      { header: 'Creation Date', key: 'Created', width: 25 },
+      { header: 'Re-Open Date', key: 'TicketReOpenDate', width: 25 },
+      { header: 'Ticket Status', key: 'TicketStatus', width: 20 },
+      { header: 'Status Date', key: 'StatusUpdateTime', width: 25 },
+      { header: 'State', key: 'StateMasterName', width: 20 },
+      { header: 'District', key: 'DistrictMasterName', width: 20 },
+      { header: 'Sub District', key: 'SubDistrictName', width: 20 },
+      { header: 'Type', key: 'TicketHeadName', width: 20 },
+      { header: 'Category', key: 'TicketTypeName', width: 20 },
+      { header: 'Sub Category', key: 'TicketCategoryName', width: 20 },
+      { header: 'Season', key: 'CropSeasonName', width: 15 },
+      { header: 'Year', key: 'RequestYear', width: 10 },
+      { header: 'Insurance Company', key: 'InsuranceCompany', width: 30 },
+      { header: 'Application No', key: 'ApplicationNo', width: 25 },
+      { header: 'Policy No', key: 'InsurancePolicyNo', width: 25 },
+      { header: 'Caller Mobile No', key: 'CallerContactNumber', width: 20 },
+      { header: 'Farmer Name', key: 'RequestorName', width: 25 },
+      { header: 'Mobile No', key: 'RequestorMobileNo', width: 20 },
+      { header: 'Relation', key: 'Relation', width: 15 },
+      { header: 'Relative Name', key: 'RelativeName', width: 25 },
+      { header: 'Policy Premium', key: 'PolicyPremium', width: 15 },
+      { header: 'Policy Area', key: 'PolicyArea', width: 15 },
+      { header: 'Policy Type', key: 'PolicyType', width: 20 },
+      { header: 'Land Survey Number', key: 'LandSurveyNumber', width: 25 },
+      { header: 'Land Division Number', key: 'LandDivisionNumber', width: 25 },
+      { header: 'Plot State', key: 'PlotStateName', width: 20 },
+      { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
+      { header: 'Plot Village', key: 'PlotVillageName', width: 25 },
+      { header: 'Application Source', key: 'ApplicationSource', width: 20 },
+      { header: 'Crop Share', key: 'CropShare', width: 15 },
+      { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
+      { header: 'Farmer Share', key: 'FarmerShare', width: 15 },
+      { header: 'Sowing Date', key: 'SowingDate', width: 20 },
+      { header: 'Created By', key: 'CreatedBY', width: 20 },
+      { header: 'Description', key: 'TicketDescription', width: 50 },
+    ];
 
-  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
-  if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+    await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
 
-  const RequestDateTime = await getCurrentFormattedDateTime();
-  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
-  const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
-  if (cachedData) {
-    console.log('Using cached data');
-    await this.db.collection('support_ticket_download_logs').updateOne(
-      { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
-      {
-        $set: {
-          downloadUrl: cachedData.downloadUrl || '',
-          zipFileName: cachedData.zipFileName || '',
-          updatedAt: new Date()
-        },
-        $setOnInsert: { createdAt: new Date() }
-      },
-      { upsert: true }
-    );
-    return cachedData;
-  }
+    const CHUNK_SIZE = 10000;
 
-  // ===== User detail auth =====
-  const Delta = await this.getSupportTicketUserDetail(SPUserID);
-  const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
-  const item = (responseInfo.data as any)?.user?.[0];
-  if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+    async function processDateWithChunking(currentDate: Date, endDate: Date) {
+      if (currentDate > endDate) return;
 
-  const userDetail = {
-    InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
-    StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
-    BRHeadTypeID: item.BRHeadTypeID,
-    LocationTypeID: item.LocationTypeID,
-  };
-  const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+      const startOfDay = new Date(currentDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(currentDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
 
-  let locationFilter: any = {};
-  if (LocationTypeID === 1 && StateMasterID?.length)
-    locationFilter = { FilterStateID: { $in: StateMasterID } };
-  else if (LocationTypeID === 2 && item.DistrictIDs?.length)
-    locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+      let skip = 0;
+      let hasMore = true;
 
-  const baseMatch: any = { ...locationFilter };
-  if (SPTicketHeaderID && SPTicketHeaderID !== 0) baseMatch.TicketHeaderID = SPTicketHeaderID;
-
-  if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
-    const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map((id) => Number(id.trim()));
-    const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
-    const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id));
-    if (!validInsuranceIDs.length)
-      return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
-    baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs };
-  } else if (InsuranceCompanyID?.length) {
-    baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
-  }
-
-  if (SPStateID && SPStateID !== '#ALL') {
-    const requestedStateIDs = SPStateID.split(',').map((id) => id.trim());
-    const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id));
-    if (!validStateIDs.length)
-      return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
-    baseMatch.FilterStateID = { $in: validStateIDs };
-  } else if (StateMasterID?.length && LocationTypeID !== 2) {
-    baseMatch.FilterStateID = { $in: StateMasterID };
-  }
-
-  const folderPath = path.join(process.cwd(), 'downloads');
-  await fs.promises.mkdir(folderPath, { recursive: true });
-
-  // ===== Filename =====
-  const headerTypeMap: Record<number, string> = {
-    1: 'Grievance',
-    2: 'Information',
-    4: 'Crop_Loss',
-  };
-  const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
-  const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');
-
-  const excelFileName = `Support_ticket_data_${ticketTypeName}_${currentDateStr}.xlsx`;
-  const excelFilePath = path.join(folderPath, excelFileName);
-
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
-  const worksheet = workbook.addWorksheet('Support Tickets');
-
-  await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
-
-  const CHUNK_SIZE = 10000;
-
-  // Keep global set of dynamic columns
-  const dynamicColumns = new Set<string>();
-  const allDocs: any[] = []; // collect all docs first
-
-  function formatToDDMMYYYY(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '';
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day}-${month}-${year} ${hours}:${minutes}`;
-  }
-
-  async function processDateWithChunking(currentDate: Date, endDate: Date) {
-    if (currentDate > endDate) return;
-
-    const startOfDay = new Date(currentDate);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(currentDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
-
-    let skip = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
-      const pipeline: any[] = [
-        { $match: dailyMatch },
-        {
-          $lookup: {
-            from: 'SLA_KRPH_SupportTicketsHistory_Records',
-            let: { ticketId: '$SupportTicketID' },
-            pipeline: [
-              { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
-              { $sort: { TicketHistoryID: -1 } },
-              { $limit: 1 }
-            ],
-            as: 'ticketHistory',
-          }
-        },
-        {
-          $lookup: {
-            from: 'support_ticket_claim_intimation_report_history',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'claimInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'csc_agent_master',
-            localField: 'InsertUserID',
-            foreignField: 'UserLoginID',
-            as: 'agentInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'ticket_comment_journey',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'ticket_comment_journey',
-          },
-        },
-        { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-        { $skip: skip },
-        { $limit: CHUNK_SIZE },
-        { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
-      ];
-
-      const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
-      const docs = await cursor.toArray();
-
-      docs.forEach(doc => {
-        if (Array.isArray(doc.ticket_comment_journey)) {
-          const seenComments = new Set();
-          let commentIndex = 1;
-
-          doc.ticket_comment_journey.forEach((commentObj) => {
-            const rawComment = (commentObj.ResolvedComment || '').replace(/<\/?[^>]+(>|$)/g, '').trim();
-            const commentDate = formatToDDMMYYYY(commentObj.ResolvedDate);
-
-            const uniqueKey = `${commentDate}__${rawComment}`;
-            if (!seenComments.has(uniqueKey)) {
-              doc[`Date ${commentIndex}`] = commentDate;
-              doc[`Comment ${commentIndex}`] = rawComment;
-              dynamicColumns.add(`Date ${commentIndex}`);
-              dynamicColumns.add(`Comment ${commentIndex}`);
-              seenComments.add(uniqueKey);
-              commentIndex++;
+      while (hasMore) {
+        const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
+        const pipeline: any[] = [
+          { $match: dailyMatch },
+          {
+            $lookup: {
+              from: 'SLA_KRPH_SupportTicketsHistory_Records',
+              let: { ticketId: '$SupportTicketID' },
+              pipeline: [
+                { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
+                { $sort: { TicketHistoryID: -1 } },
+                { $limit: 1 }
+              ],
+              as: 'ticketHistory',
             }
-          });
+          },
+          {
+            $lookup: {
+              from: 'support_ticket_claim_intimation_report_history',
+              localField: 'SupportTicketNo',
+              foreignField: 'SupportTicketNo',
+              as: 'claimInfo',
+            }
+          },
+          {
+            $lookup: {
+              from: 'csc_agent_master',
+              localField: 'InsertUserID',
+              foreignField: 'UserLoginID',
+              as: 'agentInfo',
+            }
+          },
+          {
+            $lookup: {
+              from: 'ticket_comment_journey',
+              localField: 'SupportTicketNo',
+              foreignField: 'SupportTicketNo',
+              as: 'ticket_comment_journey',
+            },
+          },
 
-          delete doc.ticket_comment_journey;
-        }
+          { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+          { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+          { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+          { $skip: skip },
+          { $limit: CHUNK_SIZE },
+          {
+            $project: {
+              agentInfo: 1,
+              TicketComments: {
+                $arrayToObject: {
+                  $map: {
+                    input: {
+                      $filter: {
+                        input: '$ticket_comment_journey',
+                        as: 'comment',
+                        cond: {
+                          $and: [
+                            { $ne: ['$$comment.ResolvedDate', null] },
+                            { $ne: ['$$comment.ResolvedComment', null] }
+                          ]
+                        }
+                      }
+                    },
+                    as: 'comment',
+                    in: {
+                      k: {
+                        $concat: [
+                          'Comment (',
+                          {
+                            $dateToString: {
+                              format: '%Y-%m-%d',
+                              date: '$$comment.ResolvedDate',
+                            },
+                          },
+                          ')',
+                        ],
+                      },
+                      v: '$$comment.ResolvedComment',
+                    },
+                  }
+                }
+              },
 
-        allDocs.push(doc);
-      });
+              CallingUniqueID: 1,
+              TicketNCIPDocketNo: 1,
+              SupportTicketNo: 1,
+              Created: 1,
+              TicketReOpenDate: 1,
+              TicketStatus: 1,
+              StatusUpdateTime: 1,
+              StateMasterName: 1,
+              DistrictMasterName: 1,
+              SubDistrictName: 1,
+              TicketHeadName: 1,
+              TicketTypeName: 1,
+              TicketCategoryName: 1,
+              CropSeasonName: 1,
+              RequestYear: 1,
+              InsuranceCompany: 1,
+              ApplicationNo: 1,
+              InsurancePolicyNo: 1,
+              CallerContactNumber: 1,
+              RequestorName: 1,
+              RequestorMobileNo: 1,
+              Relation: 1,
+              RelativeName: 1,
+              PolicyPremium: 1,
+              PolicyArea: 1,
+              PolicyType: 1,
+              LandSurveyNumber: 1,
+              LandDivisionNumber: 1,
+              PlotStateName: 1,
+              PlotDistrictName: 1,
+              PlotVillageName: 1,
+              ApplicationSource: 1,
+              CropShare: 1,
+              IFSCCode: 1,
+              FarmerShare: 1,
+              SowingDate: 1,
+              CreatedBY: 1,
+              TicketDescription: 1
+            }
+          },
+        ];
 
-      if (docs.length < CHUNK_SIZE) hasMore = false;
-      else skip += CHUNK_SIZE;
+        const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
+        const docs = await cursor.toArray();
+
+        docs.forEach(doc => {
+          if (doc.TicketComments) {
+            for (const [key, value] of Object.entries(doc.TicketComments)) {
+              doc[key] = value;
+            }
+            delete doc.TicketComments;
+          }
+
+          worksheet.addRow({
+            AgentID: doc.agentInfo?.UserID?.toString() || '',
+            CallingUniqueID: doc.CallingUniqueID || '',
+            TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
+            SupportTicketNo: doc.SupportTicketNo?.toString() || '',
+            Created: doc.Created ? new Date(doc.Created).toISOString() : '',
+            TicketReOpenDate: doc.TicketReOpenDate || '',
+            TicketStatus: doc.TicketStatus || '',
+            StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
+            StateMasterName: doc.StateMasterName || '',
+            DistrictMasterName: doc.DistrictMasterName || '',
+            SubDistrictName: doc.SubDistrictName || '',
+            TicketHeadName: doc.TicketHeadName || '',
+            TicketTypeName: doc.TicketTypeName || '',
+            TicketCategoryName: doc.TicketCategoryName || '',
+            CropSeasonName: doc.CropSeasonName || '',
+            RequestYear: doc.RequestYear || '',
+            InsuranceCompany: doc.InsuranceCompany || '',
+            ApplicationNo: doc.ApplicationNo || '',
+            InsurancePolicyNo: doc.InsurancePolicyNo || '',
+            CallerContactNumber: doc.CallerContactNumber || '',
+            RequestorName: doc.RequestorName || '',
+            RequestorMobileNo: doc.RequestorMobileNo || '',
+            Relation: doc.Relation || '',
+            RelativeName: doc.RelativeName || '',
+            PolicyPremium: doc.PolicyPremium || '',
+            PolicyArea: doc.PolicyArea || '',
+            PolicyType: doc.PolicyType || '',
+            LandSurveyNumber: doc.LandSurveyNumber || '',
+            LandDivisionNumber: doc.LandDivisionNumber || '',
+            PlotStateName: doc.PlotStateName || '',
+            PlotDistrictName: doc.PlotDistrictName || '',
+            PlotVillageName: doc.PlotVillageName || '',
+            ApplicationSource: doc.ApplicationSource || '',
+            CropShare: doc.CropShare || '',
+            IFSCCode: doc.IFSCCode || '',
+            FarmerShare: doc.FarmerShare || '',
+            SowingDate: doc.SowingDate || '',
+            CreatedBY: doc.CreatedBY || '',
+            TicketDescription: doc.TicketDescription || ''
+          }).commit();
+        });
+
+        if (docs.length < CHUNK_SIZE) hasMore = false;
+        else skip += CHUNK_SIZE;
+      }
+
+      const nextDate = new Date(currentDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      await processDateWithChunking(nextDate, endDate);
     }
 
-    const nextDate = new Date(currentDate);
-    nextDate.setDate(nextDate.getDate() + 1);
-    await processDateWithChunking(nextDate, endDate);
-  }
+    await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
 
-  await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
+    await workbook.commit();
+    console.log(`Excel file created at: ${excelFilePath}`);
 
-  // ===== Set worksheet columns BEFORE adding rows =====
-  const staticColumns = [
-    { header: 'Agent ID', key: 'AgentID', width: 20 },
-    { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
-    { header: 'Ticket NCIP Docket No', key: 'TicketNCIPDocketNo', width: 25 },
-    { header: 'Ticket No', key: 'SupportTicketNo', width: 30 },
-    { header: 'Creation Date', key: 'Created', width: 25 },
-    { header: 'Ticket ReOpen Date', key: 'TicketReOpenDate', width: 25 },
-    { header: 'Ticket Status', key: 'TicketStatus', width: 20 },
-    { header: 'Status Update Time', key: 'StatusUpdateTime', width: 25 },
-    { header: 'State', key: 'StateMasterName', width: 20 },
-    { header: 'District', key: 'DistrictMasterName', width: 20 },
-    { header: 'Sub District', key: 'SubDistrictName', width: 20 },
-    { header: 'Ticket Head', key: 'TicketHeadName', width: 20 },
-    { header: 'Ticket Type', key: 'TicketTypeName', width: 20 },
-    { header: 'Ticket Category', key: 'TicketCategoryName', width: 20 },
-    { header: 'Crop Season', key: 'CropSeasonName', width: 20 },
-    { header: 'Request Year', key: 'RequestYear', width: 20 },
-    { header: 'Insurance Company', key: 'InsuranceCompany', width: 30 },
-    { header: 'Application No', key: 'ApplicationNo', width: 30 },
-    { header: 'Policy No', key: 'InsurancePolicyNo', width: 30 },
-    { header: 'Caller Contact No', key: 'CallerContactNumber', width: 20 },
-    { header: 'Requestor Name', key: 'RequestorName', width: 20 },
-    { header: 'Requestor Mobile No', key: 'RequestorMobileNo', width: 20 },
-    { header: 'Relation', key: 'Relation', width: 20 },
-    { header: 'Relative Name', key: 'RelativeName', width: 20 },
-    { header: 'Policy Premium', key: 'PolicyPremium', width: 20 },
-    { header: 'Policy Area', key: 'PolicyArea', width: 20 },
-    { header: 'Policy Type', key: 'PolicyType', width: 20 },
-    { header: 'Land Survey No', key: 'LandSurveyNumber', width: 20 },
-    { header: 'Land Division No', key: 'LandDivisionNumber', width: 20 },
-    { header: 'Plot State', key: 'PlotStateName', width: 20 },
-    { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
-    { header: 'Plot Village', key: 'PlotVillageName', width: 20 },
-    { header: 'Application Source', key: 'ApplicationSource', width: 20 },
-    { header: 'Crop Share', key: 'CropShare', width: 20 },
-    { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
-    { header: 'Farmer Share', key: 'FarmerShare', width: 20 },
-    { header: 'Sowing Date', key: 'SowingDate', width: 20 },
-    { header: 'Created By', key: 'CreatedBY', width: 20 },
-    { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
-  ];
-
-  const dynamicColumnDefs = Array.from(dynamicColumns).map(col => ({
-    header: col,
-    key: col,
-    width: 40
-  }));
-
-  worksheet.columns = [...staticColumns, ...dynamicColumnDefs];
-
-  // ===== Now add rows safely =====
-  allDocs.forEach(doc => {
-    worksheet.addRow({
-      AgentID: doc.agentInfo?.UserID?.toString() || '',
-      CallingUniqueID: doc.CallingUniqueID || '',
-      TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
-      SupportTicketNo: doc.SupportTicketNo?.toString() || '',
-      Created: doc.Created ? new Date(doc.Created).toISOString() : '',
-      TicketReOpenDate: doc.TicketReOpenDate || '',
-      TicketStatus: doc.TicketStatus || '',
-      StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
-      StateMasterName: doc.StateMasterName || '',
-      DistrictMasterName: doc.DistrictMasterName || '',
-      SubDistrictName: doc.SubDistrictName || '',
-      TicketHeadName: doc.TicketHeadName || '',
-      TicketTypeName: doc.TicketTypeName || '',
-      TicketCategoryName: doc.TicketCategoryName || '',
-      CropSeasonName: doc.CropSeasonName || '',
-      RequestYear: doc.RequestYear || '',
-      InsuranceCompany: doc.InsuranceCompany || '',
-      ApplicationNo: doc.ApplicationNo || '',
-      InsurancePolicyNo: doc.InsurancePolicyNo || '',
-      CallerContactNumber: doc.CallerContactNumber || '',
-      RequestorName: doc.RequestorName || '',
-      RequestorMobileNo: doc.RequestorMobileNo || '',
-      Relation: doc.Relation || '',
-      RelativeName: doc.RelativeName || '',
-      PolicyPremium: doc.PolicyPremium || '',
-      PolicyArea: doc.PolicyArea || '',
-      PolicyType: doc.PolicyType || '',
-      LandSurveyNumber: doc.LandSurveyNumber || '',
-      LandDivisionNumber: doc.LandDivisionNumber || '',
-      PlotStateName: doc.PlotStateName || '',
-      PlotDistrictName: doc.PlotDistrictName || '',
-      PlotVillageName: doc.PlotVillageName || '',
-      ApplicationSource: doc.ApplicationSource || '',
-      CropShare: doc.CropShare || '',
-      IFSCCode: doc.IFSCCode || '',
-      FarmerShare: doc.FarmerShare || '',
-      SowingDate: doc.SowingDate || '',
-      CreatedBY: doc.CreatedBY || '',
-      TicketDescription: doc.TicketDescription || '',
-      // include dynamic cols
-      ...Object.fromEntries(Object.entries(doc).filter(([k]) => k.startsWith('Date') || k.startsWith('Comment')))
-    }).commit();
-  });
-
-  await workbook.commit();
-  console.log(`Excel file created at: ${excelFilePath}`);
-
-  // ===== Create ZIP =====
-  const zipFileName = excelFileName.replace('.xlsx', '.zip');
-  const zipFilePath = path.join(folderPath, zipFileName);
-  const output = fs.createWriteStream(zipFilePath);
-  const archive = archiver('zip', { zlib: { level: 9 } });
-  archive.pipe(output);
-  archive.file(excelFilePath, { name: excelFileName });
-  await archive.finalize();
-  await new Promise<void>((resolve, reject) => {
-    output.on('close', resolve);
-    output.on('error', reject);
-  });
-  await fs.promises.unlink(excelFilePath).catch(console.error);
-
-  // ===== Upload to GCP =====
-  const gcpService = new GCPServices();
-  const fileBuffer = await fs.promises.readFile(zipFilePath);
-  const uploadResult = await gcpService.uploadFileToGCP({
-    filePath: 'krph/reports/',
-    uploadedBy: 'KRPH',
-    file: { buffer: fileBuffer, originalname: zipFileName },
-  });
-  const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
-  if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
-
-  await this.insertOrUpdateDownloadLog(
-    SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
-    SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, this.db
-  );
-
-  const responsePayload = {
-    data: [],
-    pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
-    downloadUrl: gcpDownloadUrl,
-    zipFileName: zipFileName
-  };
-
-
-  const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
-  try {
-    await this.mailService.sendMail({
-      to: userEmail,
-      subject: 'Support Ticket History Report Download Service',
-      text: 'Support Ticket History Report',
-      html: supportTicketTemplate
+    // Create ZIP
+    const zipFileName = excelFileName.replace('.xlsx', '.zip');
+    const zipFilePath = path.join(folderPath, zipFileName);
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(output);
+    archive.file(excelFilePath, { name: excelFileName });
+    await archive.finalize();
+    await new Promise<void>((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
     });
-    console.log("Mail sent successfully");
-  } catch (err) {
-    console.error(`Failed to send email to ${userEmail}:`, err);
+    await fs.promises.unlink(excelFilePath).catch(console.error);
+
+    // Upload to GCP
+    const gcpService = new GCPServices();
+    const fileBuffer = await fs.promises.readFile(zipFilePath);
+    const uploadResult = await gcpService.uploadFileToGCP({
+      filePath: 'krph/reports/',
+      uploadedBy: 'KRPH',
+      file: { buffer: fileBuffer, originalname: zipFileName },
+    });
+    const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+    if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+
+    await this.insertOrUpdateDownloadLog(
+      SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
+      SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, this.db
+    );
+
+    const responsePayload = {
+      data: [],
+      pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+      downloadUrl: gcpDownloadUrl,
+      zipFileName: zipFileName
+    };
+
+    const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
+    try {
+      await this.mailService.sendMail({
+        to: userEmail,
+        subject: 'Support Ticket History Report Download Service',
+        text: 'Support Ticket History Report',
+        html: supportTicketTemplate
+      });
+      console.log("Mail sent successfully");
+    } catch (err) {
+      console.error(`Failed to send email to ${userEmail}:`, err);
+    }
+
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+
+    // return responsePayload;   <-- optionally return
   }
 
-  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
-
-  } */
+  //Upgraded code Previoud
+  /* async processTicketHistoryAndGenerateZip(ticketPayload: any) {
+    let {
+      SPFROMDATE,
+      SPTODATE,
+      SPInsuranceCompanyID,
+      SPStateID,
+      SPTicketHeaderID,
+      SPUserID,
+      page = 1,
+      limit = 1000000000,
+      userEmail,
+    } = ticketPayload;
+  
+    const db = this.db;
+    SPTicketHeaderID = Number(SPTicketHeaderID);
+  
+    if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+    if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+  
+    const RequestDateTime = await getCurrentFormattedDateTime();
+    const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+    if (cachedData) {
+      console.log('Using cached data');
+      await this.db.collection('support_ticket_download_logs').updateOne(
+        { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
+        {
+          $set: {
+            downloadUrl: cachedData.downloadUrl || '',
+            zipFileName: cachedData.zipFileName || '',
+            updatedAt: new Date()
+          },
+          $setOnInsert: { createdAt: new Date() }
+        },
+        { upsert: true }
+      );
+      return cachedData;
+    }
+  
+    // ===== User detail auth =====
+    const Delta = await this.getSupportTicketUserDetail(SPUserID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+    if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+  
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+    };
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+  
+    let locationFilter: any = {};
+    if (LocationTypeID === 1 && StateMasterID?.length)
+      locationFilter = { FilterStateID: { $in: StateMasterID } };
+    else if (LocationTypeID === 2 && item.DistrictIDs?.length)
+      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+  
+    const baseMatch: any = { ...locationFilter };
+    if (SPTicketHeaderID && SPTicketHeaderID !== 0) baseMatch.TicketHeaderID = SPTicketHeaderID;
+  
+    if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+      const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map((id) => Number(id.trim()));
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+      const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id));
+      if (!validInsuranceIDs.length)
+        return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+      baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs };
+    } else if (InsuranceCompanyID?.length) {
+      baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
+  
+    if (SPStateID && SPStateID !== '#ALL') {
+      const requestedStateIDs = SPStateID.split(',').map((id) => id.trim());
+      const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id));
+      if (!validStateIDs.length)
+        return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+      baseMatch.FilterStateID = { $in: validStateIDs };
+    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+      baseMatch.FilterStateID = { $in: StateMasterID };
+    }
+  
+    const folderPath = path.join(process.cwd(), 'downloads');
+    await fs.promises.mkdir(folderPath, { recursive: true });
+  
+    // ===== Filename =====
+    const headerTypeMap: Record<number, string> = {
+      1: 'Grievance',
+      2: 'Information',
+      4: 'Crop_Loss',
+    };
+    const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
+    const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');
+  
+    const excelFileName = `Support_ticket_data_${ticketTypeName}_${currentDateStr}.xlsx`;
+    const excelFilePath = path.join(folderPath, excelFileName);
+  
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
+    const worksheet = workbook.addWorksheet('Support Tickets');
+  
+    await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
+  
+    const CHUNK_SIZE = 10000;
+  
+    // Keep global set of dynamic columns
+    const dynamicColumns = new Set<string>();
+    const allDocs: any[] = []; // collect all docs first
+  
+    function formatToDDMMYYYY(dateString) {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${day}-${month}-${year} ${hours}:${minutes}`;
+    }
+  
+    async function processDateWithChunking(currentDate: Date, endDate: Date) {
+      if (currentDate > endDate) return;
+  
+      const startOfDay = new Date(currentDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(currentDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+  
+      let skip = 0;
+      let hasMore = true;
+  
+      while (hasMore) {
+        const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
+        const pipeline: any[] = [
+          { $match: dailyMatch },
+          {
+            $lookup: {
+              from: 'SLA_KRPH_SupportTicketsHistory_Records',
+              let: { ticketId: '$SupportTicketID' },
+              pipeline: [
+                { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
+                { $sort: { TicketHistoryID: -1 } },
+                { $limit: 1 }
+              ],
+              as: 'ticketHistory',
+            }
+          },
+          {
+            $lookup: {
+              from: 'support_ticket_claim_intimation_report_history',
+              localField: 'SupportTicketNo',
+              foreignField: 'SupportTicketNo',
+              as: 'claimInfo',
+            }
+          },
+          {
+            $lookup: {
+              from: 'csc_agent_master',
+              localField: 'InsertUserID',
+              foreignField: 'UserLoginID',
+              as: 'agentInfo',
+            }
+          },
+          {
+            $lookup: {
+              from: 'ticket_comment_journey',
+              localField: 'SupportTicketNo',
+              foreignField: 'SupportTicketNo',
+              as: 'ticket_comment_journey',
+            },
+          },
+          { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+          { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+          { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+          { $skip: skip },
+          { $limit: CHUNK_SIZE },
+          { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
+        ];
+  
+        const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
+        const docs = await cursor.toArray();
+  
+        docs.forEach(doc => {
+          if (Array.isArray(doc.ticket_comment_journey)) {
+            const seenComments = new Set();
+            let commentIndex = 1;
+  
+            doc.ticket_comment_journey.forEach((commentObj) => {
+              const rawComment = (commentObj.ResolvedComment || '').replace(/<\/?[^>]+(>|$)/g, '').trim();
+              const commentDate = formatToDDMMYYYY(commentObj.ResolvedDate);
+  
+              const uniqueKey = `${commentDate}__${rawComment}`;
+              if (!seenComments.has(uniqueKey)) {
+                doc[`Date ${commentIndex}`] = commentDate;
+                doc[`Comment ${commentIndex}`] = rawComment;
+                dynamicColumns.add(`Date ${commentIndex}`);
+                dynamicColumns.add(`Comment ${commentIndex}`);
+                seenComments.add(uniqueKey);
+                commentIndex++;
+              }
+            });
+  
+            delete doc.ticket_comment_journey;
+          }
+  
+          allDocs.push(doc);
+        });
+  
+        if (docs.length < CHUNK_SIZE) hasMore = false;
+        else skip += CHUNK_SIZE;
+      }
+  
+      const nextDate = new Date(currentDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      await processDateWithChunking(nextDate, endDate);
+    }
+  
+    await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
+  
+    // ===== Set worksheet columns BEFORE adding rows =====
+    const staticColumns = [
+      { header: 'Agent ID', key: 'AgentID', width: 20 },
+      { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
+      { header: 'Ticket NCIP Docket No', key: 'TicketNCIPDocketNo', width: 25 },
+      { header: 'Ticket No', key: 'SupportTicketNo', width: 30 },
+      { header: 'Creation Date', key: 'Created', width: 25 },
+      { header: 'Ticket ReOpen Date', key: 'TicketReOpenDate', width: 25 },
+      { header: 'Ticket Status', key: 'TicketStatus', width: 20 },
+      { header: 'Status Update Time', key: 'StatusUpdateTime', width: 25 },
+      { header: 'State', key: 'StateMasterName', width: 20 },
+      { header: 'District', key: 'DistrictMasterName', width: 20 },
+      { header: 'Sub District', key: 'SubDistrictName', width: 20 },
+      { header: 'Ticket Head', key: 'TicketHeadName', width: 20 },
+      { header: 'Ticket Type', key: 'TicketTypeName', width: 20 },
+      { header: 'Ticket Category', key: 'TicketCategoryName', width: 20 },
+      { header: 'Crop Season', key: 'CropSeasonName', width: 20 },
+      { header: 'Request Year', key: 'RequestYear', width: 20 },
+      { header: 'Insurance Company', key: 'InsuranceCompany', width: 30 },
+      { header: 'Application No', key: 'ApplicationNo', width: 30 },
+      { header: 'Policy No', key: 'InsurancePolicyNo', width: 30 },
+      { header: 'Caller Contact No', key: 'CallerContactNumber', width: 20 },
+      { header: 'Requestor Name', key: 'RequestorName', width: 20 },
+      { header: 'Requestor Mobile No', key: 'RequestorMobileNo', width: 20 },
+      { header: 'Relation', key: 'Relation', width: 20 },
+      { header: 'Relative Name', key: 'RelativeName', width: 20 },
+      { header: 'Policy Premium', key: 'PolicyPremium', width: 20 },
+      { header: 'Policy Area', key: 'PolicyArea', width: 20 },
+      { header: 'Policy Type', key: 'PolicyType', width: 20 },
+      { header: 'Land Survey No', key: 'LandSurveyNumber', width: 20 },
+      { header: 'Land Division No', key: 'LandDivisionNumber', width: 20 },
+      { header: 'Plot State', key: 'PlotStateName', width: 20 },
+      { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
+      { header: 'Plot Village', key: 'PlotVillageName', width: 20 },
+      { header: 'Application Source', key: 'ApplicationSource', width: 20 },
+      { header: 'Crop Share', key: 'CropShare', width: 20 },
+      { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
+      { header: 'Farmer Share', key: 'FarmerShare', width: 20 },
+      { header: 'Sowing Date', key: 'SowingDate', width: 20 },
+      { header: 'Created By', key: 'CreatedBY', width: 20 },
+      { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
+    ];
+  
+    const dynamicColumnDefs = Array.from(dynamicColumns).map(col => ({
+      header: col,
+      key: col,
+      width: 40
+    }));
+  
+    worksheet.columns = [...staticColumns, ...dynamicColumnDefs];
+  
+    // ===== Now add rows safely =====
+    allDocs.forEach(doc => {
+      worksheet.addRow({
+        AgentID: doc.agentInfo?.UserID?.toString() || '',
+        CallingUniqueID: doc.CallingUniqueID || '',
+        TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
+        SupportTicketNo: doc.SupportTicketNo?.toString() || '',
+        Created: doc.Created ? new Date(doc.Created).toISOString() : '',
+        TicketReOpenDate: doc.TicketReOpenDate || '',
+        TicketStatus: doc.TicketStatus || '',
+        StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
+        StateMasterName: doc.StateMasterName || '',
+        DistrictMasterName: doc.DistrictMasterName || '',
+        SubDistrictName: doc.SubDistrictName || '',
+        TicketHeadName: doc.TicketHeadName || '',
+        TicketTypeName: doc.TicketTypeName || '',
+        TicketCategoryName: doc.TicketCategoryName || '',
+        CropSeasonName: doc.CropSeasonName || '',
+        RequestYear: doc.RequestYear || '',
+        InsuranceCompany: doc.InsuranceCompany || '',
+        ApplicationNo: doc.ApplicationNo || '',
+        InsurancePolicyNo: doc.InsurancePolicyNo || '',
+        CallerContactNumber: doc.CallerContactNumber || '',
+        RequestorName: doc.RequestorName || '',
+        RequestorMobileNo: doc.RequestorMobileNo || '',
+        Relation: doc.Relation || '',
+        RelativeName: doc.RelativeName || '',
+        PolicyPremium: doc.PolicyPremium || '',
+        PolicyArea: doc.PolicyArea || '',
+        PolicyType: doc.PolicyType || '',
+        LandSurveyNumber: doc.LandSurveyNumber || '',
+        LandDivisionNumber: doc.LandDivisionNumber || '',
+        PlotStateName: doc.PlotStateName || '',
+        PlotDistrictName: doc.PlotDistrictName || '',
+        PlotVillageName: doc.PlotVillageName || '',
+        ApplicationSource: doc.ApplicationSource || '',
+        CropShare: doc.CropShare || '',
+        IFSCCode: doc.IFSCCode || '',
+        FarmerShare: doc.FarmerShare || '',
+        SowingDate: doc.SowingDate || '',
+        CreatedBY: doc.CreatedBY || '',
+        TicketDescription: doc.TicketDescription || '',
+        // include dynamic cols
+        ...Object.fromEntries(Object.entries(doc).filter(([k]) => k.startsWith('Date') || k.startsWith('Comment')))
+      }).commit();
+    });
+  
+    await workbook.commit();
+    console.log(`Excel file created at: ${excelFilePath}`);
+  
+    // ===== Create ZIP =====
+    const zipFileName = excelFileName.replace('.xlsx', '.zip');
+    const zipFilePath = path.join(folderPath, zipFileName);
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(output);
+    archive.file(excelFilePath, { name: excelFileName });
+    await archive.finalize();
+    await new Promise<void>((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
+    });
+    await fs.promises.unlink(excelFilePath).catch(console.error);
+  
+    // ===== Upload to GCP =====
+    const gcpService = new GCPServices();
+    const fileBuffer = await fs.promises.readFile(zipFilePath);
+    const uploadResult = await gcpService.uploadFileToGCP({
+      filePath: 'krph/reports/',
+      uploadedBy: 'KRPH',
+      file: { buffer: fileBuffer, originalname: zipFileName },
+    });
+    const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+    if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+  
+    await this.insertOrUpdateDownloadLog(
+      SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
+      SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, this.db
+    );
+  
+    const responsePayload = {
+      data: [],
+      pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+      downloadUrl: gcpDownloadUrl,
+      zipFileName: zipFileName
+    };
+  
+  
+    const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
+    try {
+      await this.mailService.sendMail({
+        to: userEmail,
+        subject: 'Support Ticket History Report Download Service',
+        text: 'Support Ticket History Report',
+        html: supportTicketTemplate
+      });
+      console.log("Mail sent successfully");
+    } catch (err) {
+      console.error(`Failed to send email to ${userEmail}:`, err);
+    }
+  
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+  
+    } */
 
 
   async processTicketHistoryAndGenerateZipchabged(ticketPayload: any) {
-  let {
-    SPFROMDATE,
-    SPTODATE,
-    SPInsuranceCompanyID,
-    SPStateID,
-    SPTicketHeaderID,
-    SPUserID,
-    page = 1,
-    limit = 1000000000,
-    userEmail,
-  } = ticketPayload;
+    let {
+      SPFROMDATE,
+      SPTODATE,
+      SPInsuranceCompanyID,
+      SPStateID,
+      SPTicketHeaderID,
+      SPUserID,
+      page = 1,
+      limit = 1000000000,
+      userEmail,
+    } = ticketPayload;
 
-  const db = this.db;
-  SPTicketHeaderID = Number(SPTicketHeaderID);
+    const db = this.db;
+    SPTicketHeaderID = Number(SPTicketHeaderID);
 
-  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
-  if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+    if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+    if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
 
-  const RequestDateTime = await getCurrentFormattedDateTime();
-  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
-  const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
-  if (cachedData) {
-    console.log('Using cached data');
-    await this.db.collection('support_ticket_download_logs').updateOne(
-      { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
-      {
-        $set: {
-          downloadUrl: cachedData.downloadUrl || '',
-          zipFileName: cachedData.zipFileName || '',
-          updatedAt: new Date()
-        },
-        $setOnInsert: { createdAt: new Date() }
-      },
-      { upsert: true }
-    );
-    return cachedData;
-  }
-
-  // ===== User detail auth =====
-  const Delta = await this.getSupportTicketUserDetail(SPUserID);
-  const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
-  const item = (responseInfo.data as any)?.user?.[0];
-  if (!item) return { rcode: 0, rmessage: 'User details not found.' };
-
-  const userDetail = {
-    InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
-    StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
-    BRHeadTypeID: item.BRHeadTypeID,
-    LocationTypeID: item.LocationTypeID,
-  };
-  const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
-
-  let locationFilter: any = {};
-  if (LocationTypeID === 1 && StateMasterID?.length)
-    locationFilter = { FilterStateID: { $in: StateMasterID } };
-  else if (LocationTypeID === 2 && item.DistrictIDs?.length)
-    locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
-
-  const baseMatch: any = { ...locationFilter };
-  if (SPTicketHeaderID && SPTicketHeaderID !== 0) baseMatch.TicketHeaderID = SPTicketHeaderID;
-
-  if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
-    const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map((id) => Number(id.trim()));
-    const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
-    const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id));
-    if (!validInsuranceIDs.length)
-      return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
-    baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs };
-  } else if (InsuranceCompanyID?.length) {
-    baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
-  }
-
-  if (SPStateID && SPStateID !== '#ALL') {
-    const requestedStateIDs = SPStateID.split(',').map((id) => id.trim());
-    const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id));
-    if (!validStateIDs.length)
-      return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
-    baseMatch.FilterStateID = { $in: validStateIDs };
-  } else if (StateMasterID?.length && LocationTypeID !== 2) {
-    baseMatch.FilterStateID = { $in: StateMasterID };
-  }
-
-  const folderPath = path.join(process.cwd(), 'downloads');
-  await fs.promises.mkdir(folderPath, { recursive: true });
-
-  // ===== Filename =====
-  const headerTypeMap: Record<number, string> = {
-    1: 'Grievance',
-    2: 'Information',
-    4: 'Crop_Loss',
-  };
-  const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
-  const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');
-
-  const excelFileName = `Support_ticket_data_${ticketTypeName}_${currentDateStr}.xlsx`;
-  const excelFilePath = path.join(folderPath, excelFileName);
-
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
-  const worksheet = workbook.addWorksheet('Support Tickets');
-
-  await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
-
-  const CHUNK_SIZE = 1000;
-
-  const staticColumns = [
-    { header: 'Agent ID', key: 'AgentID', width: 20 },
-    { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
-    { header: 'Ticket NCIP Docket No', key: 'TicketNCIPDocketNo', width: 25 },
-    { header: 'Ticket No', key: 'SupportTicketNo', width: 30 },
-    { header: 'Creation Date', key: 'Created', width: 25 },
-    { header: 'Ticket ReOpen Date', key: 'TicketReOpenDate', width: 25 },
-    { header: 'Ticket Status', key: 'TicketStatus', width: 20 },
-    { header: 'Status Update Time', key: 'StatusUpdateTime', width: 25 },
-    { header: 'State', key: 'StateMasterName', width: 20 },
-    { header: 'District', key: 'DistrictMasterName', width: 20 },
-    { header: 'Sub District', key: 'SubDistrictName', width: 20 },
-    { header: 'Ticket Head', key: 'TicketHeadName', width: 20 },
-    { header: 'Ticket Type', key: 'TicketTypeName', width: 20 },
-    { header: 'Ticket Category', key: 'TicketCategoryName', width: 20 },
-    { header: 'Crop Season', key: 'CropSeasonName', width: 20 },
-    { header: 'Request Year', key: 'RequestYear', width: 20 },
-    { header: 'Insurance Company', key: 'InsuranceCompany', width: 30 },
-    { header: 'Application No', key: 'ApplicationNo', width: 30 },
-    { header: 'Policy No', key: 'InsurancePolicyNo', width: 30 },
-    { header: 'Caller Contact No', key: 'CallerContactNumber', width: 20 },
-    { header: 'Requestor Name', key: 'RequestorName', width: 20 },
-    { header: 'Requestor Mobile No', key: 'RequestorMobileNo', width: 20 },
-    { header: 'Relation', key: 'Relation', width: 20 },
-    { header: 'Relative Name', key: 'RelativeName', width: 20 },
-    { header: 'Policy Premium', key: 'PolicyPremium', width: 20 },
-    { header: 'Policy Area', key: 'PolicyArea', width: 20 },
-    { header: 'Policy Type', key: 'PolicyType', width: 20 },
-    { header: 'Land Survey No', key: 'LandSurveyNumber', width: 20 },
-    { header: 'Land Division No', key: 'LandDivisionNumber', width: 20 },
-    { header: 'Plot State', key: 'PlotStateName', width: 20 },
-    { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
-    { header: 'Plot Village', key: 'PlotVillageName', width: 20 },
-    { header: 'Application Source', key: 'ApplicationSource', width: 20 },
-    { header: 'Crop Share', key: 'CropShare', width: 20 },
-    { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
-    { header: 'Farmer Share', key: 'FarmerShare', width: 20 },
-    { header: 'Sowing Date', key: 'SowingDate', width: 20 },
-    { header: 'Created By', key: 'CreatedBY', width: 20 },
-    { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
-  ];
-
-  const dynamicColumns = new Set<string>();
-  let headersSet = false;
-
-  function formatToDDMMYYYY(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '';
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day}-${month}-${year} ${hours}:${minutes}`;
-  }
-
-  async function processDateWithChunking(currentDate: Date, endDate: Date) {
-    if (currentDate > endDate) return;
-
-    const startOfDay = new Date(currentDate);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(currentDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
-
-    let skip = 0, hasMore = true;
-
-    while (hasMore) {
-      const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
-      const pipeline: any[] = [
-        { $match: dailyMatch },
+    const RequestDateTime = await getCurrentFormattedDateTime();
+    const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+    if (cachedData) {
+      console.log('Using cached data');
+      await this.db.collection('support_ticket_download_logs').updateOne(
+        { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
         {
-          $lookup: {
-            from: 'SLA_KRPH_SupportTicketsHistory_Records',
-            let: { ticketId: '$SupportTicketID' },
-            pipeline: [
-              { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
-              { $sort: { TicketHistoryID: -1 } },
-              { $limit: 1 }
-            ],
-            as: 'ticketHistory',
-          }
-        },
-        {
-          $lookup: {
-            from: 'support_ticket_claim_intimation_report_history',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'claimInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'csc_agent_master',
-            localField: 'InsertUserID',
-            foreignField: 'UserLoginID',
-            as: 'agentInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'ticket_comment_journey',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'ticket_comment_journey',
+          $set: {
+            downloadUrl: cachedData.downloadUrl || '',
+            zipFileName: cachedData.zipFileName || '',
+            updatedAt: new Date()
           },
+          $setOnInsert: { createdAt: new Date() }
         },
-        { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-        { $skip: skip },
-        { $limit: CHUNK_SIZE },
-        { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
-      ];
-
-      const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
-      const docs = await cursor.toArray();
-
-      for (const doc of docs) {
-        // --- dynamic comment handling ---
-        if (Array.isArray(doc.ticket_comment_journey)) {
-          const seen = new Set();
-          let idx = 1;
-
-          for (const c of doc.ticket_comment_journey) {
-            const raw = (c.ResolvedComment || '').replace(/<\/?[^>]+>/g, '').trim();
-            const date = formatToDDMMYYYY(c.ResolvedDate);
-            const key = `${date}__${raw}`;
-            if (!seen.has(key)) {
-              doc[`Date ${idx}`] = date;
-              doc[`Comment ${idx}`] = raw;
-              dynamicColumns.add(`Date ${idx}`);
-              dynamicColumns.add(`Comment ${idx}`);
-              seen.add(key);
-              idx++;
-            }
-          }
-          delete doc.ticket_comment_journey;
-        }
-
-        if (!headersSet) {
-          const dynamicDefs = Array.from(dynamicColumns).map(col => ({ header: col, key: col, width: 40 }));
-          worksheet.columns = [...staticColumns, ...dynamicDefs];
-          headersSet = true;
-        }
-
-        worksheet.addRow({
-          AgentID: doc.agentInfo?.UserID?.toString() || '',
-          CallingUniqueID: doc.CallingUniqueID || '',
-          TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
-          SupportTicketNo: doc.SupportTicketNo?.toString() || '',
-          Created: doc.Created ? new Date(doc.Created).toISOString() : '',
-          TicketReOpenDate: doc.TicketReOpenDate || '',
-          TicketStatus: doc.TicketStatus || '',
-          StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
-          StateMasterName: doc.StateMasterName || '',
-          DistrictMasterName: doc.DistrictMasterName || '',
-          SubDistrictName: doc.SubDistrictName || '',
-          TicketHeadName: doc.TicketHeadName || '',
-          TicketTypeName: doc.TicketTypeName || '',
-          TicketCategoryName: doc.TicketCategoryName || '',
-          CropSeasonName: doc.CropSeasonName || '',
-          RequestYear: doc.RequestYear || '',
-          InsuranceCompany: doc.InsuranceCompany || '',
-          ApplicationNo: doc.ApplicationNo || '',
-          InsurancePolicyNo: doc.InsurancePolicyNo || '',
-          CallerContactNumber: doc.CallerContactNumber || '',
-          RequestorName: doc.RequestorName || '',
-          RequestorMobileNo: doc.RequestorMobileNo || '',
-          Relation: doc.Relation || '',
-          RelativeName: doc.RelativeName || '',
-          PolicyPremium: doc.PolicyPremium || '',
-          PolicyArea: doc.PolicyArea || '',
-          PolicyType: doc.PolicyType || '',
-          LandSurveyNumber: doc.LandSurveyNumber || '',
-          LandDivisionNumber: doc.LandDivisionNumber || '',
-          PlotStateName: doc.PlotStateName || '',
-          PlotDistrictName: doc.PlotDistrictName || '',
-          PlotVillageName: doc.PlotVillageName || '',
-          ApplicationSource: doc.ApplicationSource || '',
-          CropShare: doc.CropShare || '',
-          IFSCCode: doc.IFSCCode || '',
-          FarmerShare: doc.FarmerShare || '',
-          SowingDate: doc.SowingDate || '',
-          CreatedBY: doc.CreatedBY || '',
-          TicketDescription: doc.TicketDescription || '',
-          ...Object.fromEntries(Object.entries(doc).filter(([k]) => k.startsWith('Date') || k.startsWith('Comment')))
-        }).commit();
-      }
-
-      hasMore = docs.length === CHUNK_SIZE;
-      skip += CHUNK_SIZE;
+        { upsert: true }
+      );
+      return cachedData;
     }
 
-    const nextDate = new Date(currentDate);
-    nextDate.setDate(nextDate.getDate() + 1);
-    await processDateWithChunking(nextDate, endDate);
-  }
+    // ===== User detail auth =====
+    const Delta = await this.getSupportTicketUserDetail(SPUserID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+    if (!item) return { rcode: 0, rmessage: 'User details not found.' };
 
-  await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
-  await workbook.commit();
-  console.log(`Excel file created at: ${excelFilePath}`);
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+    };
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
 
-  // ===== Create ZIP =====
-  const zipFileName = excelFileName.replace('.xlsx', '.zip');
-  const zipFilePath = path.join(folderPath, zipFileName);
-  const output = fs.createWriteStream(zipFilePath);
-  const archive = archiver('zip', { zlib: { level: 9 } });
-  archive.pipe(output);
-  archive.file(excelFilePath, { name: excelFileName });
-  await archive.finalize();
-  await new Promise<void>((resolve, reject) => {
-    output.on('close', resolve);
-    output.on('error', reject);
-  });
-  await fs.promises.unlink(excelFilePath).catch(console.error);
+    let locationFilter: any = {};
+    if (LocationTypeID === 1 && StateMasterID?.length)
+      locationFilter = { FilterStateID: { $in: StateMasterID } };
+    else if (LocationTypeID === 2 && item.DistrictIDs?.length)
+      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
 
-  // ===== Upload to GCP =====
-  const gcpService = new GCPServices();
-  const fileBuffer = await fs.promises.readFile(zipFilePath);
-  const uploadResult = await gcpService.uploadFileToGCP({
-    filePath: 'krph/reports/',
-    uploadedBy: 'KRPH',
-    file: { buffer: fileBuffer, originalname: zipFileName },
-  });
-  const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
-  if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+    const baseMatch: any = { ...locationFilter };
+    if (SPTicketHeaderID && SPTicketHeaderID !== 0) baseMatch.TicketHeaderID = SPTicketHeaderID;
 
-  await this.insertOrUpdateDownloadLog(
-    SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
-    SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, this.db
-  );
-
-  const responsePayload = {
-    data: [],
-    pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
-    downloadUrl: gcpDownloadUrl,
-    zipFileName: zipFileName
-  };
-
-  const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
-  try {
-    await this.mailService.sendMail({
-      to: userEmail,
-      subject: 'Support Ticket History Report Download Service',
-      text: 'Support Ticket History Report',
-      html: supportTicketTemplate
-    });
-    console.log("Mail sent successfully");
-  } catch (err) {
-    console.error(`Failed to send email to ${userEmail}:`, err);
-  }
-
-  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
-
-  // return responsePayload;
-}
-
-
-async processTicketHistoryAndGenerateZip(ticketPayload: any) {
-  let {
-    SPFROMDATE,
-    SPTODATE,
-    SPInsuranceCompanyID,
-    SPStateID,
-    SPTicketHeaderID,
-    SPUserID,
-    page = 1,
-    limit = 1000000000,
-    userEmail,
-  } = ticketPayload;
-
-  const db = this.db;
-  SPTicketHeaderID = Number(SPTicketHeaderID);
-
-  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
-  if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
-
-  const RequestDateTime = await getCurrentFormattedDateTime();
-  const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
-  const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
-  if (cachedData) {
-    console.log('Using cached data');
-    await this.db.collection('support_ticket_download_logs').updateOne(
-      { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
-      {
-        $set: {
-          downloadUrl: cachedData.downloadUrl || '',
-          zipFileName: cachedData.zipFileName || '',
-          updatedAt: new Date()
-        },
-        $setOnInsert: { createdAt: new Date() }
-      },
-      { upsert: true }
-    );
-    return cachedData;
-  }
-
-  // ===== User detail auth =====
-  const Delta = await this.getSupportTicketUserDetail(SPUserID);
-  const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
-  const item = (responseInfo.data as any)?.user?.[0];
-  if (!item) return { rcode: 0, rmessage: 'User details not found.' };
-
-  const userDetail = {
-    InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
-    StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
-    BRHeadTypeID: item.BRHeadTypeID,
-    LocationTypeID: item.LocationTypeID,
-  };
-  const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
-
-  let locationFilter: any = {};
-  if (LocationTypeID === 1 && StateMasterID?.length)
-    locationFilter = { FilterStateID: { $in: StateMasterID } };
-  else if (LocationTypeID === 2 && item.DistrictIDs?.length)
-    locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
-
-  const baseMatch: any = { ...locationFilter };
-  if (SPTicketHeaderID && SPTicketHeaderID !== 0) baseMatch.TicketHeaderID = SPTicketHeaderID;
-
-  if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
-    const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map((id) => Number(id.trim()));
-    const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
-    const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id));
-    if (!validInsuranceIDs.length)
-      return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
-    baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs };
-  } else if (InsuranceCompanyID?.length) {
-    baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
-  }
-
-  if (SPStateID && SPStateID !== '#ALL') {
-    const requestedStateIDs = SPStateID.split(',').map((id) => id.trim());
-    const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id));
-    if (!validStateIDs.length)
-      return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
-    baseMatch.FilterStateID = { $in: validStateIDs };
-  } else if (StateMasterID?.length && LocationTypeID !== 2) {
-    baseMatch.FilterStateID = { $in: StateMasterID };
-  }
-
-  const folderPath = path.join(process.cwd(), 'downloads');
-  await fs.promises.mkdir(folderPath, { recursive: true });
-
-  // ===== Filename =====
-  const headerTypeMap: Record<number, string> = {
-    1: 'Grievance',
-    2: 'Information',
-    4: 'Crop_Loss',
-  };
-  const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
-  const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');
-
-  const excelFileName = `Support_ticket_data_${ticketTypeName}_${currentDateStr}.xlsx`;
-  const excelFilePath = path.join(folderPath, excelFileName);
-
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
-  const worksheet = workbook.addWorksheet('Support Tickets');
-
-  await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
-
-  const CHUNK_SIZE = 1000;
-
-  const staticColumns = [
-    { header: 'Agent ID', key: 'AgentID', width: 20 },
-    { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
-    { header: 'Ticket NCIP Docket No', key: 'TicketNCIPDocketNo', width: 25 },
-    { header: 'Ticket No', key: 'SupportTicketNo', width: 30 },
-    { header: 'Creation Date', key: 'Created', width: 25 },
-    { header: 'Ticket ReOpen Date', key: 'TicketReOpenDate', width: 25 },
-    { header: 'Ticket Status', key: 'TicketStatus', width: 20 },
-    { header: 'Status Update Time', key: 'StatusUpdateTime', width: 25 },
-    { header: 'State', key: 'StateMasterName', width: 20 },
-    { header: 'District', key: 'DistrictMasterName', width: 20 },
-    { header: 'Sub District', key: 'SubDistrictName', width: 20 },
-    { header: 'Ticket Head', key: 'TicketHeadName', width: 20 },
-    { header: 'Ticket Type', key: 'TicketTypeName', width: 20 },
-    { header: 'Ticket Category', key: 'TicketCategoryName', width: 20 },
-    { header: 'Crop Season', key: 'CropSeasonName', width: 20 },
-    { header: 'Request Year', key: 'RequestYear', width: 20 },
-    { header: 'Insurance Company', key: 'InsuranceCompany', width: 30 },
-    { header: 'Application No', key: 'ApplicationNo', width: 30 },
-    { header: 'Policy No', key: 'InsurancePolicyNo', width: 30 },
-    { header: 'Caller Contact No', key: 'CallerContactNumber', width: 20 },
-    { header: 'Requestor Name', key: 'RequestorName', width: 20 },
-    { header: 'Requestor Mobile No', key: 'RequestorMobileNo', width: 20 },
-    { header: 'Relation', key: 'Relation', width: 20 },
-    { header: 'Relative Name', key: 'RelativeName', width: 20 },
-    { header: 'Policy Premium', key: 'PolicyPremium', width: 20 },
-    { header: 'Policy Area', key: 'PolicyArea', width: 20 },
-    { header: 'Policy Type', key: 'PolicyType', width: 20 },
-    { header: 'Land Survey No', key: 'LandSurveyNumber', width: 20 },
-    { header: 'Land Division No', key: 'LandDivisionNumber', width: 20 },
-    { header: 'Plot State', key: 'PlotStateName', width: 20 },
-    { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
-    { header: 'Plot Village', key: 'PlotVillageName', width: 20 },
-    { header: 'Application Source', key: 'ApplicationSource', width: 20 },
-    { header: 'Crop Share', key: 'CropShare', width: 20 },
-    { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
-    { header: 'Farmer Share', key: 'FarmerShare', width: 20 },
-    { header: 'Sowing Date', key: 'SowingDate', width: 20 },
-    { header: 'Created By', key: 'CreatedBY', width: 20 },
-    { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
-  ];
-
-  worksheet.columns = staticColumns;
-
-  function formatToDDMMYYYY(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '';
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day}-${month}-${year} ${hours}:${minutes}`;
-  }
-
-  async function processDateWithChunking(currentDate: Date, endDate: Date) {
-    if (currentDate > endDate) return;
-
-    const startOfDay = new Date(currentDate);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(currentDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
-
-    let skip = 0, hasMore = true;
-
-    while (hasMore) {
-      const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
-      const pipeline: any[] = [
-        { $match: dailyMatch },
-        {
-          $lookup: {
-            from: 'SLA_KRPH_SupportTicketsHistory_Records',
-            let: { ticketId: '$SupportTicketID' },
-            pipeline: [
-              { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
-              { $sort: { TicketHistoryID: -1 } },
-              { $limit: 1 }
-            ],
-            as: 'ticketHistory',
-          }
-        },
-        {
-          $lookup: {
-            from: 'support_ticket_claim_intimation_report_history',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'claimInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'csc_agent_master',
-            localField: 'InsertUserID',
-            foreignField: 'UserLoginID',
-            as: 'agentInfo',
-          }
-        },
-        {
-          $lookup: {
-            from: 'ticket_comment_journey',
-            localField: 'SupportTicketNo',
-            foreignField: 'SupportTicketNo',
-            as: 'ticket_comment_journey',
-          },
-        },
-        { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-        { $skip: skip },
-        { $limit: CHUNK_SIZE },
-        { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
-      ];
-
-      const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
-      const docs = await cursor.toArray();
-
-      for (const doc of docs) {
-        const dynamicColumnsBatch: any = {};
-        if (Array.isArray(doc.ticket_comment_journey)) {
-          const seen = new Set();
-          let idx = 1;
-          for (const c of doc.ticket_comment_journey) {
-            const raw = (c.ResolvedComment || '').replace(/<\/?[^>]+>/g, '').trim();
-            const date = formatToDDMMYYYY(c.ResolvedDate);
-            const key = `${date}__${raw}`;
-            if (!seen.has(key)) {
-              dynamicColumnsBatch[`Date ${idx}`] = date;
-              dynamicColumnsBatch[`Comment ${idx}`] = raw;
-              seen.add(key);
-              idx++;
-            }
-          }
-        }
-
-        worksheet.addRow({
-          AgentID: doc.agentInfo?.UserID?.toString() || '',
-          CallingUniqueID: doc.CallingUniqueID || '',
-          TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
-          SupportTicketNo: doc.SupportTicketNo?.toString() || '',
-          Created: doc.Created ? new Date(doc.Created).toISOString() : '',
-          TicketReOpenDate: doc.TicketReOpenDate || '',
-          TicketStatus: doc.TicketStatus || '',
-          StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
-          StateMasterName: doc.StateMasterName || '',
-          DistrictMasterName: doc.DistrictMasterName || '',
-          SubDistrictName: doc.SubDistrictName || '',
-          TicketHeadName: doc.TicketHeadName || '',
-          TicketTypeName: doc.TicketTypeName || '',
-          TicketCategoryName: doc.TicketCategoryName || '',
-          CropSeasonName: doc.CropSeasonName || '',
-          RequestYear: doc.RequestYear || '',
-          InsuranceCompany: doc.InsuranceCompany || '',
-          ApplicationNo: doc.ApplicationNo || '',
-          InsurancePolicyNo: doc.InsurancePolicyNo || '',
-          CallerContactNumber: doc.CallerContactNumber || '',
-          RequestorName: doc.RequestorName || '',
-          RequestorMobileNo: doc.RequestorMobileNo || '',
-          Relation: doc.Relation || '',
-          RelativeName: doc.RelativeName || '',
-          PolicyPremium: doc.PolicyPremium || '',
-          PolicyArea: doc.PolicyArea || '',
-          PolicyType: doc.PolicyType || '',
-          LandSurveyNumber: doc.LandSurveyNumber || '',
-          LandDivisionNumber: doc.LandDivisionNumber || '',
-          PlotStateName: doc.PlotStateName || '',
-          PlotDistrictName: doc.PlotDistrictName || '',
-          PlotVillageName: doc.PlotVillageName || '',
-          ApplicationSource: doc.ApplicationSource || '',
-          CropShare: doc.CropShare || '',
-          IFSCCode: doc.IFSCCode || '',
-          FarmerShare: doc.FarmerShare || '',
-          SowingDate: doc.SowingDate || '',
-          CreatedBY: doc.CreatedBY || '',
-          TicketDescription: doc.TicketDescription || '',
-          ...dynamicColumnsBatch
-        }).commit();
-      }
-
-      hasMore = docs.length === CHUNK_SIZE;
-      skip += CHUNK_SIZE;
+    if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+      const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map((id) => Number(id.trim()));
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+      const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id));
+      if (!validInsuranceIDs.length)
+        return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+      baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs };
+    } else if (InsuranceCompanyID?.length) {
+      baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
     }
 
-    const nextDate = new Date(currentDate);
-    nextDate.setDate(nextDate.getDate() + 1);
-    await processDateWithChunking(nextDate, endDate);
-  }
+    if (SPStateID && SPStateID !== '#ALL') {
+      const requestedStateIDs = SPStateID.split(',').map((id) => id.trim());
+      const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id));
+      if (!validStateIDs.length)
+        return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+      baseMatch.FilterStateID = { $in: validStateIDs };
+    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+      baseMatch.FilterStateID = { $in: StateMasterID };
+    }
 
-  await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
-  await workbook.commit();
-  console.log(`Excel file created at: ${excelFilePath}`);
+    const folderPath = path.join(process.cwd(), 'downloads');
+    await fs.promises.mkdir(folderPath, { recursive: true });
 
-  // ===== Create ZIP =====
-  const zipFileName = excelFileName.replace('.xlsx', '.zip');
-  const zipFilePath = path.join(folderPath, zipFileName);
-  const output = fs.createWriteStream(zipFilePath);
-  const archive = archiver('zip', { zlib: { level: 9 } });
-  archive.pipe(output);
-  archive.file(excelFilePath, { name: excelFileName });
-  await archive.finalize();
-  await new Promise<void>((resolve, reject) => {
-    output.on('close', resolve);
-    output.on('error', reject);
-  });
-  await fs.promises.unlink(excelFilePath).catch(console.error);
+    // ===== Filename =====
+    const headerTypeMap: Record<number, string> = {
+      1: 'Grievance',
+      2: 'Information',
+      4: 'Crop_Loss',
+    };
+    const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
+    const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');
 
-  // ===== Upload to GCP =====
-  const gcpService = new GCPServices();
-  const fileBuffer = await fs.promises.readFile(zipFilePath);
-  const uploadResult = await gcpService.uploadFileToGCP({
-    filePath: 'krph/reports/',
-    uploadedBy: 'KRPH',
-    file: { buffer: fileBuffer, originalname: zipFileName },
-  });
-  const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
-  if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+    const excelFileName = `Support_ticket_data_${ticketTypeName}_${currentDateStr}.xlsx`;
+    const excelFilePath = path.join(folderPath, excelFileName);
 
-  await this.insertOrUpdateDownloadLog(
-    SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
-    SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, this.db
-  );
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
+    const worksheet = workbook.addWorksheet('Support Tickets');
 
-  const responsePayload = {
-    data: [],
-    pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
-    downloadUrl: gcpDownloadUrl,
-    zipFileName: zipFileName
-  };
+    await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
 
-  const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
-  try {
-    await this.mailService.sendMail({
-      to: userEmail,
-      subject: 'Support Ticket History Report Download Service',
-      text: 'Support Ticket History Report',
-      html: supportTicketTemplate
+    const CHUNK_SIZE = 1000;
+
+    const staticColumns = [
+      { header: 'Agent ID', key: 'AgentID', width: 20 },
+      { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
+      { header: 'Ticket NCIP Docket No', key: 'TicketNCIPDocketNo', width: 25 },
+      { header: 'Ticket No', key: 'SupportTicketNo', width: 30 },
+      { header: 'Creation Date', key: 'Created', width: 25 },
+      { header: 'Ticket ReOpen Date', key: 'TicketReOpenDate', width: 25 },
+      { header: 'Ticket Status', key: 'TicketStatus', width: 20 },
+      { header: 'Status Update Time', key: 'StatusUpdateTime', width: 25 },
+      { header: 'State', key: 'StateMasterName', width: 20 },
+      { header: 'District', key: 'DistrictMasterName', width: 20 },
+      { header: 'Sub District', key: 'SubDistrictName', width: 20 },
+      { header: 'Ticket Head', key: 'TicketHeadName', width: 20 },
+      { header: 'Ticket Type', key: 'TicketTypeName', width: 20 },
+      { header: 'Ticket Category', key: 'TicketCategoryName', width: 20 },
+      { header: 'Crop Season', key: 'CropSeasonName', width: 20 },
+      { header: 'Request Year', key: 'RequestYear', width: 20 },
+      { header: 'Insurance Company', key: 'InsuranceCompany', width: 30 },
+      { header: 'Application No', key: 'ApplicationNo', width: 30 },
+      { header: 'Policy No', key: 'InsurancePolicyNo', width: 30 },
+      { header: 'Caller Contact No', key: 'CallerContactNumber', width: 20 },
+      { header: 'Requestor Name', key: 'RequestorName', width: 20 },
+      { header: 'Requestor Mobile No', key: 'RequestorMobileNo', width: 20 },
+      { header: 'Relation', key: 'Relation', width: 20 },
+      { header: 'Relative Name', key: 'RelativeName', width: 20 },
+      { header: 'Policy Premium', key: 'PolicyPremium', width: 20 },
+      { header: 'Policy Area', key: 'PolicyArea', width: 20 },
+      { header: 'Policy Type', key: 'PolicyType', width: 20 },
+      { header: 'Land Survey No', key: 'LandSurveyNumber', width: 20 },
+      { header: 'Land Division No', key: 'LandDivisionNumber', width: 20 },
+      { header: 'Plot State', key: 'PlotStateName', width: 20 },
+      { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
+      { header: 'Plot Village', key: 'PlotVillageName', width: 20 },
+      { header: 'Application Source', key: 'ApplicationSource', width: 20 },
+      { header: 'Crop Share', key: 'CropShare', width: 20 },
+      { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
+      { header: 'Farmer Share', key: 'FarmerShare', width: 20 },
+      { header: 'Sowing Date', key: 'SowingDate', width: 20 },
+      { header: 'Created By', key: 'CreatedBY', width: 20 },
+      { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
+    ];
+
+    const dynamicColumns = new Set<string>();
+    let headersSet = false;
+
+    function formatToDDMMYYYY(dateString) {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${day}-${month}-${year} ${hours}:${minutes}`;
+    }
+
+    async function processDateWithChunking(currentDate: Date, endDate: Date) {
+      if (currentDate > endDate) return;
+
+      const startOfDay = new Date(currentDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(currentDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+
+      let skip = 0, hasMore = true;
+
+      while (hasMore) {
+        const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
+        const pipeline: any[] = [
+          { $match: dailyMatch },
+          {
+            $lookup: {
+              from: 'SLA_KRPH_SupportTicketsHistory_Records',
+              let: { ticketId: '$SupportTicketID' },
+              pipeline: [
+                { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
+                { $sort: { TicketHistoryID: -1 } },
+                { $limit: 1 }
+              ],
+              as: 'ticketHistory',
+            }
+          },
+          {
+            $lookup: {
+              from: 'support_ticket_claim_intimation_report_history',
+              localField: 'SupportTicketNo',
+              foreignField: 'SupportTicketNo',
+              as: 'claimInfo',
+            }
+          },
+          {
+            $lookup: {
+              from: 'csc_agent_master',
+              localField: 'InsertUserID',
+              foreignField: 'UserLoginID',
+              as: 'agentInfo',
+            }
+          },
+          {
+            $lookup: {
+              from: 'ticket_comment_journey',
+              localField: 'SupportTicketNo',
+              foreignField: 'SupportTicketNo',
+              as: 'ticket_comment_journey',
+            },
+          },
+          { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+          { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+          { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+          { $skip: skip },
+          { $limit: CHUNK_SIZE },
+          { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
+        ];
+
+        const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
+        const docs = await cursor.toArray();
+
+        for (const doc of docs) {
+          // --- dynamic comment handling ---
+          if (Array.isArray(doc.ticket_comment_journey)) {
+            const seen = new Set();
+            let idx = 1;
+
+            for (const c of doc.ticket_comment_journey) {
+              const raw = (c.ResolvedComment || '').replace(/<\/?[^>]+>/g, '').trim();
+              const date = formatToDDMMYYYY(c.ResolvedDate);
+              const key = `${date}__${raw}`;
+              if (!seen.has(key)) {
+                doc[`Date ${idx}`] = date;
+                doc[`Comment ${idx}`] = raw;
+                dynamicColumns.add(`Date ${idx}`);
+                dynamicColumns.add(`Comment ${idx}`);
+                seen.add(key);
+                idx++;
+              }
+            }
+            delete doc.ticket_comment_journey;
+          }
+
+          if (!headersSet) {
+            const dynamicDefs = Array.from(dynamicColumns).map(col => ({ header: col, key: col, width: 40 }));
+            worksheet.columns = [...staticColumns, ...dynamicDefs];
+            headersSet = true;
+          }
+
+          worksheet.addRow({
+            AgentID: doc.agentInfo?.UserID?.toString() || '',
+            CallingUniqueID: doc.CallingUniqueID || '',
+            TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
+            SupportTicketNo: doc.SupportTicketNo?.toString() || '',
+            Created: doc.Created ? new Date(doc.Created).toISOString() : '',
+            TicketReOpenDate: doc.TicketReOpenDate || '',
+            TicketStatus: doc.TicketStatus || '',
+            StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
+            StateMasterName: doc.StateMasterName || '',
+            DistrictMasterName: doc.DistrictMasterName || '',
+            SubDistrictName: doc.SubDistrictName || '',
+            TicketHeadName: doc.TicketHeadName || '',
+            TicketTypeName: doc.TicketTypeName || '',
+            TicketCategoryName: doc.TicketCategoryName || '',
+            CropSeasonName: doc.CropSeasonName || '',
+            RequestYear: doc.RequestYear || '',
+            InsuranceCompany: doc.InsuranceCompany || '',
+            ApplicationNo: doc.ApplicationNo || '',
+            InsurancePolicyNo: doc.InsurancePolicyNo || '',
+            CallerContactNumber: doc.CallerContactNumber || '',
+            RequestorName: doc.RequestorName || '',
+            RequestorMobileNo: doc.RequestorMobileNo || '',
+            Relation: doc.Relation || '',
+            RelativeName: doc.RelativeName || '',
+            PolicyPremium: doc.PolicyPremium || '',
+            PolicyArea: doc.PolicyArea || '',
+            PolicyType: doc.PolicyType || '',
+            LandSurveyNumber: doc.LandSurveyNumber || '',
+            LandDivisionNumber: doc.LandDivisionNumber || '',
+            PlotStateName: doc.PlotStateName || '',
+            PlotDistrictName: doc.PlotDistrictName || '',
+            PlotVillageName: doc.PlotVillageName || '',
+            ApplicationSource: doc.ApplicationSource || '',
+            CropShare: doc.CropShare || '',
+            IFSCCode: doc.IFSCCode || '',
+            FarmerShare: doc.FarmerShare || '',
+            SowingDate: doc.SowingDate || '',
+            CreatedBY: doc.CreatedBY || '',
+            TicketDescription: doc.TicketDescription || '',
+            ...Object.fromEntries(Object.entries(doc).filter(([k]) => k.startsWith('Date') || k.startsWith('Comment')))
+          }).commit();
+        }
+
+        hasMore = docs.length === CHUNK_SIZE;
+        skip += CHUNK_SIZE;
+      }
+
+      const nextDate = new Date(currentDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      await processDateWithChunking(nextDate, endDate);
+    }
+
+    await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
+    await workbook.commit();
+    console.log(`Excel file created at: ${excelFilePath}`);
+
+    // ===== Create ZIP =====
+    const zipFileName = excelFileName.replace('.xlsx', '.zip');
+    const zipFilePath = path.join(folderPath, zipFileName);
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(output);
+    archive.file(excelFilePath, { name: excelFileName });
+    await archive.finalize();
+    await new Promise<void>((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
     });
-    console.log("Mail sent successfully");
-  } catch (err) {
-    console.error(`Failed to send email to ${userEmail}:`, err);
+    await fs.promises.unlink(excelFilePath).catch(console.error);
+
+    // ===== Upload to GCP =====
+    const gcpService = new GCPServices();
+    const fileBuffer = await fs.promises.readFile(zipFilePath);
+    const uploadResult = await gcpService.uploadFileToGCP({
+      filePath: 'krph/reports/',
+      uploadedBy: 'KRPH',
+      file: { buffer: fileBuffer, originalname: zipFileName },
+    });
+    const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+    if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+
+    await this.insertOrUpdateDownloadLog(
+      SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
+      SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, this.db
+    );
+
+    const responsePayload = {
+      data: [],
+      pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+      downloadUrl: gcpDownloadUrl,
+      zipFileName: zipFileName
+    };
+
+    const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
+    try {
+      await this.mailService.sendMail({
+        to: userEmail,
+        subject: 'Support Ticket History Report Download Service',
+        text: 'Support Ticket History Report',
+        html: supportTicketTemplate
+      });
+      console.log("Mail sent successfully");
+    } catch (err) {
+      console.error(`Failed to send email to ${userEmail}:`, err);
+    }
+
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+
+    // return responsePayload;
   }
 
-  await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
-}
+
+  async processTicketHistoryAndGenerateZip(ticketPayload: any) {
+    let {
+      SPFROMDATE,
+      SPTODATE,
+      SPInsuranceCompanyID,
+      SPStateID,
+      SPTicketHeaderID,
+      SPUserID,
+      page = 1,
+      limit = 1000000000,
+      userEmail,
+    } = ticketPayload;
+
+    const db = this.db;
+    SPTicketHeaderID = Number(SPTicketHeaderID);
+
+    if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+    if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+
+    const RequestDateTime = await getCurrentFormattedDateTime();
+    const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
+    const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
+    if (cachedData) {
+      console.log('Using cached data');
+      await this.db.collection('support_ticket_download_logs').updateOne(
+        { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
+        {
+          $set: {
+            downloadUrl: cachedData.downloadUrl || '',
+            zipFileName: cachedData.zipFileName || '',
+            updatedAt: new Date()
+          },
+          $setOnInsert: { createdAt: new Date() }
+        },
+        { upsert: true }
+      );
+      return cachedData;
+    }
+
+    // ===== User detail auth =====
+    const Delta = await this.getSupportTicketUserDetail(SPUserID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+    if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+    };
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+
+    let locationFilter: any = {};
+    if (LocationTypeID === 1 && StateMasterID?.length)
+      locationFilter = { FilterStateID: { $in: StateMasterID } };
+    else if (LocationTypeID === 2 && item.DistrictIDs?.length)
+      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+
+    const baseMatch: any = { ...locationFilter };
+    if (SPTicketHeaderID && SPTicketHeaderID !== 0) baseMatch.TicketHeaderID = SPTicketHeaderID;
+
+    if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+      const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map((id) => Number(id.trim()));
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+      const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id));
+      if (!validInsuranceIDs.length)
+        return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+      baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs };
+    } else if (InsuranceCompanyID?.length) {
+      baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
+
+    if (SPStateID && SPStateID !== '#ALL') {
+      const requestedStateIDs = SPStateID.split(',').map((id) => id.trim());
+      const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id));
+      if (!validStateIDs.length)
+        return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+      baseMatch.FilterStateID = { $in: validStateIDs };
+    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+      baseMatch.FilterStateID = { $in: StateMasterID };
+    }
+
+    const folderPath = path.join(process.cwd(), 'downloads');
+    await fs.promises.mkdir(folderPath, { recursive: true });
+
+    // ===== Filename =====
+    const headerTypeMap: Record<number, string> = {
+      1: 'Grievance',
+      2: 'Information',
+      4: 'Crop_Loss',
+    };
+    const ticketTypeName = headerTypeMap[SPTicketHeaderID] || 'General';
+    const currentDateStr = new Date().toLocaleDateString('en-GB').split('/').join('_');
+
+    const excelFileName = `Support_ticket_data_${ticketTypeName}_${currentDateStr}.xlsx`;
+    const excelFilePath = path.join(folderPath, excelFileName);
+
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: excelFilePath });
+    const worksheet = workbook.addWorksheet('Support Tickets');
+
+    await this.insertOrUpdateDownloadLog(SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE, "", "", this.db);
+
+    const CHUNK_SIZE = 1000;
+
+    const staticColumns = [
+      { header: 'Agent ID', key: 'AgentID', width: 20 },
+      { header: 'Calling ID', key: 'CallingUniqueID', width: 25 },
+      { header: 'Ticket NCIP Docket No', key: 'TicketNCIPDocketNo', width: 25 },
+      { header: 'Ticket No', key: 'SupportTicketNo', width: 30 },
+      { header: 'Creation Date', key: 'Created', width: 25 },
+      { header: 'Ticket ReOpen Date', key: 'TicketReOpenDate', width: 25 },
+      { header: 'Ticket Status', key: 'TicketStatus', width: 20 },
+      { header: 'Status Update Time', key: 'StatusUpdateTime', width: 25 },
+      { header: 'State', key: 'StateMasterName', width: 20 },
+      { header: 'District', key: 'DistrictMasterName', width: 20 },
+      { header: 'Sub District', key: 'SubDistrictName', width: 20 },
+      { header: 'Ticket Head', key: 'TicketHeadName', width: 20 },
+      { header: 'Ticket Type', key: 'TicketTypeName', width: 20 },
+      { header: 'Ticket Category', key: 'TicketCategoryName', width: 20 },
+      { header: 'Crop Season', key: 'CropSeasonName', width: 20 },
+      { header: 'Request Year', key: 'RequestYear', width: 20 },
+      { header: 'Insurance Company', key: 'InsuranceCompany', width: 30 },
+      { header: 'Application No', key: 'ApplicationNo', width: 30 },
+      { header: 'Policy No', key: 'InsurancePolicyNo', width: 30 },
+      { header: 'Caller Contact No', key: 'CallerContactNumber', width: 20 },
+      { header: 'Requestor Name', key: 'RequestorName', width: 20 },
+      { header: 'Requestor Mobile No', key: 'RequestorMobileNo', width: 20 },
+      { header: 'Relation', key: 'Relation', width: 20 },
+      { header: 'Relative Name', key: 'RelativeName', width: 20 },
+      { header: 'Policy Premium', key: 'PolicyPremium', width: 20 },
+      { header: 'Policy Area', key: 'PolicyArea', width: 20 },
+      { header: 'Policy Type', key: 'PolicyType', width: 20 },
+      { header: 'Land Survey No', key: 'LandSurveyNumber', width: 20 },
+      { header: 'Land Division No', key: 'LandDivisionNumber', width: 20 },
+      { header: 'Plot State', key: 'PlotStateName', width: 20 },
+      { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
+      { header: 'Plot Village', key: 'PlotVillageName', width: 20 },
+      { header: 'Application Source', key: 'ApplicationSource', width: 20 },
+      { header: 'Crop Share', key: 'CropShare', width: 20 },
+      { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
+      { header: 'Farmer Share', key: 'FarmerShare', width: 20 },
+      { header: 'Sowing Date', key: 'SowingDate', width: 20 },
+      { header: 'Created By', key: 'CreatedBY', width: 20 },
+      { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
+    ];
+
+    worksheet.columns = staticColumns;
+
+    function formatToDDMMYYYY(dateString) {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${day}-${month}-${year} ${hours}:${minutes}`;
+    }
+
+    async function processDateWithChunking(currentDate: Date, endDate: Date) {
+      if (currentDate > endDate) return;
+
+      const startOfDay = new Date(currentDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(currentDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+
+      let skip = 0, hasMore = true;
+
+      while (hasMore) {
+        const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
+        const pipeline: any[] = [
+          { $match: dailyMatch },
+          {
+            $lookup: {
+              from: 'SLA_KRPH_SupportTicketsHistory_Records',
+              let: { ticketId: '$SupportTicketID' },
+              pipeline: [
+                { $match: { $expr: { $and: [{ $eq: ['$SupportTicketID', '$$ticketId'] }, { $eq: ['$TicketStatusID', 109304] }] } } },
+                { $sort: { TicketHistoryID: -1 } },
+                { $limit: 1 }
+              ],
+              as: 'ticketHistory',
+            }
+          },
+          {
+            $lookup: {
+              from: 'support_ticket_claim_intimation_report_history',
+              localField: 'SupportTicketNo',
+              foreignField: 'SupportTicketNo',
+              as: 'claimInfo',
+            }
+          },
+          {
+            $lookup: {
+              from: 'csc_agent_master',
+              localField: 'InsertUserID',
+              foreignField: 'UserLoginID',
+              as: 'agentInfo',
+            }
+          },
+          {
+            $lookup: {
+              from: 'ticket_comment_journey',
+              localField: 'SupportTicketNo',
+              foreignField: 'SupportTicketNo',
+              as: 'ticket_comment_journey',
+            },
+          },
+          { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+          { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+          { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+          { $skip: skip },
+          { $limit: CHUNK_SIZE },
+          { $addFields: { ticket_comment_journey: { $ifNull: ['$ticket_comment_journey', []] } } }
+        ];
+
+        const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
+        const docs = await cursor.toArray();
+
+        for (const doc of docs) {
+          const dynamicColumnsBatch: any = {};
+          if (Array.isArray(doc.ticket_comment_journey)) {
+            const seen = new Set();
+            let idx = 1;
+            for (const c of doc.ticket_comment_journey) {
+              const raw = (c.ResolvedComment || '').replace(/<\/?[^>]+>/g, '').trim();
+              const date = formatToDDMMYYYY(c.ResolvedDate);
+              const key = `${date}__${raw}`;
+              if (!seen.has(key)) {
+                dynamicColumnsBatch[`Date ${idx}`] = date;
+                dynamicColumnsBatch[`Comment ${idx}`] = raw;
+                seen.add(key);
+                idx++;
+              }
+            }
+          }
+
+          worksheet.addRow({
+            AgentID: doc.agentInfo?.UserID?.toString() || '',
+            CallingUniqueID: doc.CallingUniqueID || '',
+            TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
+            SupportTicketNo: doc.SupportTicketNo?.toString() || '',
+            Created: doc.Created ? new Date(doc.Created).toISOString() : '',
+            TicketReOpenDate: doc.TicketReOpenDate || '',
+            TicketStatus: doc.TicketStatus || '',
+            StatusUpdateTime: doc.StatusUpdateTime ? new Date(doc.StatusUpdateTime).toISOString() : '',
+            StateMasterName: doc.StateMasterName || '',
+            DistrictMasterName: doc.DistrictMasterName || '',
+            SubDistrictName: doc.SubDistrictName || '',
+            TicketHeadName: doc.TicketHeadName || '',
+            TicketTypeName: doc.TicketTypeName || '',
+            TicketCategoryName: doc.TicketCategoryName || '',
+            CropSeasonName: doc.CropSeasonName || '',
+            RequestYear: doc.RequestYear || '',
+            InsuranceCompany: doc.InsuranceCompany || '',
+            ApplicationNo: doc.ApplicationNo || '',
+            InsurancePolicyNo: doc.InsurancePolicyNo || '',
+            CallerContactNumber: doc.CallerContactNumber || '',
+            RequestorName: doc.RequestorName || '',
+            RequestorMobileNo: doc.RequestorMobileNo || '',
+            Relation: doc.Relation || '',
+            RelativeName: doc.RelativeName || '',
+            PolicyPremium: doc.PolicyPremium || '',
+            PolicyArea: doc.PolicyArea || '',
+            PolicyType: doc.PolicyType || '',
+            LandSurveyNumber: doc.LandSurveyNumber || '',
+            LandDivisionNumber: doc.LandDivisionNumber || '',
+            PlotStateName: doc.PlotStateName || '',
+            PlotDistrictName: doc.PlotDistrictName || '',
+            PlotVillageName: doc.PlotVillageName || '',
+            ApplicationSource: doc.ApplicationSource || '',
+            CropShare: doc.CropShare || '',
+            IFSCCode: doc.IFSCCode || '',
+            FarmerShare: doc.FarmerShare || '',
+            SowingDate: doc.SowingDate || '',
+            CreatedBY: doc.CreatedBY || '',
+            TicketDescription: doc.TicketDescription || '',
+            ...dynamicColumnsBatch
+          }).commit();
+        }
+
+        hasMore = docs.length === CHUNK_SIZE;
+        skip += CHUNK_SIZE;
+      }
+
+      const nextDate = new Date(currentDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      await processDateWithChunking(nextDate, endDate);
+    }
+
+    await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
+    await workbook.commit();
+    console.log(`Excel file created at: ${excelFilePath}`);
+
+    // ===== Create ZIP =====
+    const zipFileName = excelFileName.replace('.xlsx', '.zip');
+    const zipFilePath = path.join(folderPath, zipFileName);
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(output);
+    archive.file(excelFilePath, { name: excelFileName });
+    await archive.finalize();
+    await new Promise<void>((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
+    });
+    await fs.promises.unlink(excelFilePath).catch(console.error);
+
+    // ===== Upload to GCP =====
+    const gcpService = new GCPServices();
+    const fileBuffer = await fs.promises.readFile(zipFilePath);
+    const uploadResult = await gcpService.uploadFileToGCP({
+      filePath: 'krph/reports/',
+      uploadedBy: 'KRPH',
+      file: { buffer: fileBuffer, originalname: zipFileName },
+    });
+    const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+    if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+
+    await this.insertOrUpdateDownloadLog(
+      SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
+      SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, this.db
+    );
+
+    const responsePayload = {
+      data: [],
+      pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+      downloadUrl: gcpDownloadUrl,
+      zipFileName: zipFileName
+    };
+
+    const supportTicketTemplate = await generateSupportTicketEmailHTML('Portal User', RequestDateTime, gcpDownloadUrl);
+    try {
+      await this.mailService.sendMail({
+        to: userEmail,
+        subject: 'Support Ticket History Report Download Service',
+        text: 'Support Ticket History Report',
+        html: supportTicketTemplate
+      });
+      console.log("Mail sent successfully");
+    } catch (err) {
+      console.error(`Failed to send email to ${userEmail}:`, err);
+    }
+
+    await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+  }
 
 
 
