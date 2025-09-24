@@ -187,21 +187,20 @@ const excelFilePath = path.join(folderPath, excelFileName);
     { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
   ];
 
+
+
+  
   const dynamicColumns = [];
-for (let i = 1; i <= 3; i++) {
+for (let i = 0; i < 3; i++) { 
+  const suffix = (i === 0) ? '' : `${i}`; 
+
   dynamicColumns.push(
-    { header: `In-Progress Date ${i}`, key: `In-Progress Date ${i}`, width: 25 },
-    { header: `In-Progress Comment ${i}`, key: `In-Progress Comment ${i}`, width: 50 },
-    { header: `Resolved-Date ${i}`, key: `Resolved-Date ${i}`, width: 25 },
-    { header: `Resolved Comment ${i}`, key: `Resolved Comment ${i}`, width: 50 },
-    { header: `Re-Open-Date ${i}`, key: `Re-Open-Date ${i}`, width: 25 },
-    { header: `Re-Open Comment ${i}`, key: `Re-Open Comment ${i}`, width: 50 },
-    { header: `In-Progress1 Date ${i}`, key: `In-Progress1 Date ${i}`, width: 25 },
-    { header: `Resolved1 Date ${i}`, key: `Resolved1 Date ${i}`, width: 25 },
-    { header: `Re-Open1 Date ${i}`, key: `Re-Open1 Date ${i}`, width: 25 },
-    { header: `In-Progress1 Comment ${i}`, key: `In-Progress1 Comment ${i}`, width: 50 },
-    { header: `Resolved1 Comment ${i}`, key: `Resolved1 Comment ${i}`, width: 50 },
-    { header: `Re-Open1 Comment ${i}`, key: `Re-Open1 Comment ${i}`, width: 50 }
+    { header: `In-Progress Date${suffix}`, key: `In-Progress Date${suffix}`, width: 25 },
+    { header: `In-Progress Comment${suffix}`, key: `In-Progress Comment${suffix}`, width: 50 },
+    { header: `Resolved Date${suffix}`, key: `Resolved Date${suffix}`, width: 25 },
+    { header: `Resolved Comment${suffix}`, key: `Resolved Comment${suffix}`, width: 50 },
+    { header: `Re-Open Date${suffix}`, key: `Re-Open Date${suffix}`, width: 25 },
+    { header: `Re-Open Comment${suffix}`, key: `Re-Open Comment${suffix}`, width: 50 }
   );
 }
 worksheet.columns = staticColumns.concat(dynamicColumns);
@@ -338,141 +337,54 @@ worksheet.columns = staticColumns.concat(dynamicColumns);
       const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
 
       const docs = await cursor.toArray();
-
-    /*   for (const doc of docs) {
-        const dynamicColumnsBatch: any = {};
-        if (Array.isArray(doc.ticket_comment_journey)) {
-          const seen = new Set();
-          let idx = 1;
-          for (const c of doc.ticket_comment_journey) {
-            const raw = (c.ResolvedComment || '').replace(/<\/?[^>]+>/g, '').trim();
-            const date = formatToDDMMYYYY(c.ResolvedDate);
-            const key = `${date}__${raw}`;
-            if (!seen.has(key)) {
-              dynamicColumnsBatch[`Date ${idx}`] = date;
-              dynamicColumnsBatch[`Comment ${idx}`] = raw;
-              seen.add(key);
-              idx++;
-            }
-          }
-        }
-
-        worksheet.addRow({
-          AgentID: doc.agentInfo?.UserID?.toString() || '',
-          CallingUniqueID: doc.CallingUniqueID || '',
-          TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
-          SupportTicketNo: doc.SupportTicketNo?.toString() || '',
-          Created: doc.Created ?  formatDate(doc.Created) : '',
-          TicketReOpenDate: doc.TicketReOpenDate || '',
-          TicketStatus: doc.TicketStatus || '',
-          StatusUpdateTime: doc.StatusUpdateTime ?  formatDate(doc.StatusUpdateTime): '',
-          StateMasterName: doc.StateMasterName || '',
-          DistrictMasterName: doc.DistrictMasterName || '',
-          SubDistrictName: doc.SubDistrictName || '',
-          TicketHeadName: doc.TicketHeadName || '',
-          TicketTypeName: doc.TicketTypeName || '',
-          TicketCategoryName: doc.TicketCategoryName || '',
-          CropSeasonName: doc.CropSeasonName || '',
-          RequestYear: doc.RequestYear || '',
-          InsuranceCompany: doc.InsuranceCompany || '',
-          ApplicationNo: doc.ApplicationNo || '',
-          InsurancePolicyNo: doc.InsurancePolicyNo || '',
-          CallerContactNumber: doc.CallerContactNumber || '',
-          RequestorName: doc.RequestorName || '',
-          RequestorMobileNo: doc.RequestorMobileNo || '',
-          Relation: doc.Relation || '',
-          RelativeName: doc.RelativeName || '',
-          PolicyPremium: doc.PolicyPremium || '',
-          PolicyArea: doc.PolicyArea || '',
-          PolicyType: doc.PolicyType || '',
-          LandSurveyNumber: doc.LandSurveyNumber || '',
-          LandDivisionNumber: doc.LandDivisionNumber || '',
-          PlotStateName: doc.PlotStateName || '',
-          PlotDistrictName: doc.PlotDistrictName || '',
-          PlotVillageName: doc.PlotVillageName || '',
-          ApplicationSource: doc.ApplicationSource || '',
-          CropShare: doc.CropShare || '',
-          IFSCCode: doc.IFSCCode || '',
-          FarmerShare: doc.FarmerShare || '',
-          SowingDate: doc.SowingDate || '',
-          CreatedBY: doc.CreatedBY || '',
-          TicketDescription: doc.TicketDescription || '',
-          ...dynamicColumnsBatch
-        }).commit();
-      }  */
-for (const doc of docs) {
+  for (const doc of docs) {
   const dynamicColumnsBatch = {};
 
-  if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+
+  
+     if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
     const journey = doc.ticket_comment_journey;
 
     for (let idx = 0; idx < 3; idx++) {
-      const commentObj = journey[idx] || {}; 
+      const commentObj = journey[idx] || {};
+
+      const suffix = (idx === 0) ? '' : `${idx}`; 
 
       const inProgressDate = commentObj.InprogressDate ? formatToDDMMYYYY(commentObj.InprogressDate) : 'NA';
       const inProgressComment = commentObj.InprogressComment
-        ? commentObj.InprogressComment.replace(/<\/?[^>]+(>|$)/g, '').trim()  // Remove HTML tags
+        ? commentObj.InprogressComment.replace(/<\/?[^>]+(>|$)/g, '').trim() 
         : 'NA';
-      dynamicColumnsBatch[`In-Progress Date ${idx + 1}`] = inProgressDate;
-      dynamicColumnsBatch[`In-Progress Comment ${idx + 1}`] = inProgressComment;
+      dynamicColumnsBatch[`In-Progress Date${suffix}`] = inProgressDate;
+      dynamicColumnsBatch[`In-Progress Comment${suffix}`] = inProgressComment;
 
       const resolvedDate = commentObj.ResolvedDate ? formatToDDMMYYYY(commentObj.ResolvedDate) : 'NA';
       const resolvedComment = commentObj.ResolvedComment
-        ? commentObj.ResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim()  
+        ? commentObj.ResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim()
         : 'NA';
-      dynamicColumnsBatch[`Resolved-Date ${idx + 1}`] = resolvedDate;
-      dynamicColumnsBatch[`Resolved Comment ${idx + 1}`] = resolvedComment;
+      dynamicColumnsBatch[`Resolved Date${suffix}`] = resolvedDate;
+      dynamicColumnsBatch[`Resolved Comment${suffix}`] = resolvedComment;
 
       const reOpenDate = commentObj.ReOpenDate ? formatToDDMMYYYY(commentObj.ReOpenDate) : 'NA';
       const reOpenComment = commentObj.ReOpenComment
-        ? commentObj.ReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim()  
+        ? commentObj.ReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim()
         : 'NA';
-      dynamicColumnsBatch[`Re-Open-Date ${idx + 1}`] = reOpenDate;
-      dynamicColumnsBatch[`Re-Open Comment ${idx + 1}`] = reOpenComment;
-
-      const inProgress1Date = commentObj.Inprogress1Date ? formatToDDMMYYYY(commentObj.Inprogress1Date) : 'NA';
-      const resolved1Date = commentObj.Resolved1Date ? formatToDDMMYYYY(commentObj.Resolved1Date) : 'NA';
-      const reOpen1Date = commentObj.ReOpen1Date ? formatToDDMMYYYY(commentObj.ReOpen1Date) : 'NA';
-
-      const inProgress1Comment = commentObj.Inprogress1Comment
-        ? commentObj.Inprogress1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim()
-        : 'NA';
-      const resolved1Comment = commentObj.Resolved1Comment
-        ? commentObj.Resolved1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim()
-        : 'NA';
-      const reOpen1Comment = commentObj.ReOpen1Comment
-        ? commentObj.ReOpen1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim()
-        : 'NA';
-
-      dynamicColumnsBatch[`In-Progress1 Date ${idx + 1}`] = inProgress1Date;
-      dynamicColumnsBatch[`Resolved1 Date ${idx + 1}`] = resolved1Date;
-      dynamicColumnsBatch[`Re-Open1 Date ${idx + 1}`] = reOpen1Date;
-
-      dynamicColumnsBatch[`In-Progress1 Comment ${idx + 1}`] = inProgress1Comment;
-      dynamicColumnsBatch[`Resolved1 Comment ${idx + 1}`] = resolved1Comment;
-      dynamicColumnsBatch[`Re-Open1 Comment ${idx + 1}`] = reOpen1Comment;
+      dynamicColumnsBatch[`Re-Open Date${suffix}`] = reOpenDate;
+      dynamicColumnsBatch[`Re-Open Comment${suffix}`] = reOpenComment;
     }
-
   } else {
-    for (let i = 1; i <= 3; i++) {
-      dynamicColumnsBatch[`In-Progress Date ${i}`] = 'NA';
-      dynamicColumnsBatch[`In-Progress Comment ${i}`] = 'NA';
-      dynamicColumnsBatch[`Resolved-Date ${i}`] = 'NA';
-      dynamicColumnsBatch[`Resolved Comment ${i}`] = 'NA';
-      dynamicColumnsBatch[`Re-Open-Date ${i}`] = 'NA';
-      dynamicColumnsBatch[`Re-Open Comment ${i}`] = 'NA';
+    
+    for (let i = 0; i < 3; i++) {
+      const suffix = (i === 0) ? '' : `${i}`; 
 
-      dynamicColumnsBatch[`In-Progress1 Date ${i}`] = 'NA';
-      dynamicColumnsBatch[`Resolved1 Date ${i}`] = 'NA';
-      dynamicColumnsBatch[`Re-Open1 Date ${i}`] = 'NA';
-
-      dynamicColumnsBatch[`In-Progress1 Comment ${i}`] = 'NA';
-      dynamicColumnsBatch[`Resolved1 Comment ${i}`] = 'NA';
-      dynamicColumnsBatch[`Re-Open1 Comment ${i}`] = 'NA';
+      dynamicColumnsBatch[`In-Progress Date${suffix}`] = 'NA';
+      dynamicColumnsBatch[`In-Progress Comment${suffix}`] = 'NA';
+      dynamicColumnsBatch[`Resolved Date${suffix}`] = 'NA';
+      dynamicColumnsBatch[`Resolved Comment${suffix}`] = 'NA';
+      dynamicColumnsBatch[`Re-Open Date${suffix}`] = 'NA';
+      dynamicColumnsBatch[`Re-Open Comment${suffix}`] = 'NA';
     }
   }
-
-  console.log('Dynamic Columns for Ticket:', dynamicColumnsBatch);
+    console.log('Dynamic Columns for Ticket:', dynamicColumnsBatch);
 
   worksheet.addRow({
     AgentID: doc.agentInfo?.UserID?.toString() || '',
