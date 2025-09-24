@@ -998,10 +998,6 @@ const pipeline: any[] = [
 
 
 
- 
-
-console.log(JSON.stringify(pipeline), "testPipeline");
-return
 
 
 //     const pipeline: any[] = [
