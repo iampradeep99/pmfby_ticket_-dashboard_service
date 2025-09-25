@@ -6663,6 +6663,18 @@ async fetchTicketListing(payload: any) {
     let data: any = '';
 
     // Get user detail
+
+    if(!objCommon.insertedUserID && objCommon.insertedUserID == ""){
+      return {
+        data: [],
+        message: {
+          msg: `User Id is required`,
+          code: "0"
+        },
+       
+      };
+
+    }
     const Delta = await this.getSupportTicketUserDetail(objCommon.insertedUserID);
     const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
     const item = (responseInfo.data as any)?.user?.[0];
@@ -6923,7 +6935,7 @@ async fetchTicketListing(payload: any) {
                   { $eq: ["$TicketHeaderID", 2] }
                 ]
               },
-              then: "Resolved (Information)"
+              then: "Resolved(Information)"
             },
             {
               case: { $eq: ["$TicketStatusID", 109301] },
@@ -6931,7 +6943,7 @@ async fetchTicketListing(payload: any) {
             },
             {
               case: { $eq: ["$TicketStatusID", 109302] },
-              then: "In-progress"
+              then: "In-Progress"
             },
             {
               case: { $eq: ["$TicketStatusID", 109304] },
