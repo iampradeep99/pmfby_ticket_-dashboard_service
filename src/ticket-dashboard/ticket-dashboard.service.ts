@@ -6635,7 +6635,7 @@ async fetchTicketListingQithResolvedHeader(payload: any) {
 async fetchTicketListing(payload: any) {
   try {
     const db = this.db;
-    const {
+    let {
       fromdate,
       toDate,
       viewTYP,
@@ -6657,6 +6657,14 @@ async fetchTicketListing(payload: any) {
       pageSize = 100,
       objCommon
     } = payload;
+
+    ticketHeaderID = Number(ticketHeaderID);
+    ticketCategoryID = Number(ticketCategoryID);
+    supportTicketTypeID = Number(supportTicketTypeID);
+    statusID = Number(statusID);
+    insuranceCompanyID = Number(insuranceCompanyID)
+
+
 
     let pipeline: any[] = [];
     let message = {};
