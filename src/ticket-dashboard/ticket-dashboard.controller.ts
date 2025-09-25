@@ -231,6 +231,24 @@ async FarmerSelectCallingHistoryRoute(
   }
 
 
+    @Post('SupportTicketListing')
+async supportTicketListing(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const { data, message } = await this.dashboardService.fetchTicketListing(payload);
+
+    const compressedData = data ? await this.utilService.GZip(data) : null;
+
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
   }
 
 
