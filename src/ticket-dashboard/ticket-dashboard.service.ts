@@ -5785,7 +5785,7 @@ async fetchTicketListing(payload: any) {
     } = payload;
 
     let pipeline: any[] = [];
-    let message = '';
+    let message = {};
     let data: any = '';
 
     // Get user detail
@@ -6006,9 +6006,25 @@ async fetchTicketListing(payload: any) {
         .toArray();
     } catch (err) {
       console.error('❌ Error while querying DB:', err);
-    }
 
-    return { data, message };
+    }
+    if(data.length == 0){
+      data = []
+      let message = {
+        msg :"Record Not Found",
+        code: "0"
+      }
+       return { data, message };
+    }
+    
+          let obj = {
+      supportTicket: data
+    };
+    message = {
+      msg:"Fetched Success",
+      code: "1"
+    }
+    return { obj, message };
   } catch (err) {
     console.log('❌ Top-level error:', err);
     return { data: [], message: 'Unexpected error' };
