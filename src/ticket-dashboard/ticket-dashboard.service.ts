@@ -598,6 +598,9 @@ export class TicketDashboardService {
           "ticket_comment_journey": "$ticket_comment_journey"
         }
       },
+      {$sort:{
+        "Creation Date":-1
+      }},
 
       { $skip: (page - 1) * limit },
       { $limit: limit }
@@ -1092,7 +1095,6 @@ results.forEach(doc => {
     const journey = doc.ticket_comment_journey;
 
     journey.forEach((commentObj) => {
-      // Handle Inprogress Date and Comment
       if (commentObj.InprogressDate && commentObj.InprogressComment) {
         const inProgressDate = this.formatToDDMMYYYY(commentObj.InprogressDate);
         const rawInProgressComment = commentObj.InprogressComment || '';
@@ -1131,7 +1133,6 @@ results.forEach(doc => {
         doc['Re-Open Comment'] = "NA";
       }
 
-      // Handle Inprogress1 Date and Comment (with "1" suffix)
       if (commentObj.Inprogress1Date && commentObj.Inprogress1Comment) {
         const inProgress1Date = this.formatToDDMMYYYY(commentObj.Inprogress1Date);
         const rawInProgress1Comment = commentObj.Inprogress1Comment || '';
@@ -1144,7 +1145,6 @@ results.forEach(doc => {
         doc['In-Progress Comment 1'] = "NA";
       }
 
-      // Handle Resolved1 Date and Comment (with "1" suffix)
       if (commentObj.Resolved1Date && commentObj.Resolved1Comment) {
         const resolved1Date = this.formatToDDMMYYYY(commentObj.Resolved1Date);
         const rawResolved1Comment = commentObj.Resolved1Comment || '';
@@ -1157,7 +1157,6 @@ results.forEach(doc => {
         doc['Resolved Comment 1'] = "NA";
       }
 
-      // Handle ReOpen1 Date and Comment (with "1" suffix)
       if (commentObj.ReOpen1Date && commentObj.ReOpen1Comment) {
         const reOpen1Date = this.formatToDDMMYYYY(commentObj.ReOpen1Date);
         const rawReOpen1Comment = commentObj.ReOpen1Comment || '';
@@ -1170,7 +1169,6 @@ results.forEach(doc => {
         doc['Re-Open Comment 1'] = "NA";
       }
 
-      // Handle Inprogress2 Date and Comment (with "2" suffix)
       if (commentObj.Inprogress2Date && commentObj.Inprogress2Comment) {
         const inProgress2Date = this.formatToDDMMYYYY(commentObj.Inprogress2Date);
         const rawInProgress2Comment = commentObj.Inprogress2Comment || '';
@@ -1183,7 +1181,6 @@ results.forEach(doc => {
         doc['In-Progress Comment 2'] = "NA";
       }
 
-      // Handle Resolved2 Date and Comment (with "2" suffix)
       if (commentObj.Resolved2Date && commentObj.Resolved2Comment) {
         const resolved2Date = this.formatToDDMMYYYY(commentObj.Resolved2Date);
         const rawResolved2Comment = commentObj.Resolved2Comment || '';
@@ -1196,7 +1193,6 @@ results.forEach(doc => {
         doc['Resolved Comment 2'] = "NA";
       }
 
-      // Handle ReOpen2 Date and Comment (with "2" suffix)
       if (commentObj.ReOpen2Date && commentObj.ReOpen2Comment) {
         const reOpen2Date = this.formatToDDMMYYYY(commentObj.ReOpen2Date);
         const rawReOpen2Comment = commentObj.ReOpen2Comment || '';
@@ -1212,7 +1208,6 @@ results.forEach(doc => {
 
     delete doc.ticket_comment_journey;
   } else {
-    // Default NA values when no journey exists
     doc['In-Progress Date'] = "NA";
     doc['In-Progress Comment'] = "NA";
     doc['Resolved-Date'] = "NA";
@@ -1233,11 +1228,6 @@ results.forEach(doc => {
     doc['Re-Open Comment 2'] = "NA";
   }
 });
-
-
-
-
-
 
 
     const responsePayload = {
