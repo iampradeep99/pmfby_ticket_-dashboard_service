@@ -5758,6 +5758,462 @@ results.forEach(doc => {
 
 
 
+async fetchTicketListing(payload: any) {
+  try {
+    const db = this.db;
+    const {
+      fromdate,
+      toDate,
+      viewTYP,
+      supportTicketID,
+      ticketCategoryID,
+      ticketSourceID,
+      supportTicketTypeID,
+      supportTicketNo,
+      applicationNo,
+      docketNo,
+      statusID,
+      RequestorMobileNo,
+      schemeID,
+      ticketHeaderID,
+      stateID,
+      districtID,
+      insuranceCompanyID,
+      pageIndex = 1,
+      pageSize = 100,
+      objCommon
+    } = payload;
+
+    let pipeline: any[] = [];
+    let message = '';
+    let data: any = '';
+
+    // Get user detail
+    const Delta = await this.getSupportTicketUserDetail(objCommon.insertedUserID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+
+    if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+    };
+
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+
+    // Location-based filter
+    let locationFilter: any = {};
+    if (LocationTypeID === 1 && StateMasterID?.length) {
+      locationFilter = { FilterStateID: { $in: StateMasterID } };
+    } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+    }
+
+    const match: any = { ...locationFilter };
+
+    if (ticketHeaderID && ticketHeaderID !== 0) {
+      match.TicketHeaderID = ticketHeaderID;
+    }
+
+    if (insuranceCompanyID && insuranceCompanyID !== 0) {
+      const requestedInsuranceIDs = insuranceCompanyID
+        .split(',')
+        .map(id => Number(id.trim()));
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+      const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
+        allowedInsuranceIDs.includes(id)
+      );
+
+      if (validInsuranceIDs.length === 0) {
+        return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+      }
+
+      match.InsuranceCompanyID = { $in: validInsuranceIDs };
+    } else {
+      if (InsuranceCompanyID?.length) {
+        match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+      }
+    }
+
+    if (stateID && stateID !== '') {
+      const requestedStateIDs = stateID
+        .split(',')
+        .map(id => Number(id.trim()));
+      const validStateIDs = requestedStateIDs.filter(id =>
+        StateMasterID.map(Number).includes(id)
+      );
+
+      if (validStateIDs.length === 0) {
+        return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+      }
+
+      match.FilterStateID = { $in: validStateIDs };
+    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+      match.FilterStateID = { $in: StateMasterID.map(Number) };
+    }
+
+    console.log(JSON.stringify(match), 'Initial match filters');
+
+    if (viewTYP === 'FILTER') {
+      if (fromdate && toDate) {
+        match.Created = {
+          $gte: new Date(`${fromdate}T00:00:00.000Z`),
+          $lte: new Date(`${toDate}T23:59:59.999Z`)
+        };
+      }
+
+      if (supportTicketID) match.SupportTicketID = supportTicketID;
+      if (ticketCategoryID) match.TicketCategoryID = ticketCategoryID;
+      if (ticketSourceID) match.TicketSourceID = ticketSourceID;
+      if (supportTicketTypeID) match.SupportTicketTypeID = supportTicketTypeID;
+      if (statusID) match.TicketStatusID = statusID;
+      if (schemeID) match.SchemeID = schemeID;
+      if (ticketHeaderID) match.TicketHeaderID = ticketHeaderID;
+      if (stateID) match.StateMasterID = parseInt(stateID);
+      if (districtID) match.DistrictMasterID = districtID;
+      if (insuranceCompanyID) match.InsuranceCompanyID = insuranceCompanyID;
+
+      if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
+      if (applicationNo) match.ApplicationNo = applicationNo;
+      if (docketNo) match.TicketNCIPDocketNo = docketNo;
+      if (RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
+
+      pipeline.push({ $match: match });
+
+      const skipCount = (pageIndex - 1) * pageSize;
+      pipeline.push({ $skip: skipCount });
+      pipeline.push({ $limit: pageSize });
+
+      pipeline.push({
+        $project: {
+          _id: 0,
+          SupportTicketID: 1,
+          CallerContactNumber: 1,
+          CallingAudioFile: 1,
+          TicketRequestorID: 1,
+          StateCodeAlpha: 1,
+          StateMasterID: 1,
+          DistrictMasterID: 1,
+          VillageRequestorID: 1,
+          NyayPanchayatID: 1,
+          NyayPanchayat: 1,
+          GramPanchayatID: 1,
+          GramPanchayat: 1,
+          CallerID: 1,
+          CreationMode: 1,
+          SupportTicketNo: 1,
+          RequestorUniqueNo: 1,
+          RequestorName: 1,
+          RequestorMobileNo: 1,
+          RequestorAccountNo: 1,
+          RequestorAadharNo: 1,
+          TicketCategoryID: 1,
+          CropCategoryOthers: 1,
+          CropStageMaster: 1,
+          CropStageMasterID: 1,
+          TicketHeaderID: 1,
+          SupportTicketTypeID: 1,
+          RequestYear: 1,
+          RequestSeason: 1,
+          TicketSourceID: 1,
+          TicketDescription: 1,
+          LossDate: 1,
+          LossTime: 1,
+          OnTimeIntimationFlag: 1,
+          VillageName: 1,
+          ApplicationCropName: 1,
+          CropName: 1,
+          AREA: 1,
+          DistrictRequestorID: 1,
+          PostHarvestDate: 1,
+          TicketStatusID: 1,
+          StatusUpdateTime: 1,
+          StatusUpdateUserID: 1,
+          ApplicationNo: 1,
+          InsuranceCompanyCode: 1,
+          InsuranceCompanyID: 1,
+          InsurancePolicyNo: 1,
+          InsurancePolicyDate: 1,
+          InsuranceExpiryDate: 1,
+          BankMasterID: 1,
+          AgentUserID: 1,
+          SchemeID: 1,
+          AttachmentPath: 1,
+          HasDocument: 1,
+          Relation: 1,
+          RelativeName: 1,
+          SubDistrictID: 1,
+          SubDistrictName: 1,
+          PolicyPremium: 1,
+          PolicyArea: 1,
+          PolicyType: 1,
+          LandSurveyNumber: 1,
+          LandDivisionNumber: 1,
+          PlotVillageName: 1,
+          PlotDistrictName: 1,
+          PlotStateName: 1,
+          ApplicationSource: 1,
+          CropShare: 1,
+          IFSCCode: 1,
+          FarmerShare: 1,
+          SowingDate: 1,
+          CropSeasonName: 1,
+          TicketSourceName: 1,
+          TicketCategoryName: 1,
+          TicketStatus: 1,
+          InsuranceCompany: 1,
+          Created: 1,
+          TicketTypeName: 1,
+          StateMasterName: 1,
+          DistrictMasterName: 1,
+          TicketHeadName: 1,
+          BMCGCode: 1,
+          BusinessRelationName: 1,
+          CropLossDetailID: 1,
+          CallingUniqueID: 1,
+          CallingInsertUserID: 1,
+          CropStage: 1,
+          CategoryHeadID: 1,
+          TicketReOpenDate: 1,
+          Sos: 1,
+          IsSos: 1,
+          TicketNCIPDocketNo: 1,
+          FilterDistrictRequestorID: 1,
+          FilterStateID: 1,
+          SchemeName: 1,
+          InsertUserID: 1,
+          InsertDateTime: 1,
+          InsertIPAddress: 1,
+          UpdateUserID: 1,
+          AgentName: 1,
+          CreatedBY: 1,
+          CallingUserID: 1,
+          UpdateDateTime: 1,
+          UpdateIPAddress: 1,
+          CreatedAt: 1
+        }
+      });
+    }
+
+      console.log('📦 Aggregation Pipeline:', JSON.stringify(pipeline, null, 2));
+    try {
+      data = await db
+        .collection('SLA_Ticket_listing')
+        .aggregate(pipeline, { allowDiskUse: true })
+        .toArray();
+    } catch (err) {
+      console.error('❌ Error while querying DB:', err);
+    }
+
+    return { data, message };
+  } catch (err) {
+    console.log('❌ Top-level error:', err);
+    return { data: [], message: 'Unexpected error' };
+  }
+}
+
+
+
+
+
+/* 
+async fetchTicketListing(payload: any) {
+  try {
+    const db = this.db;
+    const {
+      fromdate,
+      toDate,
+      viewTYP,
+      supportTicketID,
+      ticketCategoryID,
+      ticketSourceID,
+      supportTicketTypeID,
+      supportTicketNo,
+      applicationNo,
+      docketNo,
+      statusID,
+      RequestorMobileNo,
+      schemeID,
+      ticketHeaderID,
+      stateID,
+      districtID,
+      insuranceCompanyID,
+      pageIndex = 1,
+      pageSize = 20
+    } = payload;
+
+    let pipeline: any[] = [];
+    let message = '';
+
+    
+
+    if (viewTYP === 'FILTER') {
+      const matchStage: any = {};
+
+      if (fromdate && toDate) {
+        matchStage.Created = {
+          $gte: new Date(`${fromdate}T00:00:00.000Z`),
+          $lte: new Date(`${toDate}T23:59:59.999Z`)
+        };
+      }
+
+      if (supportTicketID) matchStage.SupportTicketID = supportTicketID;
+      if (ticketCategoryID) matchStage.TicketCategoryID = ticketCategoryID;
+      if (ticketSourceID) matchStage.TicketSourceID = ticketSourceID;
+      if (supportTicketTypeID) matchStage.SupportTicketTypeID = supportTicketTypeID;
+      if (statusID) matchStage.TicketStatusID = statusID;
+      if (schemeID) matchStage.SchemeID = schemeID;
+      if (ticketHeaderID) matchStage.TicketHeaderID = ticketHeaderID;
+      if (stateID) matchStage.StateMasterID = parseInt(stateID);
+      if (districtID) matchStage.DistrictMasterID = districtID;
+      if (insuranceCompanyID) matchStage.InsuranceCompanyID = insuranceCompanyID;
+
+      if (supportTicketNo) matchStage.SupportTicketNo = supportTicketNo;
+      if (applicationNo) matchStage.ApplicationNo = applicationNo;
+      if (docketNo) matchStage.TicketNCIPDocketNo = docketNo;
+      if (RequestorMobileNo) matchStage.RequestorMobileNo = RequestorMobileNo;
+
+      pipeline.push({ $match: matchStage });
+
+      const skipCount = (pageIndex - 1) * pageSize;
+      pipeline.push({ $skip: skipCount });
+      pipeline.push({ $limit: pageSize });
+
+      pipeline.push({
+        $project: {
+          _id: 0,
+          SupportTicketID: 1,
+          CallerContactNumber: 1,
+          CallingAudioFile: 1,
+          TicketRequestorID: 1,
+          StateCodeAlpha: 1,
+          StateMasterID: 1,
+          DistrictMasterID: 1,
+          VillageRequestorID: 1,
+          NyayPanchayatID: 1,
+          NyayPanchayat: 1,
+          GramPanchayatID: 1,
+          GramPanchayat: 1,
+          CallerID: 1,
+          CreationMode: 1,
+          SupportTicketNo: 1,
+          RequestorUniqueNo: 1,
+          RequestorName: 1,
+          RequestorMobileNo: 1,
+          RequestorAccountNo: 1,
+          RequestorAadharNo: 1,
+          TicketCategoryID: 1,
+          CropCategoryOthers: 1,
+          CropStageMaster: 1,
+          CropStageMasterID: 1,
+          TicketHeaderID: 1,
+          SupportTicketTypeID: 1,
+          RequestYear: 1,
+          RequestSeason: 1,
+          TicketSourceID: 1,
+          TicketDescription: 1,
+          LossDate: 1,
+          LossTime: 1,
+          OnTimeIntimationFlag: 1,
+          VillageName: 1,
+          ApplicationCropName: 1,
+          CropName: 1,
+          AREA: 1,
+          DistrictRequestorID: 1,
+          PostHarvestDate: 1,
+          TicketStatusID: 1,
+          StatusUpdateTime: 1,
+          StatusUpdateUserID: 1,
+          ApplicationNo: 1,
+          InsuranceCompanyCode: 1,
+          InsuranceCompanyID: 1,
+          InsurancePolicyNo: 1,
+          InsurancePolicyDate: 1,
+          InsuranceExpiryDate: 1,
+          BankMasterID: 1,
+          AgentUserID: 1,
+          SchemeID: 1,
+          AttachmentPath: 1,
+          HasDocument: 1,
+          Relation: 1,
+          RelativeName: 1,
+          SubDistrictID: 1,
+          SubDistrictName: 1,
+          PolicyPremium: 1,
+          PolicyArea: 1,
+          PolicyType: 1,
+          LandSurveyNumber: 1,
+          LandDivisionNumber: 1,
+          PlotVillageName: 1,
+          PlotDistrictName: 1,
+          PlotStateName: 1,
+          ApplicationSource: 1,
+          CropShare: 1,
+          IFSCCode: 1,
+          FarmerShare: 1,
+          SowingDate: 1,
+          CropSeasonName: 1,
+          TicketSourceName: 1,
+          TicketCategoryName: 1,
+          TicketStatus: 1,
+          InsuranceCompany: 1,
+          Created: 1,
+          TicketTypeName: 1,
+          StateMasterName: 1,
+          DistrictMasterName: 1,
+          TicketHeadName: 1,
+          BMCGCode: 1,
+          BusinessRelationName: 1,
+          CropLossDetailID: 1,
+          CallingUniqueID: 1,
+          CallingInsertUserID: 1,
+          CropStage: 1,
+          CategoryHeadID: 1,
+          TicketReOpenDate: 1,
+          Sos: 1,
+          IsSos: 1,
+          TicketNCIPDocketNo: 1,
+          FilterDistrictRequestorID: 1,
+          FilterStateID: 1,
+          SchemeName: 1,
+          InsertUserID: 1,
+          InsertDateTime: 1,
+          InsertIPAddress: 1,
+          UpdateUserID: 1,
+          AgentName: 1,
+          CreatedBY: 1,
+          CallingUserID: 1,
+          UpdateDateTime: 1,
+          UpdateIPAddress: 1,
+          CreatedAt: 1
+        }
+      });
+    }
+
+    console.log('📦 Aggregation Pipeline:', JSON.stringify(pipeline, null, 2));
+
+    let data: any = [];
+    try {
+      data = await db
+        .collection('SLA_Ticket_listing')
+        .aggregate(pipeline, { allowDiskUse: true })
+        .toArray();
+    } catch (err) {
+      console.error('❌ Error while querying DB:', err);
+    }
+
+    return { data, message };
+
+  } catch (err) {
+    console.log('❌ Top-level error:', err);
+    return { data: [], message: 'Unexpected error' };
+  }
+}
+ */
+
 
 
 }
