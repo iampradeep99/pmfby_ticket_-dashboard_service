@@ -6929,7 +6929,7 @@ async fetchTicketListing(payload: any) {
 
     const totalPages = Math.ceil(totalCount / pageSize);
 
-    const aggPipelineAllStatuses = [
+   /*  const aggPipelineAllStatuses = [
   {
     $match: {
       ...match,
@@ -6995,7 +6995,74 @@ const ticketStatusResults = await db
   const ticketSummary = ticketStatusResults.map(item => ({
   Total: item.count.toString(),
   TicketStatus: item._id
+})); */
+
+
+const aggPipelineAllStatuses = [
+  {
+    $match: match // ✅ Use the same filtered match object
+  },
+  {
+    $project: {
+      TicketStatusID: 1,
+      TicketHeaderID: 1,
+      customStatus: {
+        $switch: {
+          branches: [
+            {
+              case: {
+                $and: [
+                  { $eq: ["$TicketStatusID", 109303] },
+                  { $in: ["$TicketHeaderID", [1, 4]] }
+                ]
+              },
+              then: "Resolved"
+            },
+            {
+              case: {
+                $and: [
+                  { $eq: ["$TicketStatusID", 109303] },
+                  { $eq: ["$TicketHeaderID", 2] }
+                ]
+              },
+              then: "Resolved(Information)"
+            },
+            {
+              case: { $eq: ["$TicketStatusID", 109301] },
+              then: "Open"
+            },
+            {
+              case: { $eq: ["$TicketStatusID", 109302] },
+              then: "In-Progress"
+            },
+            {
+              case: { $eq: ["$TicketStatusID", 109304] },
+              then: "Re-Open"
+            }
+          ],
+          default: "Other"
+        }
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$customStatus",
+      count: { $sum: 1 }
+    }
+  }
+];
+
+const ticketStatusResults = await db
+  .collection('SLA_Ticket_listing')
+  .aggregate(aggPipelineAllStatuses)
+  .toArray();
+
+const ticketSummary = ticketStatusResults.map(item => ({
+  Total: item.count.toString(),
+  TicketStatus: item._id
 }));
+
 
     return {
       obj: {
