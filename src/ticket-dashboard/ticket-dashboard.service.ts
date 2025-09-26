@@ -6905,7 +6905,7 @@ async fetchTicketListing(payload: any) {
 
     pipeline.push({
       $sort:{
-        CreatedAt:-1
+        InsertDateTime:-1
       }
     })
 
