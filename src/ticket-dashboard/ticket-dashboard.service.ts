@@ -6665,6 +6665,7 @@ async fetchTicketListing(payload: any) {
     supportTicketTypeID = Number(supportTicketTypeID);
     statusID = Number(statusID);
     insuranceCompanyID = Number(insuranceCompanyID)
+    schemeID = Number(schemeID);
 
 
 
