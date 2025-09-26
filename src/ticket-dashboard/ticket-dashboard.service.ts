@@ -6788,6 +6788,11 @@ async fetchTicketListing(payload: any) {
     const totalCount = await db.collection('SLA_Ticket_listing').countDocuments(match);
 
     pipeline.push({ $match: match });
+      pipeline.push({
+      $sort:{
+        InsertDateTime:-1
+      }
+    })
 
     const skipCount = (pageIndex - 1) * pageSize;
     pipeline.push({ $skip: skipCount });
@@ -6903,11 +6908,7 @@ async fetchTicketListing(payload: any) {
       }
     });
 
-    pipeline.push({
-      $sort:{
-        InsertDateTime:-1
-      }
-    })
+  
 
     data = await db.collection('SLA_Ticket_listing')
       .aggregate(pipeline, { allowDiskUse: true })
