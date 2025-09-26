@@ -6634,7 +6634,9 @@ async fetchTicketListingQithResolvedHeader(payload: any) {
 
 async fetchTicketListing(payload: any) {
   try {
+   
     const db = this.db;
+     await this.createIndexesForTicketListing(this.db)
     let {
       fromdate,
       toDate,
@@ -6698,6 +6700,8 @@ async fetchTicketListing(payload: any) {
       BRHeadTypeID: item.BRHeadTypeID,
       LocationTypeID: item.LocationTypeID,
     };
+
+    console.log(userDetail, "userDetail")
 
     const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
 
@@ -6776,6 +6780,10 @@ async fetchTicketListing(payload: any) {
       if (RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
     }
 
+      console.log(JSON.stringify(match))
+
+
+    
     // === Pagination & Detailed Data Fetch ===
     const totalCount = await db.collection('SLA_Ticket_listing').countDocuments(match);
 
@@ -6863,7 +6871,7 @@ async fetchTicketListing(payload: any) {
         TicketCategoryName: 1,
         TicketStatus: 1,
         InsuranceCompany: 1,
-        Created: 1,
+        CreatedAt: "$Created",
         TicketTypeName: 1,
         StateMasterName: 1,
         DistrictMasterName: 1,
@@ -6891,7 +6899,7 @@ async fetchTicketListing(payload: any) {
         CallingUserID: 1,
         UpdateDateTime: 1,
         UpdateIPAddress: 1,
-        CreatedAt: 1
+        // CreatedAt: 1
       }
     });
 
