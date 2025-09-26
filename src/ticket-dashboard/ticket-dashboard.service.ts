@@ -6903,6 +6903,12 @@ async fetchTicketListing(payload: any) {
       }
     });
 
+    pipeline.push({
+      $sort:{
+        CreatedAt:-1
+      }
+    })
+
     data = await db.collection('SLA_Ticket_listing')
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
