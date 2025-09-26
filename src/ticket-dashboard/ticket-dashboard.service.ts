@@ -6747,7 +6747,7 @@ async fetchTicketListing(payload: any) {
     }
 
     // State filter
-    if (stateID && stateID !== '') {
+   /*  if (stateID && stateID !== '') {
       const requestedStateIDs = stateID
         .split(',')
         .map(id => Number(id.trim()));
@@ -6761,6 +6761,29 @@ async fetchTicketListing(payload: any) {
     } else if (StateMasterID?.length && LocationTypeID !== 2) {
       match.FilterStateID = { $in: StateMasterID.map(Number) };
     }
+ */
+
+   if (stateID && stateID !== '') {
+  const requestedStateIDs = String(stateID)
+    .split(',')
+    .map(id => Number(id.trim()));
+
+  const validStateIDs = requestedStateIDs.filter(id =>
+    StateMasterID.map(Number).includes(id)
+  );
+
+  if (validStateIDs.length === 0) {
+    return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+  }
+
+  // ✅ Apply filter on actual DB field
+  match.StateMasterID = { $in: validStateIDs };
+
+} else if (StateMasterID?.length && LocationTypeID !== 2) {
+  // ✅ Apply fallback (all authorized states)
+  match.StateMasterID = { $in: StateMasterID.map(Number) };
+}
+
 
     // Additional filters if viewTYP === 'FILTER'
     if (viewTYP === 'FILTER') {
@@ -6777,7 +6800,7 @@ async fetchTicketListing(payload: any) {
       if (statusID) match.TicketStatusID = statusID;
       if (schemeID) match.SchemeID = schemeID;
       if (ticketHeaderID) match.TicketHeaderID = ticketHeaderID;
-      if (stateID) match.StateMasterID = parseInt(stateID);
+      // if (stateID) match.StateMasterID = parseInt(stateID);
       if (districtID) match.DistrictMasterID = districtID;
       if (insuranceCompanyID) match.InsuranceCompanyID = insuranceCompanyID;
       if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
