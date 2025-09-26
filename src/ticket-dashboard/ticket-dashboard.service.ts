@@ -6664,7 +6664,7 @@ async fetchTicketListing(payload: any) {
     ticketCategoryID = Number(ticketCategoryID);
     supportTicketTypeID = Number(supportTicketTypeID);
     statusID = Number(statusID);
-    insuranceCompanyID = Number(insuranceCompanyID)
+    // insuranceCompanyID = Number(insuranceCompanyID)
     schemeID = Number(schemeID);
 
 
@@ -6722,9 +6722,14 @@ async fetchTicketListing(payload: any) {
 
     // Insurance company filter
     if (insuranceCompanyID && insuranceCompanyID !== 0) {
-      const requestedInsuranceIDs = insuranceCompanyID
-        .split(',')
-        .map(id => Number(id.trim()));
+      console.log(insuranceCompanyID, "insuranceCompanyID")
+      // const requestedInsuranceIDs = insuranceCompanyID
+      //   .split(',')
+      //   .map(id => Number(id.trim()));
+      const requestedInsuranceIDs = String(insuranceCompanyID)
+  .split(',')
+  .map(id => Number(id.trim()));
+
       const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
       const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
         allowedInsuranceIDs.includes(id)
