@@ -6632,7 +6632,7 @@ async fetchTicketListingQithResolvedHeader(payload: any) {
   }
 }
 
-async fetchTicketListing(payload: any) {
+async fetchTicketListingFirstClassWorking(payload: any) {
   try {
    
     const db = this.db;
@@ -6825,6 +6825,8 @@ async fetchTicketListing(payload: any) {
     const skipCount = (pageIndex - 1) * pageSize;
     pipeline.push({ $skip: skipCount });
     pipeline.push({ $limit: pageSize });
+
+   
 
     pipeline.push({
       $project: {
@@ -7108,6 +7110,328 @@ const ticketSummary = ticketStatusResults.map(item => ({
     return { data: [], message: 'Unexpected error' };
   }
 }
+
+
+
+
+
+async fetchTicketListing(payload: any) {
+  try {
+    const db = this.db;
+    await this.createIndexesForTicketListing(db);
+
+    let {
+      fromdate,
+      toDate,
+      viewTYP,
+      supportTicketID,
+      ticketCategoryID,
+      ticketSourceID,
+      supportTicketTypeID,
+      supportTicketNo,
+      applicationNo,
+      docketNo,
+      statusID,
+      RequestorMobileNo,
+      schemeID,
+      ticketHeaderID,
+      stateID,
+      districtID,
+      insuranceCompanyID,
+      pageIndex = 1,
+      pageSize = 100,
+      objCommon
+    } = payload;
+
+    ticketHeaderID = Number(ticketHeaderID);
+    ticketCategoryID = Number(ticketCategoryID);
+    supportTicketTypeID = Number(supportTicketTypeID);
+    statusID = Number(statusID);
+    schemeID = Number(schemeID);
+
+    if (!objCommon.insertedUserID && objCommon.insertedUserID == "") {
+      return {
+        data: [],
+        message: { msg: "User Id is required", code: "0" }
+      };
+    }
+
+    const Delta = await this.getSupportTicketUserDetail(objCommon.insertedUserID);
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+    if (!item) return { rcode: 0, rmessage: "User details not found." };
+
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID
+        ? await this.convertStringToArray(item.InsuranceCompanyID)
+        : [],
+      StateMasterID: item.StateMasterID
+        ? await this.convertStringToArray(item.StateMasterID)
+        : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID
+    };
+
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+
+    let locationFilter: any = {};
+    if (LocationTypeID === 1 && StateMasterID?.length) {
+      locationFilter = { FilterStateID: { $in: StateMasterID } };
+    } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+    }
+
+    const match: any = { ...locationFilter };
+
+    if (ticketHeaderID && ticketHeaderID !== 0) {
+      match.TicketHeaderID = ticketHeaderID;
+    }
+
+    if (insuranceCompanyID && insuranceCompanyID !== 0) {
+      const requestedInsuranceIDs = String(insuranceCompanyID)
+        .split(",")
+        .map(id => Number(id.trim()));
+
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+      const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
+        allowedInsuranceIDs.includes(id)
+      );
+
+      if (validInsuranceIDs.length === 0) {
+        return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." };
+      }
+
+      match.InsuranceCompanyID = { $in: validInsuranceIDs };
+    } else if (InsuranceCompanyID?.length) {
+      match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
+
+    if (stateID && stateID !== "") {
+      const requestedStateIDs = String(stateID)
+        .split(",")
+        .map(id => Number(id.trim()));
+
+      const validStateIDs = requestedStateIDs.filter(id =>
+        StateMasterID.map(Number).includes(id)
+      );
+
+      if (validStateIDs.length === 0) {
+        return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
+      }
+
+      match.StateMasterID = { $in: validStateIDs };
+    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+      match.StateMasterID = { $in: StateMasterID.map(Number) };
+    }
+
+    if (viewTYP === "FILTER") {
+      if (fromdate && toDate) {
+        match.Created = {
+          $gte: new Date(`${fromdate}T00:00:00.000Z`),
+          $lte: new Date(`${toDate}T23:59:59.999Z`)
+        };
+      }
+      if (supportTicketID) match.SupportTicketID = supportTicketID;
+      if (ticketCategoryID) match.TicketCategoryID = ticketCategoryID;
+      if (ticketSourceID) match.TicketSourceID = ticketSourceID;
+      if (supportTicketTypeID) match.SupportTicketTypeID = supportTicketTypeID;
+      if (statusID) match.TicketStatusID = statusID;
+      if (schemeID) match.SchemeID = schemeID;
+      if (ticketHeaderID) match.TicketHeaderID = ticketHeaderID;
+      if (districtID) match.DistrictMasterID = districtID;
+      if (insuranceCompanyID) match.InsuranceCompanyID = insuranceCompanyID;
+      if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
+      if (applicationNo) match.ApplicationNo = applicationNo;
+      if (docketNo) match.TicketNCIPDocketNo = docketNo;
+      if (RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
+    }
+
+    if (viewTYP === "MOBILE" && RequestorMobileNo) {
+      match.RequestorMobileNo = RequestorMobileNo;
+    }
+    if (viewTYP === "TICKET" && supportTicketNo) {
+      match.SupportTicketNo = supportTicketNo;
+    }
+    if (viewTYP === "APPNO" && applicationNo) {
+      match.ApplicationNo = applicationNo;
+    }
+    if (viewTYP === "DOCKT" && docketNo) {
+      match.TicketNCIPDocketNo = docketNo;
+    }
+
+    const totalCount = await db.collection("SLA_Ticket_listing").countDocuments(match);
+
+    const pipeline: any[] = [
+      { $match: match },
+      { $sort: { InsertDateTime: -1 } },
+      { $skip: (pageIndex - 1) * pageSize },
+      { $limit: pageSize },
+      {
+        $project: {
+          _id: 0,
+          SupportTicketID: 1,
+          CallerContactNumber: 1,
+          CallingAudioFile: 1,
+          TicketRequestorID: 1,
+          StateCodeAlpha: 1,
+          StateMasterID: 1,
+          DistrictMasterID: 1,
+          VillageRequestorID: 1,
+          NyayPanchayatID: 1,
+          NyayPanchayat: 1,
+          GramPanchayatID: 1,
+          GramPanchayat: 1,
+          CallerID: 1,
+          CreationMode: 1,
+          SupportTicketNo: 1,
+          RequestorUniqueNo: 1,
+          RequestorName: 1,
+          RequestorMobileNo: 1,
+          RequestorAccountNo: 1,
+          RequestorAadharNo: 1,
+          TicketCategoryID: 1,
+          CropCategoryOthers: 1,
+          CropStageMaster: 1,
+          CropStageMasterID: 1,
+          TicketHeaderID: 1,
+          SupportTicketTypeID: 1,
+          RequestYear: 1,
+          RequestSeason: 1,
+          TicketSourceID: 1,
+          TicketDescription: 1,
+          LossDate: 1,
+          LossTime: 1,
+          OnTimeIntimationFlag: 1,
+          VillageName: 1,
+          ApplicationCropName: 1,
+          CropName: 1,
+          AREA: 1,
+          DistrictRequestorID: 1,
+          PostHarvestDate: 1,
+          TicketStatusID: 1,
+          StatusUpdateTime: 1,
+          StatusUpdateUserID: 1,
+          ApplicationNo: 1,
+          InsuranceCompanyCode: 1,
+          InsuranceCompanyID: 1,
+          InsurancePolicyNo: 1,
+          InsurancePolicyDate: 1,
+          InsuranceExpiryDate: 1,
+          BankMasterID: 1,
+          AgentUserID: 1,
+          SchemeID: 1,
+          AttachmentPath: 1,
+          HasDocument: 1,
+          Relation: 1,
+          RelativeName: 1,
+          SubDistrictID: 1,
+          SubDistrictName: 1,
+          PolicyPremium: 1,
+          PolicyArea: 1,
+          PolicyType: 1,
+          LandSurveyNumber: 1,
+          LandDivisionNumber: 1,
+          PlotVillageName: 1,
+          PlotDistrictName: 1,
+          PlotStateName: 1,
+          ApplicationSource: 1,
+          CropShare: 1,
+          IFSCCode: 1,
+          FarmerShare: 1,
+          SowingDate: 1,
+          CropSeasonName: 1,
+          TicketSourceName: 1,
+          TicketCategoryName: 1,
+          TicketStatus: 1,
+          InsuranceCompany: 1,
+          CreatedAt: "$Created",
+          TicketTypeName: 1,
+          StateMasterName: 1,
+          DistrictMasterName: 1,
+          TicketHeadName: 1,
+          BMCGCode: 1,
+          BusinessRelationName: 1,
+          CropLossDetailID: 1,
+          CallingUniqueID: 1,
+          CallingInsertUserID: 1,
+          CropStage: 1,
+          CategoryHeadID: 1,
+          TicketReOpenDate: 1,
+          Sos: 1,
+          IsSos: 1,
+          TicketNCIPDocketNo: 1,
+          FilterDistrictRequestorID: 1,
+          FilterStateID: 1,
+          SchemeName: 1,
+          InsertUserID: 1,
+          InsertDateTime: 1,
+          InsertIPAddress: 1,
+          UpdateUserID: 1,
+          AgentName: 1,
+          CreatedBY: 1,
+          CallingUserID: 1,
+          UpdateDateTime: 1,
+          UpdateIPAddress: 1
+        }
+      }
+    ];
+
+    const data = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
+
+    if (data.length === 0) {
+      return {
+        data: [],
+        message: { msg: "Record Not Found", code: "0" },
+        totalCount: 0,
+        totalPages: 0
+      };
+    }
+
+    const aggPipelineAllStatuses = [
+      { $match: match },
+      {
+        $project: {
+          TicketStatusID: 1,
+          TicketHeaderID: 1,
+          customStatus: {
+            $switch: {
+              branches: [
+                {
+                  case: { $and: [{ $eq: ["$TicketStatusID", 109303] }, { $in: ["$TicketHeaderID", [1, 4]] }] },
+                  then: "Resolved"
+                },
+                {
+                  case: { $and: [{ $eq: ["$TicketStatusID", 109303] }, { $eq: ["$TicketHeaderID", 2] }] },
+                  then: "Resolved(Information)"
+                },
+                { case: { $eq: ["$TicketStatusID", 109301] }, then: "Open" },
+                { case: { $eq: ["$TicketStatusID", 109302] }, then: "In-Progress" },
+                { case: { $eq: ["$TicketStatusID", 109304] }, then: "Re-Open" }
+              ],
+              default: "Other"
+            }
+          }
+        }
+      },
+      { $group: { _id: "$customStatus", count: { $sum: 1 } } }
+    ];
+
+    const ticketStatusResults = await db.collection("SLA_Ticket_listing").aggregate(aggPipelineAllStatuses).toArray();
+    const ticketSummary = ticketStatusResults.map(item => ({
+      Total: item.count.toString(),
+      TicketStatus: item._id
+    }));
+
+    return {
+      obj: { status: ticketSummary, supportTicket: data },
+      message: { msg: "Fetched Success", code: "1" }
+    };
+  } catch (err) {
+    console.error("❌ Top-level error:", err);
+    return { data: [], message: "Unexpected error" };
+  }
+}
+
 
 
 
