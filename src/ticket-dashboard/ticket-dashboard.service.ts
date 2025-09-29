@@ -7264,8 +7264,9 @@ async fetchTicketListing(payload: any) {
       match.TicketNCIPDocketNo = docketNo;
     }
 
-if (viewTYP === "ESCAL" && userDetail.EscalationFlag === "Y") {
-  const fromDay = new Date(userDetail.FromDay + "T00:00:00.000Z");
+if (viewTYP === "ESCAL") {
+  if(userDetail.EscalationFlag === "Y"){
+ const fromDay = new Date(userDetail.FromDay + "T00:00:00.000Z");
 
   match.TicketStatusID = { $ne: 109303 };
   match.$expr = {
@@ -7280,6 +7281,16 @@ if (viewTYP === "ESCAL" && userDetail.EscalationFlag === "Y") {
       fromDay
     ]
   };
+  }else{
+    return {
+        data: [],
+        message: { msg: "Not Authorized", code: "0" },
+        totalCount: 0,
+        totalPages: 0
+      };
+
+  }
+ 
 }
     const totalCount = await db.collection("SLA_Ticket_listing").countDocuments(match);
     
