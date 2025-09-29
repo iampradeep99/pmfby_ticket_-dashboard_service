@@ -7260,8 +7260,9 @@ async fetchTicketListing(payload: any) {
     }
 
     const totalCount = await db.collection("SLA_Ticket_listing").countDocuments(match);
+    
 
-    const pipeline: any[] = [
+    /* const pipeline: any[] = [
       { $match: match },
       { $sort: { InsertDateTime: -1 } },
       { $skip: (pageIndex - 1) * pageSize },
@@ -7374,7 +7375,130 @@ async fetchTicketListing(payload: any) {
           UpdateIPAddress: 1
         }
       }
-    ];
+    ]; */
+
+    const pipeline: any[] = [
+  { $match: match },
+  { $sort: { InsertDateTime: -1 } },
+];
+
+if (pageIndex !== -1) {
+  pipeline.push(
+    { $skip: (pageIndex - 1) * pageSize },
+    { $limit: pageSize }
+  );
+}
+
+pipeline.push({
+  $project: {
+    _id: 0,
+    SupportTicketID: 1,
+    CallerContactNumber: 1,
+    CallingAudioFile: 1,
+    TicketRequestorID: 1,
+    StateCodeAlpha: 1,
+    StateMasterID: 1,
+    DistrictMasterID: 1,
+    VillageRequestorID: 1,
+    NyayPanchayatID: 1,
+    NyayPanchayat: 1,
+    GramPanchayatID: 1,
+    GramPanchayat: 1,
+    CallerID: 1,
+    CreationMode: 1,
+    SupportTicketNo: 1,
+    RequestorUniqueNo: 1,
+    RequestorName: 1,
+    RequestorMobileNo: 1,
+    RequestorAccountNo: 1,
+    RequestorAadharNo: 1,
+    TicketCategoryID: 1,
+    CropCategoryOthers: 1,
+    CropStageMaster: 1,
+    CropStageMasterID: 1,
+    TicketHeaderID: 1,
+    SupportTicketTypeID: 1,
+    RequestYear: 1,
+    RequestSeason: 1,
+    TicketSourceID: 1,
+    TicketDescription: 1,
+    LossDate: 1,
+    LossTime: 1,
+    OnTimeIntimationFlag: 1,
+    VillageName: 1,
+    ApplicationCropName: 1,
+    CropName: 1,
+    AREA: 1,
+    DistrictRequestorID: 1,
+    PostHarvestDate: 1,
+    TicketStatusID: 1,
+    StatusUpdateTime: 1,
+    StatusUpdateUserID: 1,
+    ApplicationNo: 1,
+    InsuranceCompanyCode: 1,
+    InsuranceCompanyID: 1,
+    InsurancePolicyNo: 1,
+    InsurancePolicyDate: 1,
+    InsuranceExpiryDate: 1,
+    BankMasterID: 1,
+    AgentUserID: 1,
+    SchemeID: 1,
+    AttachmentPath: 1,
+    HasDocument: 1,
+    Relation: 1,
+    RelativeName: 1,
+    SubDistrictID: 1,
+    SubDistrictName: 1,
+    PolicyPremium: 1,
+    PolicyArea: 1,
+    PolicyType: 1,
+    LandSurveyNumber: 1,
+    LandDivisionNumber: 1,
+    PlotVillageName: 1,
+    PlotDistrictName: 1,
+    PlotStateName: 1,
+    ApplicationSource: 1,
+    CropShare: 1,
+    IFSCCode: 1,
+    FarmerShare: 1,
+    SowingDate: 1,
+    CropSeasonName: 1,
+    TicketSourceName: 1,
+    TicketCategoryName: 1,
+    TicketStatus: 1,
+    InsuranceCompany: 1,
+    CreatedAt: "$Created",
+    TicketTypeName: 1,
+    StateMasterName: 1,
+    DistrictMasterName: 1,
+    TicketHeadName: 1,
+    BMCGCode: 1,
+    BusinessRelationName: 1,
+    CropLossDetailID: 1,
+    CallingUniqueID: 1,
+    CallingInsertUserID: 1,
+    CropStage: 1,
+    CategoryHeadID: 1,
+    TicketReOpenDate: 1,
+    Sos: 1,
+    IsSos: 1,
+    TicketNCIPDocketNo: 1,
+    FilterDistrictRequestorID: 1,
+    FilterStateID: 1,
+    SchemeName: 1,
+    InsertUserID: 1,
+    InsertDateTime: 1,
+    InsertIPAddress: 1,
+    UpdateUserID: 1,
+    AgentName: 1,
+    CreatedBY: 1,
+    CallingUserID: 1,
+    UpdateDateTime: 1,
+    UpdateIPAddress: 1,
+  }
+});
+    
+
 
     const data = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
 
