@@ -7157,9 +7157,12 @@ async fetchTicketListing(payload: any) {
     }
 
     const Delta = await this.getSupportTicketUserDetail(objCommon.insertedUserID);
+
+    // return
     const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
     const item = (responseInfo.data as any)?.user?.[0];
     if (!item) return { rcode: 0, rmessage: "User details not found." };
+
 
     const userDetail = {
       InsuranceCompanyID: item.InsuranceCompanyID
@@ -7169,10 +7172,12 @@ async fetchTicketListing(payload: any) {
         ? await this.convertStringToArray(item.StateMasterID)
         : [],
       BRHeadTypeID: item.BRHeadTypeID,
-      LocationTypeID: item.LocationTypeID
+      LocationTypeID: item.LocationTypeID,
+      FromDay:item?.FromDay,
+      EscalationFlag:item?.EscalationFlag
     };
 
-    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID, FromDay, EscalationFlag} = userDetail;
 
     let locationFilter: any = {};
     if (LocationTypeID === 1 && StateMasterID?.length) {
@@ -7259,6 +7264,23 @@ async fetchTicketListing(payload: any) {
       match.TicketNCIPDocketNo = docketNo;
     }
 
+if (viewTYP === "ESCAL" && userDetail.EscalationFlag === "Y") {
+  const fromDay = new Date(userDetail.FromDay + "T00:00:00.000Z");
+
+  match.TicketStatusID = { $ne: 109303 };
+  match.$expr = {
+    $lte: [
+      {
+        $cond: [
+          { $and: [{ $ne: ["$TicketReOpenDate", null] }, { $ne: ["$TicketReOpenDate", ""] }] },
+          "$TicketReOpenDate", 
+          "$InsertDateTime"    
+        ]
+      },
+      fromDay
+    ]
+  };
+}
     const totalCount = await db.collection("SLA_Ticket_listing").countDocuments(match);
     
 
@@ -7498,8 +7520,7 @@ pipeline.push({
   }
 });
     
-
-
+ 
     const data = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
 
     if (data.length === 0) {
