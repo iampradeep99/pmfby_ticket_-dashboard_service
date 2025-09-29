@@ -7294,34 +7294,37 @@ if (viewTYP === "ESCAL") {
 }
 
 
-if (viewTYP === "ESCAL") {
-  if(userDetail.EscalationFlag === "Y"){
- const fromDay = new Date(userDetail.FromDay + "T00:00:00.000Z");
+// if (viewTYP === "ESCAL") {
+//   if(userDetail.EscalationFlag === "Y"){
+//  const fromDay = new Date(userDetail.FromDay + "T00:00:00.000Z");
 
-  match.TicketStatusID = { $ne: 109303 };
-  match.$expr = {
-    $lte: [
-      {
-        $cond: [
-          { $and: [{ $ne: ["$TicketReOpenDate", null] }, { $ne: ["$TicketReOpenDate", ""] }] },
-          "$TicketReOpenDate", 
-          "$InsertDateTime"    
-        ]
-      },
-      fromDay
-    ]
-  };
-  }else{
-    return {
-        data: [],
-        message: { msg: "Not Authorized For Escalation", code: "0" },
-        totalCount: 0,
-        totalPages: 0
-      };
+//   match.TicketStatusID = { $ne: 109303 };
+//   match.$expr = {
+//     $lte: [
+//       {
+//         $cond: [
+//           { $and: [{ $ne: ["$TicketReOpenDate", null] }, { $ne: ["$TicketReOpenDate", ""] }] },
+//           "$TicketReOpenDate", 
+//           "$InsertDateTime"    
+//         ]
+//       },
+//       fromDay
+//     ]
+//   };
+//   }else{
+//     return {
+//         data: [],
+//         message: { msg: "Not Authorized For Escalation", code: "0" },
+//         totalCount: 0,
+//         totalPages: 0
+//       };
 
-  }
+//   }
  
-}
+// }
+
+
+
 
 
 if (viewTYP === "DEFESCAL") {
@@ -7581,7 +7584,7 @@ pipeline.push({
       };
     }
 
-    const aggPipelineAllStatuses = [
+/*     const aggPipelineAllStatuses = [
       { $match: match },
       {
         $project: {
@@ -7608,7 +7611,91 @@ pipeline.push({
         }
       },
       { $group: { _id: "$customStatus", count: { $sum: 1 } } }
-    ];
+    ]; */
+
+   
+
+//     const aggPipelineAllStatuses: any[] = [
+//   { $match: match },
+//   {
+//     $project: {
+//       TicketStatusID: 1,
+//       TicketHeaderID: 1,
+//       customStatus: {
+//         $switch: {
+//           branches: [
+//             {
+//               case: { $and: [{ $eq: ["$TicketStatusID", 109303] }, { $in: ["$TicketHeaderID", [1, 4]] }] },
+//               then: "Resolved"
+//             },
+//             {
+//               case: { $and: [{ $eq: ["$TicketStatusID", 109303] }, { $eq: ["$TicketHeaderID", 2] }] },
+//               then: "Resolved(Information)"
+//             },
+//             { case: { $eq: ["$TicketStatusID", 109301] }, then: "Open" },
+//             { case: { $eq: ["$TicketStatusID", 109302] }, then: "In-Progress" },
+//             { case: { $eq: ["$TicketStatusID", 109304] }, then: "Re-Open" }
+//           ],
+//           default: "Other"
+//         }
+//       }
+//     }
+//   }
+// ];
+
+// if(viewTYP === 'DEFESCAL'){
+//   aggPipelineAllStatuses.push({
+//     $match: { TicketStatusID: 109301 }
+//   });
+// }
+
+// aggPipelineAllStatuses.push({
+//   $group: { _id: "$customStatus", count: { $sum: 1 } }
+// });
+
+
+const aggPipelineAllStatuses: any[] = [
+  { $match: match },
+  {
+    $project: {
+      TicketStatusID: 1,
+      TicketHeaderID: 1,
+      customStatus: {
+        $switch: {
+          branches: [
+            { case: { $and: [{ $eq: ["$TicketStatusID", 109303] }, { $in: ["$TicketHeaderID", [1, 4]] }] }, then: "Resolved" },
+            { case: { $and: [{ $eq: ["$TicketStatusID", 109303] }, { $eq: ["$TicketHeaderID", 2] }] }, then: "Resolved(Information)" },
+            { case: { $eq: ["$TicketStatusID", 109301] }, then: "Open" },
+            { case: { $eq: ["$TicketStatusID", 109302] }, then: "In-Progress" },
+            { case: { $eq: ["$TicketStatusID", 109304] }, then: "Re-Open" }
+          ],
+          default: "Other"
+        }
+      }
+    }
+  }
+];
+
+if (viewTYP === "DEFESCAL") {
+  aggPipelineAllStatuses.push({
+    $match: { TicketStatusID: 109301 }
+  });
+}
+
+if (viewTYP === "ESCAL" && userDetail.EscalationFlag === "Y") {
+  aggPipelineAllStatuses.push({
+    $match: { TicketStatusID: { $in: [109301, 109302, 109304] }, TicketHeaderID:{$in: [1,4] }}
+
+  });
+}
+
+aggPipelineAllStatuses.push({
+  $group: { _id: "$customStatus", count: { $sum: 1 } }
+});
+
+
+
+console.log(JSON.stringify(aggPipelineAllStatuses), "aggPipelineAllStatuses")
 
     const ticketStatusResults = await db.collection("SLA_Ticket_listing").aggregate(aggPipelineAllStatuses).toArray();
     const ticketSummary = ticketStatusResults.map(item => ({
@@ -7850,7 +7937,7 @@ async fetchTicketListing(payload: any) {
   }
 } */
 
-async  createIndexesForTicketListing(db: any) {
+async  createIndexesForTicketListingxd(db: any) {
   try {
     const collection = db.collection('SLA_Ticket_listing');
     const allIndexes = await collection.indexes();
@@ -7909,6 +7996,82 @@ async  createIndexesForTicketListing(db: any) {
     if (!allIndexes.some(idx => idx.name === 'idx_ticketStatusID')) {
       await collection.createIndex({ TicketStatusID: 1 }, { name: 'idx_ticketStatusID' });
       console.log('Created index: idx_ticketStatusID');
+    }
+
+    console.log('✅ Index setup completed successfully.');
+  } catch (err) {
+    console.error('❌ Error creating indexes:', err);
+  }
+}
+
+
+async createIndexesForTicketListing(db: any) {
+  try {
+    const collection = db.collection('SLA_Ticket_listing');
+    const allIndexes = await collection.indexes();
+
+    // === 1. idx_created_ticketheader_insurance_filterstate_statemaster ===
+    const createdIndexName = 'idx_created_ticketheader_insurance_filterstate_statemaster';
+    const createdIndexKey = {
+      Created: 1,
+      TicketHeaderID: 1,
+      InsuranceCompanyID: 1,
+      FilterStateID: 1,
+      StateMasterID: 1
+    };
+    if (!allIndexes.some(idx => idx.name === createdIndexName && JSON.stringify(idx.key) === JSON.stringify(createdIndexKey))) {
+      await collection.createIndex(createdIndexKey, { name: createdIndexName });
+      console.log(`Created index: ${createdIndexName}`);
+    } else console.log(`Index ${createdIndexName} already exists.`);
+
+    // === 2. idx_mobile_ticketheader_insurance_filterstate_statemaster ===
+    const mobileIndexName = 'idx_mobile_ticketheader_insurance_filterstate_statemaster';
+    const mobileIndexKey = {
+      RequestorMobileNo: 1,
+      TicketHeaderID: 1,
+      InsuranceCompanyID: 1,
+      FilterStateID: 1,
+      StateMasterID: 1
+    };
+    if (!allIndexes.some(idx => idx.name === mobileIndexName && JSON.stringify(idx.key) === JSON.stringify(mobileIndexKey))) {
+      await collection.createIndex(mobileIndexKey, { name: mobileIndexName });
+      console.log(`Created index: ${mobileIndexName}`);
+    } else console.log(`Index ${mobileIndexName} already exists.`);
+
+    // === 3. idx_supportTicketID ===
+    // if (!allIndexes.some(idx => idx.name === 'idx_supportTicketID')) {
+    //   await collection.createIndex({ SupportTicketID: 1 }, { name: 'idx_supportTicketID' });
+    //   console.log('Created index: idx_supportTicketID');
+    // }
+
+    // === 4. idx_ticketStatusID ===
+    if (!allIndexes.some(idx => idx.name === 'idx_ticketStatusID')) {
+      await collection.createIndex({ TicketStatusID: 1 }, { name: 'idx_ticketStatusID' });
+      console.log('Created index: idx_ticketStatusID');
+    }
+
+    // === 5. InsertDateTime_1 ===
+    if (!allIndexes.some(idx => idx.name === 'InsertDateTime_1')) {
+      await collection.createIndex({ InsertDateTime: 1 }, { name: 'InsertDateTime_1' });
+      console.log('Created index: InsertDateTime_1');
+    }
+
+    // === 6. SupportTicketNo_1 ===
+    if (!allIndexes.some(idx => idx.name === 'SupportTicketNo_1')) {
+      await collection.createIndex({ SupportTicketNo: 1 }, { name: 'SupportTicketNo_1' });
+      console.log('Created index: SupportTicketNo_1');
+    }
+
+    // === 7. ApplicationNo_1 ===
+    if (!allIndexes.some(idx => idx.name === 'ApplicationNo_1')) {
+      await collection.createIndex({ ApplicationNo: 1 }, { name: 'ApplicationNo_1' });
+      console.log('Created index: ApplicationNo_1');
+    }
+
+    // === 8. TicketNCIPDocketNo_1 ===
+    if (!allIndexes.some(idx => idx.name === 'TicketNCIPDocketNo_1')) {
+      await collection.createIndex({ TicketNCIPDocketNo: 1 }, { name: 'TicketNCIPDocketNo_1' });
+      console.log('Created index: TicketNCIPDocketNo_1');
     }
 
     console.log('✅ Index setup completed successfully.');
