@@ -240,9 +240,9 @@ async supportTicketListing(
   try {
     const { obj, message }: any = await this.dashboardService.fetchTicketListing(payload);
 
-    // const compressedData = obj ? await this.utilService.GZip(obj) : null;
-
-    return jsonResponseHandler(obj, message, req, res, () => {});
+    const compressedData = obj ? await this.utilService.GZip(obj) : null;
+    console.log("test")
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
   } catch (err) {
     return jsonErrorHandler(err, req, res, () => {});
   }
