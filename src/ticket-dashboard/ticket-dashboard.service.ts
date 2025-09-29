@@ -6673,7 +6673,6 @@ async fetchTicketListing(payload: any) {
     let message = {};
     let data: any = '';
 
-    // Get user detail
 
     if(!objCommon.insertedUserID && objCommon.insertedUserID == ""){
       return {
@@ -6706,7 +6705,6 @@ async fetchTicketListing(payload: any) {
 
     const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
 
-    // Build location filter
     let locationFilter: any = {};
     if (LocationTypeID === 1 && StateMasterID?.length) {
       locationFilter = { FilterStateID: { $in: StateMasterID } };
@@ -6746,22 +6744,7 @@ async fetchTicketListing(payload: any) {
       }
     }
 
-    // State filter
-   /*  if (stateID && stateID !== '') {
-      const requestedStateIDs = stateID
-        .split(',')
-        .map(id => Number(id.trim()));
-      const validStateIDs = requestedStateIDs.filter(id =>
-        StateMasterID.map(Number).includes(id)
-      );
-      if (validStateIDs.length === 0) {
-        return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
-      }
-      match.FilterStateID = { $in: validStateIDs };
-    } else if (StateMasterID?.length && LocationTypeID !== 2) {
-      match.FilterStateID = { $in: StateMasterID.map(Number) };
-    }
- */
+   
 
    if (stateID && stateID !== '') {
   const requestedStateIDs = String(stateID)
@@ -6776,16 +6759,13 @@ async fetchTicketListing(payload: any) {
     return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
   }
 
-  // ✅ Apply filter on actual DB field
   match.StateMasterID = { $in: validStateIDs };
 
 } else if (StateMasterID?.length && LocationTypeID !== 2) {
-  // ✅ Apply fallback (all authorized states)
   match.StateMasterID = { $in: StateMasterID.map(Number) };
 }
 
 
-    // Additional filters if viewTYP === 'FILTER'
     if (viewTYP === 'FILTER') {
       if (fromdate && toDate) {
         match.Created = {
@@ -6809,11 +6789,17 @@ async fetchTicketListing(payload: any) {
       if (RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
     }
 
+    if(viewTYP === 'MOBILE'){
+      if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
+      if (applicationNo) match.ApplicationNo = applicationNo;
+      if (docketNo) match.TicketNCIPDocketNo = docketNo;
+      if (RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
+    }
+
       console.log(JSON.stringify(match))
 
 
     
-    // === Pagination & Detailed Data Fetch ===
     const totalCount = await db.collection('SLA_Ticket_listing').countDocuments(match);
 
     pipeline.push({ $match: match });
@@ -7311,7 +7297,7 @@ async fetchTicketListing(payload: any) {
  */
 
 
-async  createIndexesForTicketListing(db: any) {
+/* async  createIndexesForTicketListing(db: any) {
   try {
     const collection = db.collection('SLA_Ticket_listing');
 
@@ -7331,7 +7317,75 @@ async  createIndexesForTicketListing(db: any) {
   } catch (err) {
     console.error('Error creating indexes:', err);
   }
+} */
+
+async  createIndexesForTicketListing(db: any) {
+  try {
+    const collection = db.collection('SLA_Ticket_listing');
+    const allIndexes = await collection.indexes();
+
+    // === 1. Index used for Date range filters (DO NOT REMOVE) ===
+    const createdIndexName = 'idx_created_ticketheader_insurance_filterstate_statemaster';
+    const createdIndexKey = {
+      Created: 1,
+      TicketHeaderID: 1,
+      InsuranceCompanyID: 1,
+      FilterStateID: 1,
+      StateMasterID: 1
+    };
+
+    const createdIndexExists = allIndexes.some(idx =>
+      idx.name === createdIndexName &&
+      JSON.stringify(idx.key) === JSON.stringify(createdIndexKey)
+    );
+
+    if (!createdIndexExists) {
+      // Do NOT drop this — it’s in use elsewhere
+      await collection.createIndex(createdIndexKey, { name: createdIndexName });
+      console.log(`Created index: ${createdIndexName}`);
+    } else {
+      console.log(`Index ${createdIndexName} already exists.`);
+    }
+
+    // === 2. New Index for queries using RequestorMobileNo ===
+    const mobileIndexName = 'idx_mobile_ticketheader_insurance_filterstate_statemaster';
+    const mobileIndexKey = {
+      RequestorMobileNo: 1,
+      TicketHeaderID: 1,
+      InsuranceCompanyID: 1,
+      FilterStateID: 1,
+      StateMasterID: 1
+    };
+
+    const mobileIndexExists = allIndexes.some(idx =>
+      idx.name === mobileIndexName &&
+      JSON.stringify(idx.key) === JSON.stringify(mobileIndexKey)
+    );
+
+    if (!mobileIndexExists) {
+      await collection.createIndex(mobileIndexKey, { name: mobileIndexName });
+      console.log(`Created index: ${mobileIndexName}`);
+    } else {
+      console.log(`Index ${mobileIndexName} already exists.`);
+    }
+
+    // === 3. Other single-field indexes ===
+    if (!allIndexes.some(idx => idx.name === 'idx_supportTicketID')) {
+      await collection.createIndex({ SupportTicketID: 1 }, { name: 'idx_supportTicketID' });
+      console.log('Created index: idx_supportTicketID');
+    }
+
+    if (!allIndexes.some(idx => idx.name === 'idx_ticketStatusID')) {
+      await collection.createIndex({ TicketStatusID: 1 }, { name: 'idx_ticketStatusID' });
+      console.log('Created index: idx_ticketStatusID');
+    }
+
+    console.log('✅ Index setup completed successfully.');
+  } catch (err) {
+    console.error('❌ Error creating indexes:', err);
+  }
 }
+
 
 }
 
