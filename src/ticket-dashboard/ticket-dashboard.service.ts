@@ -7292,6 +7292,44 @@ if (viewTYP === "ESCAL") {
   }
  
 }
+
+
+if (viewTYP === "ESCAL") {
+  if(userDetail.EscalationFlag === "Y"){
+ const fromDay = new Date(userDetail.FromDay + "T00:00:00.000Z");
+
+  match.TicketStatusID = { $ne: 109303 };
+  match.$expr = {
+    $lte: [
+      {
+        $cond: [
+          { $and: [{ $ne: ["$TicketReOpenDate", null] }, { $ne: ["$TicketReOpenDate", ""] }] },
+          "$TicketReOpenDate", 
+          "$InsertDateTime"    
+        ]
+      },
+      fromDay
+    ]
+  };
+  }else{
+    return {
+        data: [],
+        message: { msg: "Not Authorized For Escalation", code: "0" },
+        totalCount: 0,
+        totalPages: 0
+      };
+
+  }
+ 
+}
+
+
+if (viewTYP === "DEFESCAL") {
+
+  match.TicketStatusID = { $eq: 109301 };
+
+ 
+}
     const totalCount = await db.collection("SLA_Ticket_listing").countDocuments(match);
     
 
@@ -7530,7 +7568,7 @@ pipeline.push({
     UpdateIPAddress: 1,
   }
 });
-    
+    console.log(JSON.stringify(pipeline), "new")
  
     const data = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
 
