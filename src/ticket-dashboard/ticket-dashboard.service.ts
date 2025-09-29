@@ -6790,11 +6790,24 @@ async fetchTicketListing(payload: any) {
     }
 
     if(viewTYP === 'MOBILE'){
-      if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
-      if (applicationNo) match.ApplicationNo = applicationNo;
-      if (docketNo) match.TicketNCIPDocketNo = docketNo;
       if (RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
     }
+
+      if(viewTYP === 'TICKET'){
+      if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
+  
+    }
+      if(viewTYP === 'APPNO'){
+      if (applicationNo) match.ApplicationNo = applicationNo;
+     
+    }
+
+    if(viewTYP === 'DOCKT'){
+    
+      if (docketNo) match.TicketNCIPDocketNo = docketNo;
+    }
+
+
 
       console.log(JSON.stringify(match))
 
