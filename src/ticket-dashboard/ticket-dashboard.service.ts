@@ -7265,32 +7265,34 @@ async fetchTicketListing(payload: any) {
     }
 
 if (viewTYP === "ESCAL") {
-  if(userDetail.EscalationFlag === "Y"){
- const fromDay = new Date(userDetail.FromDay + "T00:00:00.000Z");
+//   if(userDetail.EscalationFlag === "Y"){
+//  const fromDay = new Date(userDetail.FromDay + "T00:00:00.000Z");
 
-  match.TicketStatusID = { $ne: 109303 };
-  match.$expr = {
-    $lte: [
-      {
-        $cond: [
-          { $and: [{ $ne: ["$TicketReOpenDate", null] }, { $ne: ["$TicketReOpenDate", ""] }] },
-          "$TicketReOpenDate", 
-          "$InsertDateTime"    
-        ]
-      },
-      fromDay
-    ]
-  };
-  }else{
-    return {
-        data: [],
-        message: { msg: "Not Authorized For Escalation", code: "0" },
-        totalCount: 0,
-        totalPages: 0
-      };
 
-  }
+//   match.TicketStatusID = { $ne: 109303 };
+//   match.$expr = {
+//     $lte: [
+//       {
+//         $cond: [
+//           { $and: [{ $ne: ["$TicketReOpenDate", null] }, { $ne: ["$TicketReOpenDate", ""] }] },
+//           "$TicketReOpenDate", 
+//           "$InsertDateTime"    
+//         ]
+//       },
+//       fromDay
+//     ]
+//   };
+//   }else{
+//     return {
+//         data: [],
+//         message: { msg: "Not Authorized For Escalation", code: "0" },
+//         totalCount: 0,
+//         totalPages: 0
+//       };
+
+//   }
  
+ match.TicketStatusID = { $eq: 109301 };
 }
 
 
@@ -7683,9 +7685,12 @@ if (viewTYP === "DEFESCAL") {
 }
 
 if (viewTYP === "ESCAL" && userDetail.EscalationFlag === "Y") {
-  aggPipelineAllStatuses.push({
+ /*  aggPipelineAllStatuses.push({
     $match: { TicketStatusID: { $in: [109301, 109302, 109304] }, TicketHeaderID:{$in: [1,4] }}
 
+  }); */
+  aggPipelineAllStatuses.push({
+    $match: { TicketStatusID: 109301 }
   });
 }
 
