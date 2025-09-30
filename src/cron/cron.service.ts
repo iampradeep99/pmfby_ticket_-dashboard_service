@@ -530,8 +530,9 @@ Your Automation System
               },
               { returnDocument: 'after' }
             );
+            console.log(result)
 
-            if (result.value) totalUpdated++;
+            if (result) totalUpdated++;
             else totalMissing++;
           }
 
