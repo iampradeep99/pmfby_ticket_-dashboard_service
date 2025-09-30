@@ -13,7 +13,7 @@ export class CronService {
     private mailService: MailService
   ) {}
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+ /*  @Cron(CronExpression.EVERY_10_MINUTES)
   async handleCron() {
     console.log('⏰ Cron running every 30s');
     this.SupportTicketInsertCronForTicketListing()
@@ -25,10 +25,54 @@ export class CronService {
 
       })
       .catch(err => console.error('❌ Cron failed:', err));
-    //  this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
-    //         console.log(response)
-    //     }) .catch(err => console.error('❌ Cron failed:', err));
+    
    
+  } */
+
+      @Cron('*/12 7-22 * * *')
+  async handleDayCron() {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+
+    // ✅ Ensure start only after 7:30
+    if (hours > 7 || (hours === 7 && minutes >= 30)) {
+      console.log('⏰ Daytime cron running (every 12 min between 7:30 AM - 11 PM)');
+      this.SupportTicketInsertCronForTicketListing()
+        .then((msg) => {
+          console.log(msg);
+          this.supportTicketSyncingUpdateForTicketListing()
+            .then((response) => {
+              console.log(response);
+            })
+            .catch((err) => console.error('❌ Cron failed (update):', err));
+        })
+        .catch((err) => console.error('❌ Cron failed (insert):', err));
+    }
+  }
+
+       // === Nighttime Cron ===
+  // हर 2 घंटे → रात 11:00 PM से सुबह 7:30 AM तक
+  @Cron('0 */2 23-23,0-6 * * *')
+  async handleNightCron() {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+
+    // ✅ Ensure it stops after 7:30 (क्योंकि daytime cron start हो जाता है)
+    if (hours < 7 || (hours === 7 && minutes < 30) || hours === 23) {
+      console.log('🌙 Nighttime cron running (every 2 hours between 11 PM - 7:30 AM)');
+      this.SupportTicketInsertCronForTicketListing()
+        .then((msg) => {
+          console.log(msg);
+          this.supportTicketSyncingUpdateForTicketListing()
+            .then((response) => {
+              console.log(response);
+            })
+            .catch((err) => console.error('❌ Cron failed (update):', err));
+        })
+        .catch((err) => console.error('❌ Cron failed (insert):', err));
+    }
   }
 
   async SupportTicketInsertCronForTicketListing(): Promise<string> {
