@@ -25,6 +25,9 @@ export class CronService {
 
       })
       .catch(err => console.error('❌ Cron failed:', err));
+    //  this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
+    //         console.log(response)
+    //     }) .catch(err => console.error('❌ Cron failed:', err));
    
   }
 
@@ -473,10 +476,11 @@ Your Automation System
       const [countResult]: any = await this.sequelize.query(`
         SELECT COUNT(*) as totalCount
         FROM mergeticketlisting
-        WHERE DATE(InsertDateTime) <> CURDATE()
-        AND StatusUpdateTime = CURDATE()
+        WHERE InsertDateTime < CURDATE()
+          AND StatusUpdateTime >= CURDATE()
+          AND StatusUpdateTime < CURDATE() + INTERVAL 1 DAY
       `, { type: QueryTypes.SELECT });
-        console.log(countResult)
+
       const totalRows: number = countResult?.totalCount || 0;
       console.log(`📦 Total rows to sync: ${totalRows}`);
 
@@ -491,53 +495,44 @@ Your Automation System
 
       const processBatch = async (): Promise<void> => {
         if (offset >= totalRows) return;
+        console.log("➡️ Processing batch with offset:", offset);
 
-        const [rows]: any = await this.sequelize.query(`
+        const rows: any[] = await this.sequelize.query(`
           SELECT InsertDateTime, StatusUpdateTime, TicketStatus, TicketStatusID, SupportTicketID,
                  TicketReOpenDate, TicketNCIPDocketNo, SupportTicketNo
           FROM mergeticketlisting 
-         WHERE DATE(InsertDateTime) <> CURDATE()
-        AND StatusUpdateTime = CURDATE()
+          WHERE InsertDateTime < CURDATE()
+            AND StatusUpdateTime >= CURDATE()
+            AND StatusUpdateTime < CURDATE() + INTERVAL 1 DAY
           LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset};
         `, { type: QueryTypes.SELECT });
-          
 
-        if (rows.length === 0) return;
+        console.log(`✅ Rows fetched in this batch: ${rows.length}`);
+
+        if (!rows.length) return;
 
         for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
           const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
-          const ticketIds = chunk.map(r => r.SupportTicketID);
 
-          // Fetch only existing tickets
-          const existingDocs = await collection
-            .find({ SupportTicketID: { $in: ticketIds } }, { projection: { SupportTicketID: 1 } })
-            .toArray();
-          const existingSet = new Set(existingDocs.map(d => d.SupportTicketID));
-
-          const updates = chunk
-            .filter(record => existingSet.has(record.SupportTicketID)) // only update existing
-            .map(record => ({
-              updateOne: {
-                filter: { SupportTicketID: record.SupportTicketID },
-                update: {
-                  $set: {
-                    InsertDateTime: record.InsertDateTime,
-                    StatusUpdateTime: record.StatusUpdateTime,
-                    TicketStatus: record.TicketStatus,
-                    TicketStatusID: record.TicketStatusID,
-                    TicketReOpenDate: record.TicketReOpenDate,
-                    TicketNCIPDocketNo: record.TicketNCIPDocketNo,
-                    SupportTicketNo: record.SupportTicketNo
-                  }
+          for (const record of chunk) {
+            const result = await collection.findOneAndUpdate(
+              { SupportTicketID: record.SupportTicketID },
+              {
+                $set: {
+                  InsertDateTime: record.InsertDateTime,
+                  StatusUpdateTime: record.StatusUpdateTime,
+                  TicketStatus: record.TicketStatus,
+                  TicketStatusID: record.TicketStatusID,
+                  TicketReOpenDate: record.TicketReOpenDate,
+                  TicketNCIPDocketNo: record.TicketNCIPDocketNo,
+                  SupportTicketNo: record.SupportTicketNo
                 }
-              }
-            }));
+              },
+              { returnDocument: 'after' }
+            );
 
-          totalMissing += chunk.length - updates.length; // count missing
-          if (updates.length > 0) {
-            const result: any = await collection.bulkWrite(updates, { ordered: false });
-            totalUpdated += result.modifiedCount || 0;
-            console.log(`🔄 Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
+            if (result.value) totalUpdated++;
+            else totalMissing++;
           }
 
           if (global.gc) global.gc();
@@ -596,5 +591,7 @@ Your Automation System
     }
   });
 }
+
+
 
 }
