@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 
 interface SendMailPayload {
-  to: string;
+  to: any;
   subject: string;
   text?: string;
   html?: string;
