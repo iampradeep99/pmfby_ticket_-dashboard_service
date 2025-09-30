@@ -3,25 +3,22 @@ import { AppModule } from './app.module';
 import * as express from 'express';
 import * as path from 'path';
 import { RedisWrapper } from './commonServices/redisWrapper';
+import * as crypto from 'crypto';
+(global as any).crypto = crypto;
 
 async function bootstrap() {
-  // Create the NestJS application instance
   const app = await NestFactory.create(AppModule);
 
-  // ✅ Set a global API prefix
   app.setGlobalPrefix('krphdashboard');
 
-  // ✅ Serve static files from the "downloads" folder
   app.use('/downloads', express.static(path.join(__dirname, '../downloads')));
 
-  // ✅ Enable CORS to allow requests from any origin (all ports, all headers)
   app.enableCors({
-    origin: '*',                       // Allow any origin
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', // Allow common HTTP methods
-    allowedHeaders: '*',              // Allow any headers
+    origin: '*',                       
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', 
+    allowedHeaders: '*',            
   });
 
-  // ✅ Initialize Redis connection
   const redis = new RedisWrapper();
   try {
     // await redis.connectionInit({ url: 'redis://10.128.60.9:6379' });
@@ -30,7 +27,6 @@ async function bootstrap() {
     console.error('❌ Redis init error:', err);
   }
 
-  // ✅ Start listening on the configured port (default to 5500)
   await app.listen(process.env.PORT ?? 5500);
 }
 bootstrap();
