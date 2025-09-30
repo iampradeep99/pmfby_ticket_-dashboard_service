@@ -17,7 +17,13 @@ export class CronService {
   async handleCron() {
     console.log('⏰ Cron running every 30s');
     this.SupportTicketInsertCronForTicketListing()
-      .then(msg => console.log(msg))
+      .then((msg) => {
+        console.log(msg)
+        this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
+            console.log(response)
+        }) .catch(err => console.error('❌ Cron failed:', err));
+
+      })
       .catch(err => console.error('❌ Cron failed:', err));
   }
 
@@ -166,4 +172,154 @@ Automated System
         });
     });
   }
+
+
+
+  async supportTicketSyncingUpdateForTicketListing(): Promise<string> {
+    const MYSQL_BATCH_SIZE = 1000000;
+    const CHUNK_SIZE = 1000;
+
+    return new Promise(async (resolve, reject) => {
+      try {
+        const collection: Collection<any> = this.db.collection('SLA_Ticket_listing');
+
+        // Count rows in MySQL
+        const [countResult]: any = await this.sequelize.query(`
+          SELECT COUNT(*) as totalCount
+          FROM krph_ticketview 
+          WHERE DATE(InsertDateTime) <> CURDATE()
+            AND StatusUpdateTime = CURDATE()
+        `, { type: QueryTypes.SELECT });
+
+        const totalRows: number = countResult[0]?.totalCount || 0;
+        console.log(`📦 Total rows to sync: ${totalRows}`);
+
+        if (totalRows === 0) {
+          console.log('✅ No rows to sync today.');
+          return resolve('No rows to sync.');
+        }
+
+        let offset = 0;
+        let totalUpdated = 0;
+        let totalMissing = 0;
+        const missingTickets: any[] = [];
+        const updatedTicketNos: any[] = [];
+
+        const processBatch = async (): Promise<void> => {
+          if (offset >= totalRows) return;
+
+          const [rows]: any = await this.sequelize.query(`
+            SELECT InsertDateTime, StatusUpdateTime, TicketStatus, TicketStatusID, SupportTicketID,
+                   TicketReOpenDate, TicketNCIPDocketNo, SupportTicketNo
+            FROM krph_ticketview 
+            WHERE DATE(InsertDateTime) <> CURDATE()
+              AND StatusUpdateTime = CURDATE()
+            LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
+          `, { type: QueryTypes.SELECT });
+
+          if (!rows.length) return;
+
+          for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+            const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
+            const ticketNos: any[] = chunk.map(doc => doc.SupportTicketID);
+
+            const existingDocs: any[] = await collection
+              .find({ SupportTicketID: { $in: ticketNos } }, { projection: { SupportTicketID: 1 } })
+              .toArray();
+            const existingSet: Set<any> = new Set(existingDocs.map(doc => doc.SupportTicketID));
+
+            const updates: any[] = [];
+
+            for (const record of chunk) {
+              if (existingSet.has(record.SupportTicketID)) {
+                const updateFields: any = {
+                  StatusUpdateTime: record.StatusUpdateTime,
+                  TicketStatus: record.TicketStatus,
+                  TicketStatusID: record.TicketStatusID,
+                  TicketReOpenDate: record.TicketReOpenDate,
+                  TicketNCIPDocketNo: record.TicketNCIPDocketNo
+                };
+
+                updates.push({
+                  updateOne: {
+                    filter: { SupportTicketID: record.SupportTicketID },
+                    update: { $set: updateFields }
+                  }
+                });
+
+                updatedTicketNos.push(record.SupportTicketID);
+              } else {
+                missingTickets.push(record.SupportTicketID);
+                totalMissing++;
+              }
+            }
+
+            if (updates.length > 0) {
+              try {
+                const result: any = await collection.bulkWrite(updates, { ordered: false });
+                totalUpdated += result.modifiedCount || 0;
+                console.log(`🔄 Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
+              } catch (err: any) {
+                console.error('❌ Bulk write error:', err);
+              }
+            }
+
+            if (global.gc) global.gc();
+          }
+
+          offset += MYSQL_BATCH_SIZE;
+          console.log(`✅ Processed offset: ${offset}/${totalRows}`);
+          await processBatch(); // Recursive call
+        };
+
+        await processBatch();
+
+        console.log('🎉 Support ticket listing sync completed.');
+        console.log(`🟢 Total Updated: ${totalUpdated}`);
+        console.log(`🔴 Total Missing: ${totalMissing}`);
+
+        const to = ['pmfbysystems@gmail.com'];
+        const subject = 'Support Ticket listing Data Update Completed';
+        const text = `
+Hello,
+
+The Support Ticket listing data update process has completed.
+
+Criteria:
+- InsertDateTime ≠ Today
+- StatusUpdateTime = Today
+
+Total Rows from MySQL: ${totalRows}
+Total Existing Documents Updated: ${totalUpdated}
+Total Missing (not updated): ${totalMissing}
+
+Regards,
+Your Automation System
+        `;
+        const html = `
+<p>Hello,</p>
+<p><strong>The Support Ticket listing data update process has completed.</strong></p>
+<p><strong>Criteria:</strong></p>
+<ul>
+  <li><code>InsertDateTime</code> ≠ Today</li>
+  <li><code>StatusUpdateTime</code> = Today</li>
+</ul>
+<p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
+<p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
+<p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
+<p>Regards,<br/>Your Automation System</p>
+        `;
+
+        await this.mailService.sendMail({ to, subject, text, html });
+
+        resolve('✅ Support ticket sync completed successfully.');
+
+      } catch (err: any) {
+        console.error('❌ Error during supportTicketSyncing:', err);
+        reject(err);
+      }
+    });
+  }
+
+
 }
