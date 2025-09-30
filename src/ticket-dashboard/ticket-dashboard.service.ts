@@ -8005,6 +8005,83 @@ async  createIndexesForTicketListingxd(db: any) {
 }
 
 
+/* async createIndexesForTicketListing(db: any) {
+  try {
+    const collection = db.collection('SLA_Ticket_listing');
+    const allIndexes = await collection.indexes();
+
+    // === 1. idx_created_ticketheader_insurance_filterstate_statemaster ===
+    const createdIndexName = 'idx_created_ticketheader_insurance_filterstate_statemaster';
+    const createdIndexKey = {
+      Created: 1,
+      TicketHeaderID: 1,
+      InsuranceCompanyID: 1,
+      FilterStateID: 1,
+      StateMasterID: 1
+    };
+    if (!allIndexes.some(idx => idx.name === createdIndexName && JSON.stringify(idx.key) === JSON.stringify(createdIndexKey))) {
+      await collection.createIndex(createdIndexKey, { name: createdIndexName });
+      console.log(`Created index: ${createdIndexName}`);
+    } else console.log(`Index ${createdIndexName} already exists.`);
+
+    // === 2. idx_mobile_ticketheader_insurance_filterstate_statemaster ===
+    const mobileIndexName = 'idx_mobile_ticketheader_insurance_filterstate_statemaster';
+    const mobileIndexKey = {
+      RequestorMobileNo: 1,
+      TicketHeaderID: 1,
+      InsuranceCompanyID: 1,
+      FilterStateID: 1,
+      StateMasterID: 1
+    };
+    if (!allIndexes.some(idx => idx.name === mobileIndexName && JSON.stringify(idx.key) === JSON.stringify(mobileIndexKey))) {
+      await collection.createIndex(mobileIndexKey, { name: mobileIndexName });
+      console.log(`Created index: ${mobileIndexName}`);
+    } else console.log(`Index ${mobileIndexName} already exists.`);
+
+    // === 3. idx_supportTicketID ===
+    // if (!allIndexes.some(idx => idx.name === 'idx_supportTicketID')) {
+    //   await collection.createIndex({ SupportTicketID: 1 }, { name: 'idx_supportTicketID' });
+    //   console.log('Created index: idx_supportTicketID');
+    // }
+
+    // === 4. idx_ticketStatusID ===
+    if (!allIndexes.some(idx => idx.name === 'idx_ticketStatusID')) {
+      await collection.createIndex({ TicketStatusID: 1 }, { name: 'idx_ticketStatusID' });
+      console.log('Created index: idx_ticketStatusID');
+    }
+
+    // === 5. InsertDateTime_1 ===
+    if (!allIndexes.some(idx => idx.name === 'InsertDateTime_1')) {
+      await collection.createIndex({ InsertDateTime: 1 }, { name: 'InsertDateTime_1' });
+      console.log('Created index: InsertDateTime_1');
+    }
+
+    // === 6. SupportTicketNo_1 ===
+    if (!allIndexes.some(idx => idx.name === 'SupportTicketNo_1')) {
+      await collection.createIndex({ SupportTicketNo: 1 }, { name: 'SupportTicketNo_1' });
+      console.log('Created index: SupportTicketNo_1');
+    }
+
+    // === 7. ApplicationNo_1 ===
+    if (!allIndexes.some(idx => idx.name === 'ApplicationNo_1')) {
+      await collection.createIndex({ ApplicationNo: 1 }, { name: 'ApplicationNo_1' });
+      console.log('Created index: ApplicationNo_1');
+    }
+
+    // === 8. TicketNCIPDocketNo_1 ===
+    if (!allIndexes.some(idx => idx.name === 'TicketNCIPDocketNo_1')) {
+      await collection.createIndex({ TicketNCIPDocketNo: 1 }, { name: 'TicketNCIPDocketNo_1' });
+      console.log('Created index: TicketNCIPDocketNo_1');
+    }
+
+    console.log('✅ Index setup completed successfully.');
+  } catch (err) {
+    console.error('❌ Error creating indexes:', err);
+  }
+}
+ */
+
+
 async createIndexesForTicketListing(db: any) {
   try {
     const collection = db.collection('SLA_Ticket_listing');
@@ -8073,6 +8150,22 @@ async createIndexesForTicketListing(db: any) {
       await collection.createIndex({ TicketNCIPDocketNo: 1 }, { name: 'TicketNCIPDocketNo_1' });
       console.log('Created index: TicketNCIPDocketNo_1');
     }
+
+    // === 9. escal index for aggregation queries ===
+    const escalIndexName = 'idx_escal_full';
+    const escalIndexKey = {
+      FilterStateID: 1,
+      InsuranceCompanyID: 1,
+      StateMasterID: 1,
+      TicketStatusID: 1,
+      TicketHeaderID: 1,
+      TicketReOpenDate: 1,
+      InsertDateTime: -1
+    };
+    if (!allIndexes.some(idx => idx.name === escalIndexName && JSON.stringify(idx.key) === JSON.stringify(escalIndexKey))) {
+      await collection.createIndex(escalIndexKey, { name: escalIndexName });
+      console.log(`Created index: ${escalIndexName}`);
+    } else console.log(`Index ${escalIndexName} already exists.`);
 
     console.log('✅ Index setup completed successfully.');
   } catch (err) {
