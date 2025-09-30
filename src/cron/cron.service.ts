@@ -502,7 +502,7 @@ Your Automation System
         `, { type: QueryTypes.SELECT });
           
 
-        if (rows.lenth === 0) return;
+        if (rows.length === 0) return;
 
         for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
           const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
