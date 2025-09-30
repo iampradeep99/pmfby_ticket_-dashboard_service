@@ -38,7 +38,7 @@ export class CronService {
         .then(() =>
           this.sequelize.query<any>(`
             SELECT COUNT(*) as totalCount
-            FROM krph_ticketview
+            FROM mergestateticketlisting
             WHERE DATE(InsertDateTime) = CURDATE()
           `, { type: QueryTypes.SELECT })
         )
@@ -61,7 +61,7 @@ export class CronService {
             }
 
             return this.sequelize.query<any>(`
-              SELECT * FROM krph_ticketview
+              SELECT * FROM mergestateticketlisting
               WHERE DATE(InsertDateTime) = CURDATE()
               LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
             `, { type: QueryTypes.SELECT })
@@ -175,7 +175,7 @@ Automated System
 
 
 
-  async supportTicketSyncingUpdateForTicketListing(): Promise<string> {
+ /*  async supportTicketSyncingUpdateForTicketListing(): Promise<string> {
     const MYSQL_BATCH_SIZE = 1000000;
     const CHUNK_SIZE = 1000;
 
@@ -319,7 +319,143 @@ Your Automation System
         reject(err);
       }
     });
-  }
+  } */
 
+
+    async supportTicketSyncingUpdateForTicketListing(): Promise<string> {
+  const MYSQL_BATCH_SIZE = 1000000;
+  const CHUNK_SIZE = 1000;
+
+  return new Promise(async (resolve, reject) => {
+    try {
+      const collection: Collection<any> = this.db.collection('SLA_Ticket_listing');
+
+      // Count rows in MySQL
+      const [countResult]: any = await this.sequelize.query(`
+        SELECT COUNT(*) as totalCount
+        FROM mergestateticketlisting 
+        WHERE DATE(InsertDateTime) <> CURDATE()
+          AND StatusUpdateTime = CURDATE()
+      `, { type: QueryTypes.SELECT });
+
+      const totalRows: number = countResult[0]?.totalCount || 0;
+      console.log(`📦 Total rows to sync: ${totalRows}`);
+
+      if (totalRows === 0) {
+        console.log('✅ No rows to sync today.');
+        return resolve('No rows to sync.');
+      }
+
+      let offset = 0;
+      let totalUpdated = 0;
+      let totalMissing = 0;
+      const missingTickets: any[] = [];
+
+      const processBatch = async (): Promise<void> => {
+        if (offset >= totalRows) return;
+
+        const [rows]: any = await this.sequelize.query(`
+          SELECT InsertDateTime, StatusUpdateTime, TicketStatus, TicketStatusID, SupportTicketID,
+                 TicketReOpenDate, TicketNCIPDocketNo, SupportTicketNo
+          FROM mergestateticketlisting 
+          WHERE DATE(InsertDateTime) <> CURDATE()
+            AND StatusUpdateTime = CURDATE()
+          LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
+        `, { type: QueryTypes.SELECT });
+
+        if (!rows.length) return;
+
+        for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+          const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
+          const ticketIds = chunk.map(r => r.SupportTicketID);
+
+          // Fetch only existing tickets
+          const existingDocs = await collection
+            .find({ SupportTicketID: { $in: ticketIds } }, { projection: { SupportTicketID: 1 } })
+            .toArray();
+          const existingSet = new Set(existingDocs.map(d => d.SupportTicketID));
+
+          const updates = chunk
+            .filter(record => existingSet.has(record.SupportTicketID)) // only update existing
+            .map(record => ({
+              updateOne: {
+                filter: { SupportTicketID: record.SupportTicketID },
+                update: {
+                  $set: {
+                    InsertDateTime: record.InsertDateTime,
+                    StatusUpdateTime: record.StatusUpdateTime,
+                    TicketStatus: record.TicketStatus,
+                    TicketStatusID: record.TicketStatusID,
+                    TicketReOpenDate: record.TicketReOpenDate,
+                    TicketNCIPDocketNo: record.TicketNCIPDocketNo,
+                    SupportTicketNo: record.SupportTicketNo
+                  }
+                }
+              }
+            }));
+
+          totalMissing += chunk.length - updates.length; // count missing
+          if (updates.length > 0) {
+            const result: any = await collection.bulkWrite(updates, { ordered: false });
+            totalUpdated += result.modifiedCount || 0;
+            console.log(`🔄 Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
+          }
+
+          if (global.gc) global.gc();
+        }
+
+        offset += MYSQL_BATCH_SIZE;
+        console.log(`✅ Processed offset: ${offset}/${totalRows}`);
+        await processBatch();
+      };
+
+      await processBatch();
+
+      console.log('🎉 Support ticket listing sync completed.');
+      console.log(`🟢 Total Updated: ${totalUpdated}`);
+      console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
+
+      const to = ['pmfbysystems@gmail.com'];
+      const subject = 'Support Ticket listing Data Update Completed';
+      const text = `
+Hello,
+
+The Support Ticket listing data update process has completed.
+
+Criteria:
+- InsertDateTime ≠ Today
+- StatusUpdateTime = Today
+
+Total Rows from MySQL: ${totalRows}
+Total Existing Documents Updated: ${totalUpdated}
+Total Missing (not updated): ${totalMissing}
+
+Regards,
+Your Automation System
+      `;
+      const html = `
+<p>Hello,</p>
+<p><strong>The Support Ticket listing data update process has completed.</strong></p>
+<p><strong>Criteria:</strong></p>
+<ul>
+  <li><code>InsertDateTime</code> ≠ Today</li>
+  <li><code>StatusUpdateTime</code> = Today</li>
+</ul>
+<p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
+<p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
+<p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
+<p>Regards,<br/>Your Automation System</p>
+      `;
+
+      await this.mailService.sendMail({ to, subject, text, html });
+
+      resolve('✅ Support ticket sync completed successfully.');
+
+    } catch (err: any) {
+      console.error('❌ Error during supportTicketSyncing:', err);
+      reject(err);
+    }
+  });
+}
 
 }
