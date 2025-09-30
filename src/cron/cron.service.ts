@@ -13,7 +13,7 @@ export class CronService {
     private mailService: MailService
   ) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async handleCron() {
     console.log('⏰ Cron running every 30s');
     this.SupportTicketInsertCronForTicketListing()
@@ -25,6 +25,7 @@ export class CronService {
 
       })
       .catch(err => console.error('❌ Cron failed:', err));
+   
   }
 
   async SupportTicketInsertCronForTicketListing(): Promise<string> {
@@ -38,7 +39,7 @@ export class CronService {
         .then(() =>
           this.sequelize.query<any>(`
             SELECT COUNT(*) as totalCount
-            FROM mergestateticketlisting
+            FROM mergeticketlisting
             WHERE DATE(InsertDateTime) = CURDATE()
           `, { type: QueryTypes.SELECT })
         )
@@ -61,7 +62,7 @@ export class CronService {
             }
 
             return this.sequelize.query<any>(`
-              SELECT * FROM mergestateticketlisting
+              SELECT * FROM mergeticketlisting
               WHERE DATE(InsertDateTime) = CURDATE()
               LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
             `, { type: QueryTypes.SELECT })
@@ -471,13 +472,12 @@ Your Automation System
       // Count rows in MySQL
       const [countResult]: any = await this.sequelize.query(`
         SELECT COUNT(*) as totalCount
-        FROM mergestateticketlisting
-        WHERE InsertDateTime < CURDATE()                    -- inserted before today
-          AND StatusUpdateTime >= CURDATE()                -- updated today from 00:00:00
-          AND StatusUpdateTime < CURDATE() + INTERVAL 1 DAY;
+        FROM mergeticketlisting
+        WHERE DATE(InsertDateTime) <> CURDATE()
+        AND StatusUpdateTime = CURDATE()
       `, { type: QueryTypes.SELECT });
-
-      const totalRows: number = countResult[0]?.totalCount || 0;
+        console.log(countResult)
+      const totalRows: number = countResult?.totalCount || 0;
       console.log(`📦 Total rows to sync: ${totalRows}`);
 
       if (totalRows === 0) {
@@ -495,14 +495,14 @@ Your Automation System
         const [rows]: any = await this.sequelize.query(`
           SELECT InsertDateTime, StatusUpdateTime, TicketStatus, TicketStatusID, SupportTicketID,
                  TicketReOpenDate, TicketNCIPDocketNo, SupportTicketNo
-          FROM mergestateticketlisting 
-          WHERE InsertDateTime < CURDATE()
-            AND StatusUpdateTime >= CURDATE()
-            AND StatusUpdateTime < CURDATE() + INTERVAL 1 DAY
+          FROM mergeticketlisting 
+         WHERE DATE(InsertDateTime) <> CURDATE()
+        AND StatusUpdateTime = CURDATE()
           LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset};
         `, { type: QueryTypes.SELECT });
+          
 
-        if (!rows.length) return;
+        if (rows.lenth === 0) return;
 
         for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
           const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
