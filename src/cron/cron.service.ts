@@ -23,7 +23,7 @@ async handleCron() {
     .catch(err => console.error('❌ Cron failed:', err));
 }
 
-//   @Cron(CronExpression.EVERY_10_MINUTES)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async handleCronUpdate() {
     console.log('⏰ Cron running every 30s');
     this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
