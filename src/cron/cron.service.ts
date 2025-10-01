@@ -18,16 +18,25 @@ export class CronService {
     console.log('⏰ Cron running every 30s');
     this.SupportTicketInsertCronForTicketListing()
       .then((msg) => {
-        console.log(msg)
-        this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
-            console.log(response)
-        }) .catch(err => console.error('❌ Cron failed:', err));
-
+        console.log(msg);
       })
       .catch(err => console.error('❌ Cron failed:', err));
     
    
   }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleCronUpdate() {
+    console.log('⏰ Cron running every 30s');
+    this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
+            console.log(response)
+        }) .catch(err => console.error('❌ Cron failed:', err));
+    
+   
+  }
+
+
+    
 
 //       @Cron('*/12 7-22 * * *')
 //   async handleDayCron() {
