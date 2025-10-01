@@ -523,9 +523,10 @@ Your Automation System
       // Count rows in MySQL
       const [countResult]: any = await this.sequelize.query(`
          SELECT COUNT(*) as totalCount
-FROM mergeticketlisting
-WHERE date(StatusUpdateTime) > CURDATE() - INTERVAL 1 DAY
-  AND date(StatusUpdateTime) < CURDATE() + INTERVAL 1 DAY
+FROM mergeticketlisting 
+          WHERE DATE(StatusUpdateTime) 
+    BETWEEN DATE(CURDATE() - INTERVAL 1 DAY) 
+    AND DATE(CURDATE() + INTERVAL 1 DAY)
       `, { type: QueryTypes.SELECT });
 
       const totalRows: number = countResult?.totalCount || 0;
@@ -545,11 +546,19 @@ WHERE date(StatusUpdateTime) > CURDATE() - INTERVAL 1 DAY
         console.log("➡️ Processing batch with offset:", offset);
 
         const rows: any[] = await this.sequelize.query(`
-          SELECT InsertDateTime, StatusUpdateTime, TicketStatus, TicketStatusID, SupportTicketID,
-                 TicketReOpenDate, TicketNCIPDocketNo, SupportTicketNo
-          FROM mergeticketlisting 
-          WHERE Date(StatusUpdateTime) >= CURDATE() - INTERVAL 1 DAY
-  AND Date(StatusUpdateTime) < CURDATE() + INTERVAL 1 DAY
+          SELECT 
+    InsertDateTime, 
+    StatusUpdateTime, 
+    TicketStatus, 
+    TicketStatusID, 
+    SupportTicketID,
+    TicketReOpenDate, 
+    TicketNCIPDocketNo, 
+    SupportTicketNo
+FROM mergeticketlisting 
+WHERE DATE(StatusUpdateTime) 
+    BETWEEN DATE(CURDATE() - INTERVAL 1 DAY) 
+    AND DATE(CURDATE() + INTERVAL 1 DAY)
           LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
         `, { type: QueryTypes.SELECT });
 
