@@ -515,7 +515,7 @@ Your Automation System
 
 
   async supportTicketSyncingUpdateForTicketListing(): Promise<string> {
-  const MYSQL_BATCH_SIZE = 1000000;
+  const MYSQL_BATCH_SIZE = 100000;
   const CHUNK_SIZE = 1000;
 
   return new Promise(async (resolve, reject) => {
