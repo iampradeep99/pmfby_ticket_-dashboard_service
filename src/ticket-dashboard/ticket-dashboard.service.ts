@@ -7465,7 +7465,7 @@ if (pageIndex !== -1) {
   );
 }
 
-pipeline.push({
+/* pipeline.push({
   $project: {
     _id: 0,
     SupportTicketID: 1,
@@ -7572,186 +7572,187 @@ pipeline.push({
     UpdateDateTime: 1,
     UpdateIPAddress: 1,
   }
-}); 
+}); */ 
    
 
-// pipeline.push({
-//   $project: {
-//     _id: 0,
-//     SupportTicketID: 1,
-//     CallerContactNumber: 1,
-//     CallingAudioFile: 1,
-//     TicketRequestorID: 1,
-//     StateCodeAlpha: 1,
-//     StateMasterID: 1,
-//     DistrictMasterID: 1,
-//     VillageRequestorID: 1,
-//     NyayPanchayatID: 1,
-//     NyayPanchayat: 1,
-//     GramPanchayatID: 1,
-//     GramPanchayat: 1,
-//     CallerID: 1,
-//     CreationMode: 1,
-//     SupportTicketNo: 1,
-//     RequestorUniqueNo: 1,
-//     RequestorName: 1,
-//     RequestorMobileNo: 1,
-//     RequestorAccountNo: 1,
-//     RequestorAadharNo: 1,
-//     TicketCategoryID: 1,
-//     CropCategoryOthers: 1,
-//     CropStageMaster: 1,
-//     CropStageMasterID: 1,
-//     TicketHeaderID: 1,
-//     SupportTicketTypeID: 1,
-//     RequestYear: 1,
-//     RequestSeason: 1,
-//     TicketSourceID: 1,
-//     TicketDescription: 1,
-//     LossDate: 1,
-//     LossTime: 1,
-//     OnTimeIntimationFlag: 1,
-//     VillageName: 1,
-//     ApplicationCropName: 1,
-//     CropName: 1,
-//     AREA: 1,
-//     DistrictRequestorID: 1,
-//     PostHarvestDate: 1,
-//     TicketStatusID: 1,
-//     StatusUpdateTime: 1,
-//     StatusUpdateUserID: 1,
-//     ApplicationNo: 1,
-//     InsuranceCompanyCode: 1,
-//     InsuranceCompanyID: 1,
-//     InsurancePolicyNo: 1,
-//     InsurancePolicyDate: 1,
-//     InsuranceExpiryDate: 1,
-//     BankMasterID: 1,
-//     AgentUserID: 1,
-//     SchemeID: 1,
-//     AttachmentPath: 1,
-//     HasDocument: 1,
-//     Relation: 1,
-//     RelativeName: 1,
-//     SubDistrictID: 1,
-//     SubDistrictName: 1,
-//     PolicyPremium: 1,
-//     PolicyArea: 1,
-//     PolicyType: 1,
-//     LandSurveyNumber: 1,
-//     LandDivisionNumber: 1,
-//     PlotVillageName: 1,
-//     PlotDistrictName: 1,
-//     PlotStateName: 1,
-//     ApplicationSource: 1,
-//     CropShare: 1,
-//     IFSCCode: 1,
-//     FarmerShare: 1,
+pipeline.push({
+  $project: {
+    _id: 0,
+    SupportTicketID: 1,
+    CallerContactNumber: 1,
+    CallingAudioFile: 1,
+    TicketRequestorID: 1,
+    StateCodeAlpha: 1,
+    StateMasterID: 1,
+    DistrictMasterID: 1,
+    VillageRequestorID: 1,
+    NyayPanchayatID: 1,
+    NyayPanchayat: 1,
+    GramPanchayatID: 1,
+    GramPanchayat: 1,
+    CallerID: 1,
+    CreationMode: 1,
+    SupportTicketNo: 1,
+    RequestorUniqueNo: 1,
+    RequestorName: 1,
+    RequestorMobileNo: 1,
+    RequestorAccountNo: 1,
+    RequestorAadharNo: 1,
+    TicketCategoryID: 1,
+    CropCategoryOthers: 1,
+    CropStageMaster: 1,
+    CropStageMasterID: 1,
+    TicketHeaderID: 1,
+    SupportTicketTypeID: 1,
+    RequestYear: 1,
+    RequestSeason: 1,
+    TicketSourceID: 1,
+    TicketDescription: 1,
+    LossDate: 1,
+    LossTime: 1,
+    OnTimeIntimationFlag: 1,
+    VillageName: 1,
+    ApplicationCropName: 1,
+    CropName: 1,
+    AREA: 1,
+    DistrictRequestorID: 1,
+    PostHarvestDate: 1,
+    TicketStatusID: 1,
+    StatusUpdateTime: 1,
+    StatusUpdateUserID: 1,
+    ApplicationNo: 1,
+    InsuranceCompanyCode: 1,
+    InsuranceCompanyID: 1,
+    InsurancePolicyNo: 1,
+    InsurancePolicyDate: 1,
+    InsuranceExpiryDate: 1,
+    BankMasterID: 1,
+    AgentUserID: 1,
+    SchemeID: 1,
+    AttachmentPath: 1,
+    HasDocument: 1,
+    Relation: 1,
+    RelativeName: 1,
+    SubDistrictID: 1,
+    SubDistrictName: 1,
+    PolicyPremium: 1,
+    PolicyArea: 1,
+    PolicyType: 1,
+    LandSurveyNumber: 1,
+    LandDivisionNumber: 1,
+    PlotVillageName: 1,
+    PlotDistrictName: 1,
+    PlotStateName: 1,
+    ApplicationSource: 1,
+    CropShare: 1,
+    IFSCCode: 1,
+    FarmerShare: 1,
 
-//     // ✅ Conditional IST conversion
-//     SowingDate: {
-//       $cond: {
-//         if: { $or: [ { $eq: ["$SowingDate", null] }, { $eq: ["$SowingDate", ""] } ] },
-//         then: "$SowingDate",
-//         else: {
-//           $dateToString: {
-//             date: "$SowingDate",
-//             format: "%Y-%m-%dT%H:%M:%S",
-//             timezone: "Asia/Kolkata"
-//           }
-//         }
-//       }
-//     },
+    // ✅ Safe IST conversion
+    SowingDate: {
+      $cond: {
+        if: { $or: [{ $eq: ["$SowingDate", null] }, { $eq: ["$SowingDate", ""] }] },
+        then: null,
+        else: {
+          $dateToString: {
+            date: { $toDate: "$SowingDate" },
+            format: "%Y-%m-%dT%H:%M:%S",
+            timezone: "Asia/Kolkata"
+          }
+        }
+      }
+    },
 
-//     CropSeasonName: 1,
-//     TicketSourceName: 1,
-//     TicketCategoryName: 1,
-//     TicketStatus: 1,
-//     InsuranceCompany: 1,
+    CropSeasonName: 1,
+    TicketSourceName: 1,
+    TicketCategoryName: 1,
+    TicketStatus: 1,
+    InsuranceCompany: 1,
 
-//     // ✅ Always converted
-//     CreatedAt: {
-//       $dateToString: {
-//         date: "$Created",
-//         format: "%Y-%m-%dT%H:%M:%S",
-//         timezone: "Asia/Kolkata"
-//       }
-//     },
+    // ✅ Always converted safely
+    CreatedAt: {
+      $dateToString: {
+        date: { $toDate: "$Created" },
+        format: "%Y-%m-%dT%H:%M:%S",
+        timezone: "Asia/Kolkata"
+      }
+    },
 
-//     TicketTypeName: 1,
-//     StateMasterName: 1,
-//     DistrictMasterName: 1,
-//     TicketHeadName: 1,
-//     BMCGCode: 1,
-//     BusinessRelationName: 1,
-//     CropLossDetailID: 1,
-//     CallingUniqueID: 1,
-//     CallingInsertUserID: 1,
-//     CropStage: 1,
-//     CategoryHeadID: 1,
+    TicketTypeName: 1,
+    StateMasterName: 1,
+    DistrictMasterName: 1,
+    TicketHeadName: 1,
+    BMCGCode: 1,
+    BusinessRelationName: 1,
+    CropLossDetailID: 1,
+    CallingUniqueID: 1,
+    CallingInsertUserID: 1,
+    CropStage: 1,
+    CategoryHeadID: 1,
 
-//     // ✅ Conditional IST conversion
-//     TicketReOpenDate: {
-//       $cond: {
-//         if: { $or: [ { $eq: ["$TicketReOpenDate", null] }, { $eq: ["$TicketReOpenDate", ""] } ] },
-//         then: "$TicketReOpenDate",
-//         else: {
-//           $dateToString: {
-//             date: "$TicketReOpenDate",
-//             format: "%Y-%m-%dT%H:%M:%S",
-//             timezone: "Asia/Kolkata"
-//           }
-//         }
-//       }
-//     },
+    // ✅ Safe IST conversion
+    TicketReOpenDate: {
+      $cond: {
+        if: { $or: [{ $eq: ["$TicketReOpenDate", null] }, { $eq: ["$TicketReOpenDate", ""] }] },
+        then: null,
+        else: {
+          $dateToString: {
+            date: { $toDate: "$TicketReOpenDate" },
+            format: "%Y-%m-%dT%H:%M:%S",
+            timezone: "Asia/Kolkata"
+          }
+        }
+      }
+    },
 
-//     Sos: 1,
-//     IsSos: 1,
-//     TicketNCIPDocketNo: 1,
-//     FilterDistrictRequestorID: 1,
-//     FilterStateID: 1,
-//     SchemeName: 1,
-//     InsertUserID: 1,
+    Sos: 1,
+    IsSos: 1,
+    TicketNCIPDocketNo: 1,
+    FilterDistrictRequestorID: 1,
+    FilterStateID: 1,
+    SchemeName: 1,
+    InsertUserID: 1,
 
-//     // ✅ Conditional IST conversion
-//     InsertDateTime: {
-//       $cond: {
-//         if: { $or: [ { $eq: ["$InsertDateTime", null] }, { $eq: ["$InsertDateTime", ""] } ] },
-//         then: "$InsertDateTime",
-//         else: {
-//           $dateToString: {
-//             date: "$InsertDateTime",
-//             format: "%Y-%m-%dT%H:%M:%S",
-//             timezone: "Asia/Kolkata"
-//           }
-//         }
-//       }
-//     },
+    // ✅ Safe IST conversion
+    InsertDateTime: {
+      $cond: {
+        if: { $or: [{ $eq: ["$InsertDateTime", null] }, { $eq: ["$InsertDateTime", ""] }] },
+        then: null,
+        else: {
+          $dateToString: {
+            date: { $toDate: "$InsertDateTime" },
+            format: "%Y-%m-%dT%H:%M:%S",
+            timezone: "Asia/Kolkata"
+          }
+        }
+      }
+    },
 
-//     InsertIPAddress: 1,
-//     UpdateUserID: 1,
-//     AgentName: 1,
-//     CreatedBY: 1,
-//     CallingUserID: 1,
+    InsertIPAddress: 1,
+    UpdateUserID: 1,
+    AgentName: 1,
+    CreatedBY: 1,
+    CallingUserID: 1,
 
-//     // ✅ Conditional IST conversion
-//     UpdateDateTime: {
-//       $cond: {
-//         if: { $or: [ { $eq: ["$UpdateDateTime", null] }, { $eq: ["$UpdateDateTime", ""] } ] },
-//         then: "$UpdateDateTime",
-//         else: {
-//           $dateToString: {
-//             date: "$UpdateDateTime",
-//             format: "%Y-%m-%dT%H:%M:%S",
-//             timezone: "Asia/Kolkata"
-//           }
-//         }
-//       }
-//     },
+    // ✅ Safe IST conversion
+    UpdateDateTime: {
+      $cond: {
+        if: { $or: [{ $eq: ["$UpdateDateTime", null] }, { $eq: ["$UpdateDateTime", ""] }] },
+        then: null,
+        else: {
+          $dateToString: {
+            date: { $toDate: "$UpdateDateTime" },
+            format: "%Y-%m-%dT%H:%M:%S",
+            timezone: "Asia/Kolkata"
+          }
+        }
+      }
+    },
 
-//     UpdateIPAddress: 1,
-//   }
-// });
+    UpdateIPAddress: 1,
+  }
+});
+
 
 
 
