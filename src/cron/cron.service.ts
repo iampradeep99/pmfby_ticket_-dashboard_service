@@ -23,7 +23,7 @@ async handleCron() {
     .catch(err => console.error('❌ Cron failed:', err));
 }
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+//   @Cron(CronExpression.EVERY_10_MINUTES)
   async handleCronUpdate() {
     console.log('⏰ Cron running every 30s');
     this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
@@ -522,10 +522,10 @@ Your Automation System
 
       // Count rows in MySQL
       const [countResult]: any = await this.sequelize.query(`
-        SELECT COUNT(*) as totalCount
-        FROM mergeticketlisting
-        WHERE StatusUpdateTime >= CURDATE() - INTERVAL 1 DAY
-            AND StatusUpdateTime < CURDATE()
+         SELECT COUNT(*) as totalCount
+FROM mergeticketlisting
+WHERE StatusUpdateTime >= CURDATE() 
+  AND StatusUpdateTime < CURDATE() + INTERVAL 1 DAY
       `, { type: QueryTypes.SELECT });
 
       const totalRows: number = countResult?.totalCount || 0;
@@ -548,8 +548,8 @@ Your Automation System
           SELECT InsertDateTime, StatusUpdateTime, TicketStatus, TicketStatusID, SupportTicketID,
                  TicketReOpenDate, TicketNCIPDocketNo, SupportTicketNo
           FROM mergeticketlisting 
-        WHERE StatusUpdateTime >= CURDATE() - INTERVAL 1 DAY
-        AND StatusUpdateTime < CURDATE()
+           WHERE StatusUpdateTime >= CURDATE() 
+             AND StatusUpdateTime < CURDATE() + INTERVAL 1 DAY
           LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
         `, { type: QueryTypes.SELECT });
 
