@@ -13,19 +13,17 @@ export class CronService {
     private mailService: MailService
   ) {}
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
-  async handleCron() {
-    console.log('⏰ Cron running every 30s');
-    this.SupportTicketInsertCronForTicketListing()
-      .then((msg) => {
-        console.log(msg);
-      })
-      .catch(err => console.error('❌ Cron failed:', err));
-    
-   
-  }
+ @Cron('0 */15 * * * *') // every 15 minutes
+async handleCron() {
+  console.log('⏰ Cron running every 15 minutes');
+  this.SupportTicketInsertCronForTicketListing()
+    .then((msg) => {
+      console.log(msg);
+    })
+    .catch(err => console.error('❌ Cron failed:', err));
+}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async handleCronUpdate() {
     console.log('⏰ Cron running every 30s');
     this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
