@@ -526,8 +526,8 @@ Your Automation System
       const [countResult]: any = await this.sequelize.query(`
         SELECT COUNT(*) as totalCount
         FROM mergeticketlisting
-       WHERE DATE(InsertDateTime)<>CURDATE() 
-         AND StatusUpdateTime=CURDATE()
+        WHERE StatusUpdateTime >= CURDATE() - INTERVAL 1 DAY
+            AND StatusUpdateTime < CURDATE();
       `, { type: QueryTypes.SELECT });
 
       const totalRows: number = countResult?.totalCount || 0;
@@ -550,8 +550,8 @@ Your Automation System
           SELECT InsertDateTime, StatusUpdateTime, TicketStatus, TicketStatusID, SupportTicketID,
                  TicketReOpenDate, TicketNCIPDocketNo, SupportTicketNo
           FROM mergeticketlisting 
-          WHERE DATE(InsertDateTime)<>CURDATE() 
-            AND StatusUpdateTime=CURDATE()
+        WHERE StatusUpdateTime >= CURDATE() - INTERVAL 1 DAY
+        AND StatusUpdateTime < CURDATE();
           LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset};
         `, { type: QueryTypes.SELECT });
 
