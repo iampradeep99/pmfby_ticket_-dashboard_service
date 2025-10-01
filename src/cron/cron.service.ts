@@ -527,7 +527,7 @@ Your Automation System
         SELECT COUNT(*) as totalCount
         FROM mergeticketlisting
         WHERE StatusUpdateTime >= CURDATE() - INTERVAL 1 DAY
-            AND StatusUpdateTime < CURDATE();
+            AND StatusUpdateTime < CURDATE()
       `, { type: QueryTypes.SELECT });
 
       const totalRows: number = countResult?.totalCount || 0;
@@ -551,8 +551,8 @@ Your Automation System
                  TicketReOpenDate, TicketNCIPDocketNo, SupportTicketNo
           FROM mergeticketlisting 
         WHERE StatusUpdateTime >= CURDATE() - INTERVAL 1 DAY
-        AND StatusUpdateTime < CURDATE();
-          LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset};
+        AND StatusUpdateTime < CURDATE()
+          LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
         `, { type: QueryTypes.SELECT });
 
         console.log(`✅ Rows fetched in this batch: ${rows.length}`);
