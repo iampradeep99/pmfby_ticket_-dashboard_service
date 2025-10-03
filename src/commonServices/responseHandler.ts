@@ -74,8 +74,6 @@ export const joiErrorHandler = (error: any) => {
 export const jsonResponseHandler = (
   data: any,
   message: any,
-
-
   req: Request,
   res: Response,
   next: NextFunction
@@ -105,8 +103,9 @@ export const jsonResponseHandlerCopy = (
   next?: NextFunction
 ) => {
   // Handle message as string or object
+  console.log(message)
   const messages = message?.msg || message || constant.ResponseStatus.SUCCESS;
-  const code = message?.code || "1";
+  const code = message?.code 
 
   // Calculate record count
   const recordCount = Array.isArray(data) ? data.length : data ? 1 : 0;
