@@ -315,7 +315,7 @@ export class TicketDashboardService {
     SPTicketHeaderID = Number(SPTicketHeaderID)
 
     const db = this.db;
-    this.AddIndex(db);
+    // this.AddIndex(db);
 
     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
     if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
@@ -429,7 +429,7 @@ export class TicketDashboardService {
 
 
 
-    const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
+    const totalCount = await db.collection('SLA_Ticket_listing').countDocuments(match);
     const totalPages = Math.ceil(totalCount / limit);
     const pipeline: any[] = [
       { $match: match },
@@ -606,7 +606,7 @@ export class TicketDashboardService {
       { $limit: limit }
     ];
 
-    let results = await db.collection('SLA_KRPH_SupportTickets_Records')
+    let results = await db.collection('SLA_Ticket_listing')
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
     if (results.length === 0) {
