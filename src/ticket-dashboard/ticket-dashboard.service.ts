@@ -6771,7 +6771,13 @@ async fetchTicketListing(payload: any) {
       {
   console.log(LocationTypeID, "LocationTypeID", item);
 
-  let districtInfo = await this.GetDetailsForDistrictUsers(item?.AppAccessID);
+  // let districtInfo = await this.GetDetailsForDistrictUsers(Number(item?.AppAccessID));
+  let districtInfo = await this.GetDetailsForDistrictUsers(
+  typeof item?.AppAccessID === 'number'
+    ? item.AppAccessID
+    : Number(item?.AppAccessID)
+);
+
   const collectedDistrcitInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
 
   console.log("collectedDistrcitInfo", collectedDistrcitInfo);
