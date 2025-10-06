@@ -245,6 +245,43 @@ export class TicketDashboardService {
       });
   };
 
+
+
+
+async  GetDetailsForDistrictUsers(userID:any) {
+  const data = {
+    filterID: userID,
+    filterID1: 0,
+    masterName: "DISTASIGN",
+    searchText: "#ALL",
+    searchCriteria: "AW",
+    objCommon: {
+      insertedUserID: userID?.toString() || "3",
+      insertedIPAddress: "10.234.55.44",
+      dateShort: "yyyy-MM-dd",
+      dateLong: "yyyy-MM-dd HH:mm:ss"
+    }
+  };
+
+  const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk';
+
+  const url = 'https://pmfby.gov.in/krphapi/FGMS/GetMasterDataBinding';
+
+  try {
+    const response = await axios.post(url, data, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': TOKEN
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+
   async convertStringToArray(str) {
     return str.split(",").map(Number);
   }
@@ -315,7 +352,7 @@ export class TicketDashboardService {
     SPTicketHeaderID = Number(SPTicketHeaderID)
 
     const db = this.db;
-    // this.AddIndex(db);
+    this.AddIndex(db);
 
     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
     if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
@@ -4609,7 +4646,7 @@ let message = {
 
 
   async AddIndex(db) {
-    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
+    await db.collection('SLA_Ticket_listing').createIndex({
       FilterStateID: 1,
       InsuranceCompanyID: 1,
       TicketHeaderID: 1,
@@ -6710,6 +6747,7 @@ async fetchTicketListing(payload: any) {
     const item = (responseInfo.data as any)?.user?.[0];
     if (!item) return { rcode: 0, rmessage: "User details not found." };
 
+  
 
     const userDetail = {
       InsuranceCompanyID: item.InsuranceCompanyID
@@ -6729,10 +6767,46 @@ async fetchTicketListing(payload: any) {
     let locationFilter: any = {};
     if (LocationTypeID === 1 && StateMasterID?.length) {
       locationFilter = { FilterStateID: { $in: StateMasterID } };
-    } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
-      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+    } else if (LocationTypeID === 2)
+      {
+  console.log(LocationTypeID, "LocationTypeID", item);
+
+  let districtInfo = await this.GetDetailsForDistrictUsers(item?.AppAccessID);
+  const collectedDistrcitInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
+
+  console.log("collectedDistrcitInfo", collectedDistrcitInfo);
+
+  let districtId = [];
+
+  if (collectedDistrcitInfo?.masterdatabinding && Array.isArray(collectedDistrcitInfo.masterdatabinding)) {
+    for (let itemData of collectedDistrcitInfo.masterdatabinding) {
+      districtId.push(itemData.DistrictCodeAlpha);
     }
 
+    locationFilter = {
+      FilterDistrictRequestorID: { $in: districtId }
+    };
+  } else {
+    console.warn("Invalid district info format:", collectedDistrcitInfo);
+    locationFilter = {}; // Or handle fallback logic here
+  }
+}
+      
+    //   {
+    //   console.log(LocationTypeID, "LocationTypeID", item)
+    //   let districtInfo = await this.GetDetailsForDistrictUsers(item?.AppAccessID);
+    // const collectedDistrcitInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
+    //   districtID = collectedDistrcitInfo[0];
+    //     let districtId = []
+    //     for(let itemData of districtID?.masterdatabinding){
+    //       districtId.push(itemData.DistrictCodeAlpha)
+    //     }
+    //     console.log("collectedDistrcitInfo",collectedDistrcitInfo)
+
+    //   locationFilter = { FilterDistrictRequestorID: { $in: districtId } };
+    // }
+
+    console.log(JSON.stringify(locationFilter))
     const match: any = { ...locationFilter };
 
     if (ticketHeaderID && ticketHeaderID !== 0) {
