@@ -352,6 +352,7 @@ async  GetDetailsForDistrictUsers(userID:any) {
     SPTicketHeaderID = Number(SPTicketHeaderID)
 
     const db = this.db;
+    this.AddIndex(db)
 
     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
     if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
@@ -4364,98 +4365,7 @@ let message = {
       message: { msg: '✅ Data fetched successfully', code: 1 }
     };
   }
-  /* 
-  async FarmerSelectCallingHistoryService(payload: any) {
-    let { fromDate, toDate, stateCodeAlpha, page = 1, limit = 1000, objCommon } = payload;
   
-    page = parseInt(page);
-    limit = parseInt(limit);
-    const skip = (page - 1) * limit;
-  
-    this.createIndexes(this.db).catch(err => {
-      console.error('❌ Index creation failed:', err);
-    });
-  
-    let matchStage: Record<string, any> = {
-      InsertDateTime: {}
-    };
-  
-    if (fromDate) {
-      matchStage.InsertDateTime.$gte = new Date(`${fromDate}T00:00:00.000Z`);
-    }
-  
-    if (toDate) {
-      matchStage.InsertDateTime.$lte = new Date(`${toDate}T23:59:59.999Z`);
-    }
-  
-    if (Object.keys(matchStage.InsertDateTime).length === 0) {
-      delete matchStage.InsertDateTime;
-    }
-  
-    if (stateCodeAlpha && stateCodeAlpha.trim() !== '') {
-      matchStage.StateCodeAlpha = stateCodeAlpha;
-    }
-  
-    const collectionName = 'SLA_KRPH_Farmer_Calling_Master';
-  
-    const totalCount = await this.db.collection(collectionName).countDocuments(matchStage);
-  
-    const pipeline = [
-      { $match: matchStage },
-  
-      // Lookup bm_app_access based on InsertUserID -> AppAccessID
-      {
-        $lookup: {
-          from: 'bm_app_access',
-          localField: 'InsertUserID',
-          foreignField: 'AppAccessID',
-          as: 'appAccess'
-        }
-      },
-      { $unwind: { path: '$appAccess', preserveNullAndEmptyArrays: true } },
-  
-      // Lookup csc_agent_master where UserLoginID = AppAccessID and Status = 'Y'
-      {
-        $lookup: {
-          from: 'csc_agent_master',
-          let: { appAccessId: '$appAccess.AppAccessID' },
-          pipeline: [
-            { $match: { $expr: { $and: [ { $eq: ['$UserLoginID', '$$appAccessId'] }, { $eq: ['$Status', 'Y'] } ] } } }
-          ],
-          as: 'agentMaster'
-        }
-      },
-      { $unwind: { path: '$agentMaster', preserveNullAndEmptyArrays: true } },
-  
-      { $sort: { InsertDateTime: 1 } },
-      { $skip: skip },
-      { $limit: limit }
-    ];
-  
-    console.log('🧱 Aggregation Pipeline:', JSON.stringify(pipeline));
-  
-    const results = await this.db.collection(collectionName)
-      .aggregate(pipeline, { allowDiskUse: true })
-      .toArray();
-  
-    const totalPages = Math.ceil(totalCount / limit);
-  
-    const responsePayload = {
-      data: results || [],
-      pagination: {
-        total: totalCount,
-        page,
-        limit,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
-      },
-    };
-  
-    return responsePayload;
-  }
-   */
-
   async FarmerSelectCallingHistoryService(payload: any) {
     let { fromDate, toDate, stateCodeAlpha, page = 1, limit, objCommon } = payload;
 
@@ -4708,31 +4618,43 @@ let message = {
   }
   
   async AddIndex(db) {
-    await db.collection('SLA_Ticket_listing').createIndex({
-      FilterStateID: 1,
-      InsuranceCompanyID: 1,
-      TicketHeaderID: 1,
-      InsertDateTime: 1,
-      SupportTicketID: 1,
-      SupportTicketNo: 1,
-      InsertUserID: 1
-    });
+  // ✅ Optimized index for filtering and sorting
+  await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
+    InsuranceCompanyID: 1,
+    FilterStateID: 1,
+    TicketHeaderID: 1,
+    InsertDateTime: -1  // Add descending sort since you sort InsertDateTime descending
+  });
 
-    await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
-      SupportTicketID: 1,
-      TicketStatusID: 1,
-      TicketHistoryID: -1
-    });
+  // ✅ Index to support SupportTicketNo lookups
+  await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
+    SupportTicketNo: 1
+  });
 
-    await db.collection('support_ticket_claim_intimation_report_history').createIndex({
-      SupportTicketNo: 1
-    });
+  // ✅ SupportTicketID + TicketStatusID used in lookup pipeline
+  await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
+    SupportTicketID: 1,
+    TicketStatusID: 1,
+    TicketHistoryID: -1  // For sorting latest entry
+  });
 
-    await db.collection('csc_agent_master').createIndex({
-      UserLoginID: 1
-    });
+  // ✅ Lookup for latest claim info
+  await db.collection('support_ticket_claim_intimation_report_history').createIndex({
+    SupportTicketNo: 1,
+    InsertDateTime: -1
+  });
 
-  }
+  // ✅ Lookup for agent info
+  await db.collection('csc_agent_master').createIndex({
+    UserLoginID: 1
+  });
+
+  // ✅ Lookup and sort for comment journey
+  await db.collection('ticket_comment_journey').createIndex({
+    SupportTicketNo: 1,
+    CreatedDate: -1
+  });
+}
 
 
 
