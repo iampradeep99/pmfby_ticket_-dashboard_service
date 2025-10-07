@@ -175,6 +175,8 @@ const excelFilePath = path.join(folderPath, excelFileName);
     { header: 'Policy Type', key: 'PolicyType', width: 20 },
     { header: 'Land Survey No', key: 'LandSurveyNumber', width: 20 },
     { header: 'Land Division No', key: 'LandDivisionNumber', width: 20 },
+    { header: 'Crop Name', key: 'CropName', width: 50 },
+    { header: 'Application Crop Name', key: 'ApplicationCropName', width: 50 },
     { header: 'Plot State', key: 'PlotStateName', width: 20 },
     { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
     { header: 'Plot Village', key: 'PlotVillageName', width: 20 },
@@ -184,9 +186,8 @@ const excelFilePath = path.join(folderPath, excelFileName);
     { header: 'Farmer Share', key: 'FarmerShare', width: 20 },
     { header: 'Sowing Date', key: 'SowingDate', width: 20 },
     { header: 'Created By', key: 'CreatedBY', width: 20 },
-    { header: 'Ticket Description', key: 'TicketDescription', width: 50 },
-    { header: 'Crop Name', key: 'CropName', width: 50 },
-    { header: 'Application Crop Name', key: 'ApplicationCropName', width: 50 }
+    { header: 'Ticket Description', key: 'TicketDescription', width: 50 }
+    
 
 
     
@@ -545,6 +546,8 @@ for (const doc of docs) {
     PolicyType: doc.PolicyType || '',
     LandSurveyNumber: doc.LandSurveyNumber || '',
     LandDivisionNumber: doc.LandDivisionNumber || '',
+     CropName:doc.CropName || '',
+    ApplicationCropName:doc.ApplicationCropName || '',
     PlotStateName: doc.PlotStateName || '',
     PlotDistrictName: doc.PlotDistrictName || '',
     PlotVillageName: doc.PlotVillageName || '',
@@ -555,8 +558,7 @@ for (const doc of docs) {
     SowingDate: doc.SowingDate || '',
     CreatedBY: doc.CreatedBY || '',
     TicketDescription: doc.TicketDescription || '',
-    CropName:doc.CropName || '',
-    ApplicationCropName:doc.ApplicationCropName || '',
+   
 
     ...dynamicColumnsBatch
   }).commit();
