@@ -7086,7 +7086,14 @@ pipeline.push({
                     then: null,
                     else: { $dateToString: { date: { $toDate: "$SowingDate" }, format: "%Y-%m-%dT%H:%M:%S", timezone: "Asia/Kolkata" } }
                   }
-                }
+                },
+                CreatedAt: {
+      $dateToString: {
+        date: { $toDate: "$Created" },
+        format: "%Y-%m-%dT%H:%M:%S",
+        timezone: "Asia/Kolkata"
+      }
+    },
               }
             }
           ],
