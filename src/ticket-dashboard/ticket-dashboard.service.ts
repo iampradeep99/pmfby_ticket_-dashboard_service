@@ -352,7 +352,6 @@ async  GetDetailsForDistrictUsers(userID:any) {
     SPTicketHeaderID = Number(SPTicketHeaderID)
 
     const db = this.db;
-    // this.AddIndex(db);
 
     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
     if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
@@ -643,7 +642,7 @@ async  GetDetailsForDistrictUsers(userID:any) {
       { $limit: limit }
     ];
 
-    let results = await db.collection('SLA_Ticket_listing')
+    let results = await db.collection('SLA_KRPH_SupportTickets_Records')
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
     if (results.length === 0) {
@@ -4645,32 +4644,6 @@ let message = {
   }
 
 
-  async AddIndex(db) {
-    await db.collection('SLA_Ticket_listing').createIndex({
-      FilterStateID: 1,
-      InsuranceCompanyID: 1,
-      TicketHeaderID: 1,
-      InsertDateTime: 1,
-      SupportTicketID: 1,
-      SupportTicketNo: 1,
-      InsertUserID: 1
-    });
-
-    await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
-      SupportTicketID: 1,
-      TicketStatusID: 1,
-      TicketHistoryID: -1
-    });
-
-    await db.collection('support_ticket_claim_intimation_report_history').createIndex({
-      SupportTicketNo: 1
-    });
-
-    await db.collection('csc_agent_master').createIndex({
-      UserLoginID: 1
-    });
-
-  }
 
 
   async assignIndexes(payload) {
@@ -4732,6 +4705,33 @@ let message = {
     });
 
     console.log('Indexes dropped and recreated successfully.');
+  }
+  
+  async AddIndex(db) {
+    await db.collection('SLA_Ticket_listing').createIndex({
+      FilterStateID: 1,
+      InsuranceCompanyID: 1,
+      TicketHeaderID: 1,
+      InsertDateTime: 1,
+      SupportTicketID: 1,
+      SupportTicketNo: 1,
+      InsertUserID: 1
+    });
+
+    await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
+      SupportTicketID: 1,
+      TicketStatusID: 1,
+      TicketHistoryID: -1
+    });
+
+    await db.collection('support_ticket_claim_intimation_report_history').createIndex({
+      SupportTicketNo: 1
+    });
+
+    await db.collection('csc_agent_master').createIndex({
+      UserLoginID: 1
+    });
+
   }
 
 
