@@ -28,6 +28,7 @@ async handleCron() {
     console.log('⏰ Cron running every 30s');
     this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
             console.log(response)
+            this.supportTicketSyncingUpdateForDocketNumberForTicketHistory()
         }) .catch(err => console.error('❌ Cron failed:', err));
     
    
@@ -43,15 +44,15 @@ async handleCron() {
    
   }
 
-    @Cron(CronExpression.EVERY_HOUR)
-  async handleCronUpdateDocketNumberForTicketHistory() {
-    console.log('⏰ Cron running every 30s');
-    this.supportTicketSyncingUpdateForDocketNumberForTicketHistory().then((response)=>{
-            console.log(response)
-        }) .catch(err => console.error('❌ Cron failed:', err));
+  //   @Cron(CronExpression.EVERY_HOUR)
+  // async handleCronUpdateDocketNumberForTicketHistory() {
+  //   console.log('⏰ Cron running every 30s');
+  //   this.supportTicketSyncingUpdateForDocketNumberForTicketHistory().then((response)=>{
+  //           console.log(response)
+  //       }) .catch(err => console.error('❌ Cron failed:', err));
     
    
-  }
+  // }
 
   
 
@@ -178,7 +179,6 @@ Your Automation System
   try {
     const collection: Collection<any> = this.db.collection('SLA_KRPH_SupportTickets_Records');
 
-    // Step 1: Count rows in MySQL
     const [countResult]: any = await this.sequelize.query(`
       SELECT COUNT(*) as totalCount
       FROM mergeticketlisting 
