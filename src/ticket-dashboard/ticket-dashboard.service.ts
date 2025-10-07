@@ -466,7 +466,7 @@ async  GetDetailsForDistrictUsers(userID:any) {
 
 
 
-    const totalCount = await db.collection('SLA_Ticket_listing').countDocuments(match);
+    const totalCount = await db.collection('SLA_KRPH_SupportTicketsHistory_Records').countDocuments(match);
     const totalPages = Math.ceil(totalCount / limit);
     const pipeline: any[] = [
       { $match: match },
