@@ -43,6 +43,18 @@ async handleCron() {
    
   }
 
+    @Cron(CronExpression.EVERY_HOUR)
+  async handleCronUpdateDocketNumberForTicketHistory() {
+    console.log('⏰ Cron running every 30s');
+    this.supportTicketSyncingUpdateForDocketNumberForTicketHistory().then((response)=>{
+            console.log(response)
+        }) .catch(err => console.error('❌ Cron failed:', err));
+    
+   
+  }
+
+  
+
 
 
 
@@ -143,6 +155,116 @@ Your Automation System
     const html = `
 <p>Hello,</p>
 <p><strong>The Support Ticket listing data update process has completed.</strong></p>
+<p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
+<p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
+<p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
+<p>Regards,<br/>Your Automation System</p>
+    `;
+
+    await this.mailService.sendMail({ to, subject, text, html });
+
+    return '✅ Support ticket sync completed successfully.';
+
+  } catch (err: any) {
+    console.error('❌ Error during supportTicketSyncing:', err);
+    throw err;
+  }
+}
+
+ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<string> {
+  const MYSQL_BATCH_SIZE = 100000;
+  const CHUNK_SIZE = 1000;
+
+  try {
+    const collection: Collection<any> = this.db.collection('SLA_KRPH_SupportTickets_Records');
+
+    // Step 1: Count rows in MySQL
+    const [countResult]: any = await this.sequelize.query(`
+      SELECT COUNT(*) as totalCount
+      FROM mergeticketlisting 
+      WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+    `, { type: QueryTypes.SELECT });
+
+    const totalRows: number = countResult?.totalCount || 0;
+    console.log(`📦 Total rows to sync: ${totalRows}`);
+
+    if (totalRows === 0) {
+      console.log('✅ No rows to sync today.');
+      return 'No rows to sync.';
+    }
+
+    let offset = 0;
+    let totalUpdated = 0;
+    let totalMissing = 0;
+
+    while (offset < totalRows) {
+      console.log("➡️ Processing batch with offset:", offset);
+
+      const rows: any[] = await this.sequelize.query(`
+        SELECT TicketNCIPDocketNo, TicketHeaderID, InsertDateTime, SupportTicketID, SupportTicketNo 
+        FROM krishi_rakshak_pro.mergeticketlisting 
+        WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+        LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
+      `, { type: QueryTypes.SELECT });
+
+      console.log(`✅ Rows fetched in this batch: ${rows.length}`);
+
+      if (!rows.length) break;
+
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
+
+        for (const record of chunk) {
+          const result = await collection.findOneAndUpdate(
+            {
+              TicketHeaderID: 4,
+              TicketNCIPDocketNo: { $ne: null },
+              SupportTicketID: record.SupportTicketID,
+
+            },
+            {
+              $set: {
+                TicketNCIPDocketNo: record.TicketNCIPDocketNo
+              }
+            },
+            { returnDocument: 'after' }
+          );
+
+          if (result?.value) totalUpdated++;
+          else totalMissing++;
+        }
+
+        if (global.gc) global.gc();
+      }
+
+      offset += MYSQL_BATCH_SIZE;
+      console.log(`✅ Processed offset: ${offset}/${totalRows}`);
+    }
+
+    console.log('🎉 Support ticket listing sync completed.');
+    console.log(`🟢 Total Updated: ${totalUpdated}`);
+    console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
+
+    // Email report
+    const to = ['pmfbysystems@gmail.com'];
+    const subject = 'Docket Number Updation Cron';
+
+    const text = `
+Hello,
+
+The Docker Number Updation Complete for Ticket History.
+
+Total Rows from MySQL: ${totalRows}
+Total Existing Documents Updated: ${totalUpdated}
+Total Missing (not found in MongoDB): ${totalMissing}
+
+Regards,
+Your Automation System
+    `;
+
+    const html = `
+<p>Hello,</p>
+<p><strong>Docker Number Updation Complete for Ticket History.</strong></p>
 <p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
 <p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
 <p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
