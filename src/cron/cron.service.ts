@@ -28,7 +28,7 @@ async handleCron() {
     console.log('⏰ Cron running every 30s');
     this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
             console.log(response)
-            this.supportTicketSyncingUpdateForDocketNumberForTicketHistory()
+            // this.supportTicketSyncingUpdateForDocketNumberForTicketHistory()
         }) .catch(err => console.error('❌ Cron failed:', err));
     
    
