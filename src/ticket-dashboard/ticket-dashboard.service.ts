@@ -7346,9 +7346,147 @@ async createIndexesForTicketListing(db: any) {
 }
 
 
+// async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<string> {
+//   const MYSQL_BATCH_SIZE = 100000;
+//   const CHUNK_SIZE = 1000;
+
+//   try {
+//     console.log("🚀 Starting supportTicketSyncingUpdateForDocketNumberForTicketHistory...");
+
+//     const collection: Collection<any> = this.db.collection('SLA_KRPH_SupportTickets_Records');
+//     console.log("📂 Connected to MongoDB collection: SLA_KRPH_SupportTickets_Records");
+
+//     console.log("🧮 Counting total rows from MySQL...");
+//     const [countResult]: any = await this.sequelize.query(`
+//       SELECT COUNT(*) as totalCount
+//       FROM mergeticketlisting 
+//       WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+//     `, { type: QueryTypes.SELECT });
+
+//     const totalRows: number = countResult?.totalCount || 0;
+//     console.log(`📦 Total rows to sync: ${totalRows}`);
+
+//     if (totalRows === 0) {
+//       console.log('✅ No rows to sync today.');
+//       return 'No rows to sync.';
+//     }
+
+//     let offset = 0;
+//     let totalUpdated = 0;
+//     let totalMissing = 0;
+
+//     console.log("🔁 Beginning main sync loop...");
+//     while (offset < totalRows) {
+//       console.log(`➡️ Fetching MySQL batch starting at offset: ${offset} (limit: ${MYSQL_BATCH_SIZE})`);
+
+//       const rows: any[] = await this.sequelize.query(`
+//         SELECT TicketNCIPDocketNo, TicketHeaderID, InsertDateTime, SupportTicketID, SupportTicketNo 
+//         FROM krishi_rakshak_pro.mergeticketlisting 
+//         WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+//         LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
+//       `, { type: QueryTypes.SELECT });
+
+//       console.log(`✅ Rows fetched in this batch: ${rows.length}`);
+
+//       if (!rows.length) {
+//         console.log("⚠️ No more rows fetched, ending loop.");
+//         break;
+//       }
+
+//       for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+//         const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
+//         console.log(`🧩 Processing chunk: ${i / CHUNK_SIZE + 1} (records: ${chunk.length})`);
+
+//         let chunkUpdated = 0;
+//         let chunkMissing = 0;
+
+//         for (const record of chunk) {
+//           console.log(`🔍 Updating MongoDB record for SupportTicketID: ${record.SupportTicketID}`);
+
+//           const result = await collection.findOneAndUpdate(
+//             {
+//               TicketHeaderID: 4,
+//               TicketNCIPDocketNo: { $ne: null },
+//               SupportTicketID: record.SupportTicketID,
+//             },
+//             {
+//               $set: { TicketNCIPDocketNo: record.TicketNCIPDocketNo }
+//             },
+//             { returnDocument: 'after' }
+//           );
+
+//           if (result?.value) {
+//             totalUpdated++;
+//             chunkUpdated++;
+//           } else {
+//             totalMissing++;
+//             chunkMissing++;
+//           }
+//         }
+
+//         console.log(`✅ Chunk processed → Updated: ${chunkUpdated}, Missing: ${chunkMissing}`);
+//         console.log(`📊 Progress so far → Total Updated: ${totalUpdated}, Total Missing: ${totalMissing}`);
+
+//         if (global.gc) {
+//           console.log("🧹 Running manual garbage collection...");
+//           global.gc();
+//         }
+//       }
+
+//       offset += MYSQL_BATCH_SIZE;
+//       console.log(`✅ Completed batch offset: ${offset}/${totalRows}`);
+//     }
+
+//     console.log('🎉 Support ticket listing sync completed successfully!');
+//     console.log(`🟢 Total Updated: ${totalUpdated}`);
+//     console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
+
+//     // Email summary report
+//     console.log("📧 Preparing email summary...");
+
+//     const to = ['pmfbysystems@gmail.com'];
+//     const subject = 'Docket Number Updation Cron';
+
+//     const text = `
+// Hello,
+
+// The Docker Number Updation Complete for Ticket History.
+
+// Total Rows from MySQL: ${totalRows}
+// Total Existing Documents Updated: ${totalUpdated}
+// Total Missing (not found in MongoDB): ${totalMissing}
+
+// Regards,
+// Your Automation System
+//     `;
+
+//     const html = `
+// <p>Hello,</p>
+// <p><strong>Docker Number Updation Complete for Ticket History.</strong></p>
+// <p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
+// <p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
+// <p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
+// <p>Regards,<br/>Your Automation System</p>
+//     `;
+
+//     console.log("📨 Sending email report...");
+//     await this.mailService.sendMail({ to, subject, text, html });
+//     console.log("✅ Email sent successfully!");
+
+//     console.log("🏁 Process finished — supportTicketSyncingUpdateForDocketNumberForTicketHistory completed.");
+
+//     return '✅ Support ticket sync completed successfully.';
+
+//   } catch (err: any) {
+//     console.error('❌ Error during supportTicketSyncingUpdateForDocketNumberForTicketHistory:', err);
+//     throw err;
+//   }
+// }
+
+
 async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<string> {
-  const MYSQL_BATCH_SIZE = 100000;
-  const CHUNK_SIZE = 1000;
+  const MYSQL_BATCH_SIZE = 100000; // MySQL fetch size
+  const CHUNK_SIZE = 1000; // Mongo bulk update size
 
   try {
     console.log("🚀 Starting supportTicketSyncingUpdateForDocketNumberForTicketHistory...");
@@ -7376,59 +7514,58 @@ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<strin
     let totalMissing = 0;
 
     console.log("🔁 Beginning main sync loop...");
+
     while (offset < totalRows) {
       console.log(`➡️ Fetching MySQL batch starting at offset: ${offset} (limit: ${MYSQL_BATCH_SIZE})`);
 
       const rows: any[] = await this.sequelize.query(`
-        SELECT TicketNCIPDocketNo, TicketHeaderID, InsertDateTime, SupportTicketID, SupportTicketNo 
+        SELECT TicketNCIPDocketNo, TicketHeaderID, SupportTicketID
         FROM krishi_rakshak_pro.mergeticketlisting 
         WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
         LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
       `, { type: QueryTypes.SELECT });
-
-      console.log(`✅ Rows fetched in this batch: ${rows.length}`);
 
       if (!rows.length) {
         console.log("⚠️ No more rows fetched, ending loop.");
         break;
       }
 
+      console.log(`✅ Rows fetched in this batch: ${rows.length}`);
+
+      // Split into smaller chunks for bulkWrite
       for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-        const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
-        console.log(`🧩 Processing chunk: ${i / CHUNK_SIZE + 1} (records: ${chunk.length})`);
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
+        console.log(`🧩 Processing chunk ${i / CHUNK_SIZE + 1} (${chunk.length} records)`);
 
-        let chunkUpdated = 0;
-        let chunkMissing = 0;
-
-        for (const record of chunk) {
-          console.log(`🔍 Updating MongoDB record for SupportTicketID: ${record.SupportTicketID}`);
-
-          const result = await collection.findOneAndUpdate(
-            {
+        const bulkOps = chunk.map(record => ({
+          updateOne: {
+            filter: {
               TicketHeaderID: 4,
-              TicketNCIPDocketNo: { $ne: null },
               SupportTicketID: record.SupportTicketID,
+              TicketNCIPDocketNo: null // only update null ones
             },
-            {
+            update: {
               $set: { TicketNCIPDocketNo: record.TicketNCIPDocketNo }
-            },
-            { returnDocument: 'after' }
-          );
-
-          if (result?.value) {
-            totalUpdated++;
-            chunkUpdated++;
-          } else {
-            totalMissing++;
-            chunkMissing++;
+            }
           }
+        }));
+
+        try {
+          const result = await collection.bulkWrite(bulkOps, { ordered: false });
+
+          const matched = result.matchedCount || 0;
+          const modified = result.modifiedCount || 0;
+
+          totalUpdated += modified;
+          totalMissing += chunk.length - matched;
+
+          console.log(`✅ Chunk done → Matched: ${matched}, Updated: ${modified}, Skipped: ${chunk.length - matched}`);
+        } catch (bulkErr) {
+          console.error("❌ Bulk write error:", bulkErr.message);
         }
 
-        console.log(`✅ Chunk processed → Updated: ${chunkUpdated}, Missing: ${chunkMissing}`);
-        console.log(`📊 Progress so far → Total Updated: ${totalUpdated}, Total Missing: ${totalMissing}`);
-
+        // free memory
         if (global.gc) {
-          console.log("🧹 Running manual garbage collection...");
           global.gc();
         }
       }
@@ -7437,9 +7574,9 @@ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<strin
       console.log(`✅ Completed batch offset: ${offset}/${totalRows}`);
     }
 
-    console.log('🎉 Support ticket listing sync completed successfully!');
+    console.log("🎉 Sync completed successfully!");
     console.log(`🟢 Total Updated: ${totalUpdated}`);
-    console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
+    console.log(`🔴 Total Missing/Skipped: ${totalMissing}`);
 
     // Email summary report
     console.log("📧 Preparing email summary...");
@@ -7450,11 +7587,11 @@ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<strin
     const text = `
 Hello,
 
-The Docker Number Updation Complete for Ticket History.
+Docket Number Updation for Ticket History completed successfully.
 
 Total Rows from MySQL: ${totalRows}
-Total Existing Documents Updated: ${totalUpdated}
-Total Missing (not found in MongoDB): ${totalMissing}
+Total Documents Updated (where null): ${totalUpdated}
+Total Missing or Already Updated: ${totalMissing}
 
 Regards,
 Your Automation System
@@ -7462,10 +7599,10 @@ Your Automation System
 
     const html = `
 <p>Hello,</p>
-<p><strong>Docker Number Updation Complete for Ticket History.</strong></p>
+<p><strong>Docket Number Updation for Ticket History completed successfully.</strong></p>
 <p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
-<p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
-<p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
+<p><strong>Total Documents Updated (where null):</strong> ${totalUpdated}</p>
+<p><strong>Total Missing or Already Updated:</strong> ${totalMissing}</p>
 <p>Regards,<br/>Your Automation System</p>
     `;
 
@@ -7473,10 +7610,7 @@ Your Automation System
     await this.mailService.sendMail({ to, subject, text, html });
     console.log("✅ Email sent successfully!");
 
-    console.log("🏁 Process finished — supportTicketSyncingUpdateForDocketNumberForTicketHistory completed.");
-
     return '✅ Support ticket sync completed successfully.';
-
   } catch (err: any) {
     console.error('❌ Error during supportTicketSyncingUpdateForDocketNumberForTicketHistory:', err);
     throw err;
