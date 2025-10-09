@@ -484,28 +484,28 @@ async  GetDetailsForDistrictUsers(userID:any) {
       },
       { $replaceRoot: { newRoot: "$doc" } },
 
-      {
-        $lookup: {
-          from: 'SLA_KRPH_SupportTicketsHistory_Records',
-          let: { ticketId: '$SupportTicketID' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ['$SupportTicketID', '$$ticketId'] },
-                    { $eq: ['$TicketStatusID', 109304] }
-                  ]
-                }
-              }
-            },
-            { $sort: { TicketHistoryID: -1 } },
-            { $limit: 1 }
-          ],
-          as: 'ticketHistory'
-        }
-      },
-      { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+      // {
+      //   $lookup: {
+      //     from: 'SLA_KRPH_SupportTicketsHistory_Records',
+      //     let: { ticketId: '$SupportTicketID' },
+      //     pipeline: [
+      //       {
+      //         $match: {
+      //           $expr: {
+      //             $and: [
+      //               { $eq: ['$SupportTicketID', '$$ticketId'] },
+      //               { $eq: ['$TicketStatusID', 109304] }
+      //             ]
+      //           }
+      //         }
+      //       },
+      //       { $sort: { TicketHistoryID: -1 } },
+      //       { $limit: 1 }
+      //     ],
+      //     as: 'ticketHistory'
+      //   }
+      // },
+      // { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
 
       {
         $lookup: {
