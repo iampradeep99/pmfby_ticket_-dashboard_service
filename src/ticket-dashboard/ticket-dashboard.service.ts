@@ -1097,15 +1097,9 @@ async AddIndexForSupportTickets(db: any) {
     }
   ]);
 
-  await db.collection('support_ticket_claim_intimation_report_history').createIndex(
-    { SupportTicketNo: 1 },
-    { name: 'idx_claim_SupportTicketNo' }
-  );
 
-  await db.collection('csc_agent_master').createIndex(
-    { UserLoginID: 1 },
-    { name: 'idx_agent_UserLoginID' }
-  );
+
+ 
 
   await db.collection('ticket_comment_journey').createIndex(
     { SupportTicketNo: 1, CreatedDate: -1 },
