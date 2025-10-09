@@ -846,7 +846,7 @@ async processTicketHistoryView(ticketPayload: any) {
   SPTicketHeaderID = Number(SPTicketHeaderID);
 
   const db = this.db;
-  this.AddIndexForSupportTickets(db);
+  // this.AddIndexForSupportTickets(db);
 
   if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
   if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
