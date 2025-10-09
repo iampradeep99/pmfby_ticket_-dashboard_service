@@ -341,504 +341,778 @@ async  GetDetailsForDistrictUsers(userID:any) {
 
 
 
-  async processTicketHistoryView(ticketPayload: any) {
-    let {
-      SPFROMDATE,
-      SPTODATE,
-      SPInsuranceCompanyID,
-      SPStateID,
-      SPTicketHeaderID,
-      SPUserID,
-      page = 1,
-      limit = 20,
-    } = ticketPayload;
+//   async processTicketHistoryView(ticketPayload: any) {
+//     let {
+//       SPFROMDATE,
+//       SPTODATE,
+//       SPInsuranceCompanyID,
+//       SPStateID,
+//       SPTicketHeaderID,
+//       SPUserID,
+//       page = 1,
+//       limit = 20,
+//     } = ticketPayload;
 
-    SPTicketHeaderID = Number(SPTicketHeaderID)
+//     SPTicketHeaderID = Number(SPTicketHeaderID)
 
-    const db = this.db;
-    this.AddIndex(db)
+//     const db = this.db;
+//     this.AddIndex(db)
 
-    if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
-    if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+//     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+//     if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
 
-    // const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
-    // const cachedData = await this.redisWrapper.getRedisCache(cacheKey) as any;
-    // if (cachedData) {
-    //   return {
-    //     rcode: 1,
-    //     rmessage: 'Success',
-    //     data: cachedData.data,
-    //     pagination: cachedData.pagination,
-    //   };
-    // }
+//     const Delta = await this.getSupportTicketUserDetail(SPUserID);
+//     const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
 
-    const Delta = await this.getSupportTicketUserDetail(SPUserID);
-    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+//     const item = (responseInfo.data as any)?.user?.[0];
+//     if (!item) return { rcode: 0, rmessage: 'User details not found.' };
 
-    const item = (responseInfo.data as any)?.user?.[0];
-    if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+//     const userDetail = {
+//       InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+//       StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+//       BRHeadTypeID: item.BRHeadTypeID,
+//       LocationTypeID: item.LocationTypeID,
+//     };
 
-    const userDetail = {
-      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
-      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
-      BRHeadTypeID: item.BRHeadTypeID,
-      LocationTypeID: item.LocationTypeID,
-    };
+//     const { InsuranceCompanyID, StateMasterID, LocationTypeID, BRHeadTypeID } = userDetail;
 
-    const { InsuranceCompanyID, StateMasterID, LocationTypeID, BRHeadTypeID } = userDetail;
+//     let locationFilter: any = {};
 
-    let locationFilter: any = {};
+//     if (LocationTypeID === 1 && StateMasterID?.length) {
+//       locationFilter = {
+//         FilterStateID: { $in: StateMasterID },
+//       };
+//     } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+//       locationFilter = {
+//         FilterDistrictRequestorID: { $in: item.DistrictIDs },
+//       };
+//     } else {
+//       locationFilter = {};
+//     }
 
-    if (LocationTypeID === 1 && StateMasterID?.length) {
-      locationFilter = {
-        FilterStateID: { $in: StateMasterID },
-      };
-    } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
-      locationFilter = {
-        FilterDistrictRequestorID: { $in: item.DistrictIDs },
-      };
-    } else {
-      locationFilter = {};
-    }
+//     const match: any = {
+//       ...locationFilter,
+//     };
 
-    const match: any = {
-      ...locationFilter,
-    };
-
-    if (SPTicketHeaderID && SPTicketHeaderID !== 0) {
-      match.TicketHeaderID = SPTicketHeaderID;
-    }
+//     if (SPTicketHeaderID && SPTicketHeaderID !== 0) {
+//       match.TicketHeaderID = SPTicketHeaderID;
+//     }
 
 
 
-    if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
-      const requestedInsuranceIDs = SPInsuranceCompanyID
-        .split(',')
-        .map(id => Number(id.trim()));
+//     if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+//       const requestedInsuranceIDs = SPInsuranceCompanyID
+//         .split(',')
+//         .map(id => Number(id.trim()));
 
-      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+//       const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
 
-      const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
-        allowedInsuranceIDs.includes(id)
-      );
+//       const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
+//         allowedInsuranceIDs.includes(id)
+//       );
 
-      if (validInsuranceIDs.length === 0) {
-        return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
-      }
+//       if (validInsuranceIDs.length === 0) {
+//         return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+//       }
 
-      match.InsuranceCompanyID = { $in: validInsuranceIDs };
-    } else {
+//       match.InsuranceCompanyID = { $in: validInsuranceIDs };
+//     } else {
 
-      if (InsuranceCompanyID?.length) {
-        match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }; // force integers
-      }
-    }
-
-
-
-    if (SPStateID && SPStateID !== '#ALL') {
-      const requestedStateIDs = SPStateID
-        .split(',')
-        .map(id => Number(id.trim()));
-
-      const validStateIDs = requestedStateIDs.filter(id =>
-        StateMasterID.map(Number).includes(id)
-      );
-
-      if (validStateIDs.length === 0) {
-        return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
-      }
-
-      match.FilterStateID = { $in: validStateIDs };
-    } else if (StateMasterID?.length && LocationTypeID !== 2) {
-      match.FilterStateID = { $in: StateMasterID.map(Number) };
-    }
-
-
-    // DATE FILTER
-    if (SPFROMDATE || SPTODATE) {
-      match.InsertDateTime = {};
-
-      if (SPFROMDATE) {
-        match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`);
-      }
-
-      if (SPTODATE) {
-        match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`);
-      }
-    }
+//       if (InsuranceCompanyID?.length) {
+//         match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }; 
+//       }
+//     }
 
 
 
-    const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
-    const totalPages = Math.ceil(totalCount / limit);
-    const pipeline: any[] = [
-      { $match: match },
+//     if (SPStateID && SPStateID !== '#ALL') {
+//       const requestedStateIDs = SPStateID
+//         .split(',')
+//         .map(id => Number(id.trim()));
 
-      { $sort: { InsertDateTime: -1 } },
-      {
-        $group: {
-          _id: "$SupportTicketNo",
-          doc: { $first: "$$ROOT" }
-        }
-      },
-      { $replaceRoot: { newRoot: "$doc" } },
+//       const validStateIDs = requestedStateIDs.filter(id =>
+//         StateMasterID.map(Number).includes(id)
+//       );
 
-      // {
-      //   $lookup: {
-      //     from: 'SLA_KRPH_SupportTicketsHistory_Records',
-      //     let: { ticketId: '$SupportTicketID' },
-      //     pipeline: [
-      //       {
-      //         $match: {
-      //           $expr: {
-      //             $and: [
-      //               { $eq: ['$SupportTicketID', '$$ticketId'] },
-      //               { $eq: ['$TicketStatusID', 109304] }
-      //             ]
-      //           }
-      //         }
-      //       },
-      //       { $sort: { TicketHistoryID: -1 } },
-      //       { $limit: 1 }
-      //     ],
-      //     as: 'ticketHistory'
-      //   }
-      // },
-      // { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+//       if (validStateIDs.length === 0) {
+//         return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+//       }
 
-      {
-        $lookup: {
-          from: 'support_ticket_claim_intimation_report_history',
-          let: { ticketNo: '$SupportTicketNo' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
-            { $sort: { InsertDateTime: -1 } },
-            { $limit: 1 }
-          ],
-          as: 'claimInfo'
-        }
-      },
-      { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+//       match.FilterStateID = { $in: validStateIDs };
+//     } else if (StateMasterID?.length && LocationTypeID !== 2) {
+//       match.FilterStateID = { $in: StateMasterID.map(Number) };
+//     }
 
-      {
-        $lookup: {
-          from: 'csc_agent_master',
-          let: { userLoginId: '$InsertUserID' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$UserLoginID', '$$userLoginId'] } } },
-            { $limit: 1 }
-          ],
-          as: 'agentInfo'
-        }
-      },
-      { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
-      {
-        "$lookup": {
-          "from": "ticket_comment_journey",
-          "localField": "SupportTicketNo",
-          "foreignField": "SupportTicketNo",
-          "as": "ticket_comment_journey",
-          "pipeline": [
-            { "$sort": { "CreatedDate": -1 } },
-            {
-              "$group": {
-                "_id": "$ResolvedComment",
-                "unique_comments": { "$first": "$$ROOT" }
-              }
-            },
-            { "$replaceRoot": { "newRoot": "$unique_comments" } }
-          ]
-        }
-      },
+
+//     // DATE FILTER
+//     if (SPFROMDATE || SPTODATE) {
+//       match.InsertDateTime = {};
+
+//       if (SPFROMDATE) {
+//         match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`);
+//       }
+
+//       if (SPTODATE) {
+//         match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`);
+//       }
+//     }
+
+
+
+//     const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
+//     const totalPages = Math.ceil(totalCount / limit);
+//     const pipeline: any[] = [
+//       { $match: match },
+
+//       { $sort: { InsertDateTime: -1 } },
+//       {
+//         $group: {
+//           _id: "$SupportTicketNo",
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } },
+
+//       // {
+//       //   $lookup: {
+//       //     from: 'SLA_KRPH_SupportTicketsHistory_Records',
+//       //     let: { ticketId: '$SupportTicketID' },
+//       //     pipeline: [
+//       //       {
+//       //         $match: {
+//       //           $expr: {
+//       //             $and: [
+//       //               { $eq: ['$SupportTicketID', '$$ticketId'] },
+//       //               { $eq: ['$TicketStatusID', 109304] }
+//       //             ]
+//       //           }
+//       //         }
+//       //       },
+//       //       { $sort: { TicketHistoryID: -1 } },
+//       //       { $limit: 1 }
+//       //     ],
+//       //     as: 'ticketHistory'
+//       //   }
+//       // },
+//       // { $unwind: { path: '$ticketHistory', preserveNullAndEmptyArrays: true } },
+
+//       {
+//         $lookup: {
+//           from: 'support_ticket_claim_intimation_report_history',
+//           let: { ticketNo: '$SupportTicketNo' },
+//           pipeline: [
+//             { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
+//             { $sort: { InsertDateTime: -1 } },
+//             { $limit: 1 }
+//           ],
+//           as: 'claimInfo'
+//         }
+//       },
+//       { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+
+//       {
+//         $lookup: {
+//           from: 'csc_agent_master',
+//           let: { userLoginId: '$InsertUserID' },
+//           pipeline: [
+//             { $match: { $expr: { $eq: ['$UserLoginID', '$$userLoginId'] } } },
+//             { $limit: 1 }
+//           ],
+//           as: 'agentInfo'
+//         }
+//       },
+//       { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+//       {
+//         "$lookup": {
+//           "from": "ticket_comment_journey",
+//           "localField": "SupportTicketNo",
+//           "foreignField": "SupportTicketNo",
+//           "as": "ticket_comment_journey",
+//           "pipeline": [
+//             { "$sort": { "CreatedDate": -1 } },
+//             {
+//               "$group": {
+//                 "_id": "$ResolvedComment",
+//                 "unique_comments": { "$first": "$$ROOT" }
+//               }
+//             },
+//             { "$replaceRoot": { "newRoot": "$unique_comments" } }
+//           ]
+//         }
+//       },
       
 
-      {
-        $project: {
-          SupportTicketID: 1,
-          SupportTicketNo: 1,
-          InsertUserID: 1,
-          Created: 1,
-          StatusUpdateTime: 1,
-          TicketStatusID: 1,
-          TicketStatus: 1,
-          ApplicationNo: 1,
-          InsurancePolicyNo: 1,
-          CallerContactNumber: 1,
-          RequestorName: 1,
-          RequestorMobileNo: 1,
-          StateMasterName: 1,
-          DistrictMasterName: 1,
-          SubDistrictName: 1,
-          TicketHeadName: 1,
-          TicketCategoryName: 1,
-          RequestSeason: 1,
-          RequestYear: 1,
-          ApplicationCropName: 1,
-          Relation: 1,
-          RelativeName: 1,
-          PolicyPremium: 1,
-          PolicyArea: 1,
-          PolicyType: 1,
-          LandSurveyNumber: 1,
-          LandDivisionNumber: 1,
-          IsSos: 1,
-          PlotStateName: 1,
-          PlotDistrictName: 1,
-          PlotVillageName: 1,
-          ApplicationSource: 1,
-          CropShare: 1,
-          IFSCCode: 1,
-          FarmerShare: 1,
-          SowingDate: 1,
-          LossDate: 1,
-          CreatedBY: 1,
-          InsertDateTime: 1,
-          Sos: 1,
-          TicketNCIPDocketNo: 1,
-          TicketDescription: 1,
-          CallingUniqueID: 1,
-          TicketTypeName: 1,
-          TicketReOpenDate: 1,
-          InsuranceCompany: 1,
-          SchemeName: 1,
-          // Unwinded lookups
-          ticketHistory: 1,
-          claimInfo: 1,
-          agentInfo: 1,
-          ticket_comment_journey: 1
-        }
-      },
+//       {
+//         $project: {
+//           SupportTicketID: 1,
+//           SupportTicketNo: 1,
+//           InsertUserID: 1,
+//           Created: 1,
+//           StatusUpdateTime: 1,
+//           TicketStatusID: 1,
+//           TicketStatus: 1,
+//           ApplicationNo: 1,
+//           InsurancePolicyNo: 1,
+//           CallerContactNumber: 1,
+//           RequestorName: 1,
+//           RequestorMobileNo: 1,
+//           StateMasterName: 1,
+//           DistrictMasterName: 1,
+//           SubDistrictName: 1,
+//           TicketHeadName: 1,
+//           TicketCategoryName: 1,
+//           RequestSeason: 1,
+//           RequestYear: 1,
+//           ApplicationCropName: 1,
+//           Relation: 1,
+//           RelativeName: 1,
+//           PolicyPremium: 1,
+//           PolicyArea: 1,
+//           PolicyType: 1,
+//           LandSurveyNumber: 1,
+//           LandDivisionNumber: 1,
+//           IsSos: 1,
+//           PlotStateName: 1,
+//           PlotDistrictName: 1,
+//           PlotVillageName: 1,
+//           ApplicationSource: 1,
+//           CropShare: 1,
+//           IFSCCode: 1,
+//           FarmerShare: 1,
+//           SowingDate: 1,
+//           LossDate: 1,
+//           CreatedBY: 1,
+//           InsertDateTime: 1,
+//           Sos: 1,
+//           TicketNCIPDocketNo: 1,
+//           TicketDescription: 1,
+//           CallingUniqueID: 1,
+//           TicketTypeName: 1,
+//           TicketReOpenDate: 1,
+//           InsuranceCompany: 1,
+//           SchemeName: 1,
+//           // Unwinded lookups
+//           ticketHistory: 1,
+//           claimInfo: 1,
+//           agentInfo: 1,
+//           ticket_comment_journey: 1
+//         }
+//       },
 
-      {
-        $project: {
-          _id: 0,
-          "Agent ID": "$agentInfo.UserID",
-          "Calling ID": "$CallingUniqueID",
-          "NCIP Docket No": "$TicketNCIPDocketNo",
-          "Ticket No": "$SupportTicketNo",
-          "Creation Date": "$InsertDateTime",
-          "Re-Open Date": "$TicketReOpenDate",
-          "Ticket Status": "$TicketStatus",
-          "Status Date": "$StatusUpdateTime",
-          "State": "$StateMasterName",
-          "District": "$DistrictMasterName",
-          "Type": "$TicketHeadName",
-          "Category": "$TicketTypeName",
-          "Sub Category": "$TicketCategoryName",
-          "Season": "$RequestSeason",
-          "Year": "$RequestYear",
-          "Insurance Company": "$InsuranceCompany",
-          "Application No": "$ApplicationNo",
-          "Policy No": "$InsurancePolicyNo",
-          "Caller Mobile No": "$CallerContactNumber",
-          "Farmer Name": "$RequestorName",
-          "Mobile No": "$RequestorMobileNo",
-          "Created By": "$CreatedBY",
-          "Description": "$TicketDescription",
-          "ticket_comment_journey": "$ticket_comment_journey"
-        }
-      },
-      {$sort:{
-        "Creation Date":-1
-      }},
+//       {
+//         $project: {
+//           _id: 0,
+//           "Agent ID": "$agentInfo.UserID",
+//           "Calling ID": "$CallingUniqueID",
+//           "NCIP Docket No": "$TicketNCIPDocketNo",
+//           "Ticket No": "$SupportTicketNo",
+//           "Creation Date": "$InsertDateTime",
+//           "Re-Open Date": "$TicketReOpenDate",
+//           "Ticket Status": "$TicketStatus",
+//           "Status Date": "$StatusUpdateTime",
+//           "State": "$StateMasterName",
+//           "District": "$DistrictMasterName",
+//           "Type": "$TicketHeadName",
+//           "Category": "$TicketTypeName",
+//           "Sub Category": "$TicketCategoryName",
+//           "Season": "$RequestSeason",
+//           "Year": "$RequestYear",
+//           "Insurance Company": "$InsuranceCompany",
+//           "Application No": "$ApplicationNo",
+//           "Policy No": "$InsurancePolicyNo",
+//           "Caller Mobile No": "$CallerContactNumber",
+//           "Farmer Name": "$RequestorName",
+//           "Mobile No": "$RequestorMobileNo",
+//           "Created By": "$CreatedBY",
+//           "Description": "$TicketDescription",
+//           "ticket_comment_journey": "$ticket_comment_journey"
+//         }
+//       },
+//       {$sort:{
+//         "Creation Date":-1
+//       }},
 
-      { $skip: (page - 1) * limit },
-      { $limit: limit }
-    ];
+//       { $skip: (page - 1) * limit },
+//       { $limit: limit }
+//     ];
 
-    let results = await db.collection('SLA_KRPH_SupportTickets_Records')
-      .aggregate(pipeline, { allowDiskUse: true })
-      .toArray();
-    if (results.length === 0) {
-      let data = {
-        msg:"No Record Found",
-        code:0
-      }
-      return {
-        data: results,
-         rmessage: data,
-        pagination: null,
-         code: 0,
-      };
+//     let results = await db.collection('SLA_KRPH_SupportTickets_Records')
+//       .aggregate(pipeline, { allowDiskUse: true })
+//       .toArray();
+//     if (results.length === 0) {
+//       let data = {
+//         msg:"No Record Found",
+//         code:0
+//       }
+//       return {
+//         data: results,
+//          rmessage: data,
+//         pagination: null,
+//          code: 0,
+//       };
+//     }
+
+//     results = Array.isArray(results) ? results : [results];
+
+// results.forEach(doc => {
+//   if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+//     const journey = doc.ticket_comment_journey;
+
+//     journey.forEach((commentObj) => {
+//       if (commentObj.InprogressDate && commentObj.InprogressComment) {
+//         const inProgressDate = this.formatToDDMMYYYY(commentObj.InprogressDate);
+//         const rawInProgressComment = commentObj.InprogressComment || '';
+//         const cleanInProgressComment = rawInProgressComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['In-Progress Date'] = inProgressDate;
+//         doc['In-Progress Comment'] = cleanInProgressComment === "" ? "NA" : cleanInProgressComment;
+//       } else {
+//         doc['In-Progress Date'] = "NA";
+//         doc['In-Progress Comment'] = "NA";
+//       }
+
+//       // Handle Resolved Date and Comment
+//       if (commentObj.ResolvedDate && commentObj.ResolvedComment) {
+//         const resolvedDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
+//         const rawResolvedComment = commentObj.ResolvedComment || '';
+//         const cleanResolvedComment = rawResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['Resolved-Date'] = resolvedDate;
+//         doc['Resolved Comment'] = cleanResolvedComment === "" ? "NA" : cleanResolvedComment;
+//       } else {
+//         doc['Resolved-Date'] = "NA";
+//         doc['Resolved Comment'] = "NA";
+//       }
+
+//       if (commentObj.ReOpenDate && commentObj.ReOpenComment) {
+//         const reOpenDate = this.formatToDDMMYYYY(commentObj.ReOpenDate);
+//         const rawReOpenComment = commentObj.ReOpenComment || '';
+//         const cleanReOpenComment = rawReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['Re-Open-Date'] = reOpenDate;
+//         doc['Re-Open Comment'] = cleanReOpenComment === "" ? "NA" : cleanReOpenComment;
+//       } else {
+//         doc['Re-Open-Date'] = "NA";
+//         doc['Re-Open Comment'] = "NA";
+//       }
+
+//       if (commentObj.Inprogress1Date && commentObj.Inprogress1Comment) {
+//         const inProgress1Date = this.formatToDDMMYYYY(commentObj.Inprogress1Date);
+//         const rawInProgress1Comment = commentObj.Inprogress1Comment || '';
+//         const cleanInProgress1Comment = rawInProgress1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['In-Progress Date 1'] = inProgress1Date;
+//         doc['In-Progress Comment 1'] = cleanInProgress1Comment === "" ? "NA" : cleanInProgress1Comment;
+//       } else {
+//         doc['In-Progress Date 1'] = "NA";
+//         doc['In-Progress Comment 1'] = "NA";
+//       }
+
+//       if (commentObj.Resolved1Date && commentObj.Resolved1Comment) {
+//         const resolved1Date = this.formatToDDMMYYYY(commentObj.Resolved1Date);
+//         const rawResolved1Comment = commentObj.Resolved1Comment || '';
+//         const cleanResolved1Comment = rawResolved1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['Resolved-Date 1'] = resolved1Date;
+//         doc['Resolved Comment 1'] = cleanResolved1Comment === "" ? "NA" : cleanResolved1Comment;
+//       } else {
+//         doc['Resolved-Date 1'] = "NA";
+//         doc['Resolved Comment 1'] = "NA";
+//       }
+
+//       if (commentObj.ReOpen1Date && commentObj.ReOpen1Comment) {
+//         const reOpen1Date = this.formatToDDMMYYYY(commentObj.ReOpen1Date);
+//         const rawReOpen1Comment = commentObj.ReOpen1Comment || '';
+//         const cleanReOpen1Comment = rawReOpen1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['Re-Open-Date 1'] = reOpen1Date;
+//         doc['Re-Open Comment 1'] = cleanReOpen1Comment === "" ? "NA" : cleanReOpen1Comment;
+//       } else {
+//         doc['Re-Open-Date 1'] = "NA";
+//         doc['Re-Open Comment 1'] = "NA";
+//       }
+
+//       if (commentObj.Inprogress2Date && commentObj.Inprogress2Comment) {
+//         const inProgress2Date = this.formatToDDMMYYYY(commentObj.Inprogress2Date);
+//         const rawInProgress2Comment = commentObj.Inprogress2Comment || '';
+//         const cleanInProgress2Comment = rawInProgress2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['In-Progress Date 2'] = inProgress2Date;
+//         doc['In-Progress Comment 2'] = cleanInProgress2Comment === "" ? "NA" : cleanInProgress2Comment;
+//       } else {
+//         doc['In-Progress Date 2'] = "NA";
+//         doc['In-Progress Comment 2'] = "NA";
+//       }
+
+//       if (commentObj.Resolved2Date && commentObj.Resolved2Comment) {
+//         const resolved2Date = this.formatToDDMMYYYY(commentObj.Resolved2Date);
+//         const rawResolved2Comment = commentObj.Resolved2Comment || '';
+//         const cleanResolved2Comment = rawResolved2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['Resolved-Date 2'] = resolved2Date;
+//         doc['Resolved Comment 2'] = cleanResolved2Comment === "" ? "NA" : cleanResolved2Comment;
+//       } else {
+//         doc['Resolved-Date 2'] = "NA";
+//         doc['Resolved Comment 2'] = "NA";
+//       }
+
+//       if (commentObj.ReOpen2Date && commentObj.ReOpen2Comment) {
+//         const reOpen2Date = this.formatToDDMMYYYY(commentObj.ReOpen2Date);
+//         const rawReOpen2Comment = commentObj.ReOpen2Comment || '';
+//         const cleanReOpen2Comment = rawReOpen2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+
+//         doc['Re-Open-Date 2'] = reOpen2Date;
+//         doc['Re-Open Comment 2'] = cleanReOpen2Comment === "" ? "NA" : cleanReOpen2Comment;
+//       } else {
+//         doc['Re-Open-Date 2'] = "NA";
+//         doc['Re-Open Comment 2'] = "NA";
+//       }
+//     });
+
+//    delete doc.ticket_comment_journey;
+//   } else {
+//     doc['In-Progress Date'] = "NA";
+//     doc['In-Progress Comment'] = "NA";
+//     doc['Resolved-Date'] = "NA";
+//     doc['Resolved Comment'] = "NA";
+//     doc['Re-Open-Date'] = "NA";
+//     doc['Re-Open Comment'] = "NA";
+//     doc['In-Progress Date 1'] = "NA";
+//     doc['In-Progress Comment 1'] = "NA";
+//     doc['Resolved-Date 1'] = "NA";
+//     doc['Resolved Comment 1'] = "NA";
+//     doc['Re-Open-Date 1'] = "NA";
+//     doc['Re-Open Comment 1'] = "NA";
+//     doc['In-Progress Date 2'] = "NA";
+//     doc['In-Progress Comment 2'] = "NA";
+//     doc['Resolved-Date 2'] = "NA";
+//     doc['Resolved Comment 2'] = "NA";
+//     doc['Re-Open-Date 2'] = "NA";
+//     doc['Re-Open Comment 2'] = "NA";
+//   }
+// });
+
+
+
+//     const responsePayload = {
+//       data: results,
+//       pagination: {
+//         total: totalCount,
+//         page,
+//         limit,
+//         totalPages,
+//         hasNextPage: page < totalPages,
+//         hasPrevPage: page > 1
+//       },
+//     };
+
+//     // await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+
+//     // if(results.length === 0){
+//     //    return {
+//     //   code: 0,
+//     //   rmessage: 'No Record Found',
+//     //   data: [],
+//     //   pagination: null,
+//     // };
+
+//     // }
+// let message = {
+//   msg:"Success",
+//   code:1
+// }
+//     return {
+//       data: results,
+//       rmessage:message,
+//       pagination: responsePayload.pagination,
+//       code: 1,
+//     };
+//   }
+
+
+
+async processTicketHistoryView(ticketPayload: any) {
+  let {
+    SPFROMDATE,
+    SPTODATE,
+    SPInsuranceCompanyID,
+    SPStateID,
+    SPTicketHeaderID,
+    SPUserID,
+    page = 1,
+    limit = 20,
+  } = ticketPayload;
+
+  SPTicketHeaderID = Number(SPTicketHeaderID);
+
+  const db = this.db;
+  this.AddIndexForSupportTickets(db);
+
+  if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
+  if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
+
+  const Delta = await this.getSupportTicketUserDetail(SPUserID);
+  const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+
+  const item = (responseInfo.data as any)?.user?.[0];
+  if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+
+  const userDetail = {
+    InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+    StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+    BRHeadTypeID: item.BRHeadTypeID,
+    LocationTypeID: item.LocationTypeID,
+  };
+
+  const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+
+  let locationFilter: any = {};
+
+  if (LocationTypeID === 1 && StateMasterID?.length) {
+    locationFilter = { FilterStateID: { $in: StateMasterID } };
+  } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+    locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+  }
+
+  const match: any = { ...locationFilter };
+
+  if (SPTicketHeaderID && SPTicketHeaderID !== 0) {
+    match.TicketHeaderID = SPTicketHeaderID;
+  }
+
+  if (SPInsuranceCompanyID && SPInsuranceCompanyID !== '#ALL') {
+    const requestedInsuranceIDs = SPInsuranceCompanyID.split(',').map(id => Number(id.trim()));
+    const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+    const validInsuranceIDs = requestedInsuranceIDs.filter(id => allowedInsuranceIDs.includes(id));
+
+    if (validInsuranceIDs.length === 0) {
+      return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
     }
 
-    results = Array.isArray(results) ? results : [results];
-
-results.forEach(doc => {
-  if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
-    const journey = doc.ticket_comment_journey;
-
-    journey.forEach((commentObj) => {
-      if (commentObj.InprogressDate && commentObj.InprogressComment) {
-        const inProgressDate = this.formatToDDMMYYYY(commentObj.InprogressDate);
-        const rawInProgressComment = commentObj.InprogressComment || '';
-        const cleanInProgressComment = rawInProgressComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['In-Progress Date'] = inProgressDate;
-        doc['In-Progress Comment'] = cleanInProgressComment === "" ? "NA" : cleanInProgressComment;
-      } else {
-        doc['In-Progress Date'] = "NA";
-        doc['In-Progress Comment'] = "NA";
-      }
-
-      // Handle Resolved Date and Comment
-      if (commentObj.ResolvedDate && commentObj.ResolvedComment) {
-        const resolvedDate = this.formatToDDMMYYYY(commentObj.ResolvedDate);
-        const rawResolvedComment = commentObj.ResolvedComment || '';
-        const cleanResolvedComment = rawResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['Resolved-Date'] = resolvedDate;
-        doc['Resolved Comment'] = cleanResolvedComment === "" ? "NA" : cleanResolvedComment;
-      } else {
-        doc['Resolved-Date'] = "NA";
-        doc['Resolved Comment'] = "NA";
-      }
-
-      // Handle ReOpen Date and Comment
-      if (commentObj.ReOpenDate && commentObj.ReOpenComment) {
-        const reOpenDate = this.formatToDDMMYYYY(commentObj.ReOpenDate);
-        const rawReOpenComment = commentObj.ReOpenComment || '';
-        const cleanReOpenComment = rawReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['Re-Open-Date'] = reOpenDate;
-        doc['Re-Open Comment'] = cleanReOpenComment === "" ? "NA" : cleanReOpenComment;
-      } else {
-        doc['Re-Open-Date'] = "NA";
-        doc['Re-Open Comment'] = "NA";
-      }
-
-      if (commentObj.Inprogress1Date && commentObj.Inprogress1Comment) {
-        const inProgress1Date = this.formatToDDMMYYYY(commentObj.Inprogress1Date);
-        const rawInProgress1Comment = commentObj.Inprogress1Comment || '';
-        const cleanInProgress1Comment = rawInProgress1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['In-Progress Date 1'] = inProgress1Date;
-        doc['In-Progress Comment 1'] = cleanInProgress1Comment === "" ? "NA" : cleanInProgress1Comment;
-      } else {
-        doc['In-Progress Date 1'] = "NA";
-        doc['In-Progress Comment 1'] = "NA";
-      }
-
-      if (commentObj.Resolved1Date && commentObj.Resolved1Comment) {
-        const resolved1Date = this.formatToDDMMYYYY(commentObj.Resolved1Date);
-        const rawResolved1Comment = commentObj.Resolved1Comment || '';
-        const cleanResolved1Comment = rawResolved1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['Resolved-Date 1'] = resolved1Date;
-        doc['Resolved Comment 1'] = cleanResolved1Comment === "" ? "NA" : cleanResolved1Comment;
-      } else {
-        doc['Resolved-Date 1'] = "NA";
-        doc['Resolved Comment 1'] = "NA";
-      }
-
-      if (commentObj.ReOpen1Date && commentObj.ReOpen1Comment) {
-        const reOpen1Date = this.formatToDDMMYYYY(commentObj.ReOpen1Date);
-        const rawReOpen1Comment = commentObj.ReOpen1Comment || '';
-        const cleanReOpen1Comment = rawReOpen1Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['Re-Open-Date 1'] = reOpen1Date;
-        doc['Re-Open Comment 1'] = cleanReOpen1Comment === "" ? "NA" : cleanReOpen1Comment;
-      } else {
-        doc['Re-Open-Date 1'] = "NA";
-        doc['Re-Open Comment 1'] = "NA";
-      }
-
-      if (commentObj.Inprogress2Date && commentObj.Inprogress2Comment) {
-        const inProgress2Date = this.formatToDDMMYYYY(commentObj.Inprogress2Date);
-        const rawInProgress2Comment = commentObj.Inprogress2Comment || '';
-        const cleanInProgress2Comment = rawInProgress2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['In-Progress Date 2'] = inProgress2Date;
-        doc['In-Progress Comment 2'] = cleanInProgress2Comment === "" ? "NA" : cleanInProgress2Comment;
-      } else {
-        doc['In-Progress Date 2'] = "NA";
-        doc['In-Progress Comment 2'] = "NA";
-      }
-
-      if (commentObj.Resolved2Date && commentObj.Resolved2Comment) {
-        const resolved2Date = this.formatToDDMMYYYY(commentObj.Resolved2Date);
-        const rawResolved2Comment = commentObj.Resolved2Comment || '';
-        const cleanResolved2Comment = rawResolved2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['Resolved-Date 2'] = resolved2Date;
-        doc['Resolved Comment 2'] = cleanResolved2Comment === "" ? "NA" : cleanResolved2Comment;
-      } else {
-        doc['Resolved-Date 2'] = "NA";
-        doc['Resolved Comment 2'] = "NA";
-      }
-
-      if (commentObj.ReOpen2Date && commentObj.ReOpen2Comment) {
-        const reOpen2Date = this.formatToDDMMYYYY(commentObj.ReOpen2Date);
-        const rawReOpen2Comment = commentObj.ReOpen2Comment || '';
-        const cleanReOpen2Comment = rawReOpen2Comment.replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
-
-        doc['Re-Open-Date 2'] = reOpen2Date;
-        doc['Re-Open Comment 2'] = cleanReOpen2Comment === "" ? "NA" : cleanReOpen2Comment;
-      } else {
-        doc['Re-Open-Date 2'] = "NA";
-        doc['Re-Open Comment 2'] = "NA";
-      }
-    });
-
-    delete doc.ticket_comment_journey;
+    match.InsuranceCompanyID = { $in: validInsuranceIDs };
   } else {
-    doc['In-Progress Date'] = "NA";
-    doc['In-Progress Comment'] = "NA";
-    doc['Resolved-Date'] = "NA";
-    doc['Resolved Comment'] = "NA";
-    doc['Re-Open-Date'] = "NA";
-    doc['Re-Open Comment'] = "NA";
-    doc['In-Progress Date 1'] = "NA";
-    doc['In-Progress Comment 1'] = "NA";
-    doc['Resolved-Date 1'] = "NA";
-    doc['Resolved Comment 1'] = "NA";
-    doc['Re-Open-Date 1'] = "NA";
-    doc['Re-Open Comment 1'] = "NA";
-    doc['In-Progress Date 2'] = "NA";
-    doc['In-Progress Comment 2'] = "NA";
-    doc['Resolved-Date 2'] = "NA";
-    doc['Resolved Comment 2'] = "NA";
-    doc['Re-Open-Date 2'] = "NA";
-    doc['Re-Open Comment 2'] = "NA";
+    if (InsuranceCompanyID?.length) {
+      match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
   }
-});
 
+  if (SPStateID && SPStateID !== '#ALL') {
+    const requestedStateIDs = SPStateID.split(',').map(id => Number(id.trim()));
+    const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
 
-    const responsePayload = {
-      data: results,
-      pagination: {
-        total: totalCount,
-        page,
-        limit,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
-      },
-    };
+    if (validStateIDs.length === 0) {
+      return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
+    }
 
-    // await this.redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+    match.FilterStateID = { $in: validStateIDs };
+  } else if (StateMasterID?.length && LocationTypeID !== 2) {
+    match.FilterStateID = { $in: StateMasterID.map(Number) };
+  }
 
-    // if(results.length === 0){
-    //    return {
-    //   code: 0,
-    //   rmessage: 'No Record Found',
-    //   data: [],
-    //   pagination: null,
-    // };
+  if (SPFROMDATE || SPTODATE) {
+    match.InsertDateTime = {};
+    if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`);
+    if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`);
+  }
 
-    // }
-let message = {
-  msg:"Success",
-  code:1
-}
+  const totalCount = await db.collection('SLA_KRPH_SupportTickets_Records').countDocuments(match);
+  const totalPages = Math.ceil(totalCount / limit);
+
+  const pipeline: any[] = [
+    { $match: match },
+    { $sort: { InsertDateTime: -1 } },
+    {
+      $group: {
+        _id: "$SupportTicketNo",
+        doc: { $first: "$$ROOT" }
+      }
+    },
+    { $replaceRoot: { newRoot: "$doc" } },
+
+    {
+      $lookup: {
+        from: 'support_ticket_claim_intimation_report_history',
+        let: { ticketNo: '$SupportTicketNo' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$SupportTicketNo', '$$ticketNo'] } } },
+          { $sort: { InsertDateTime: -1 } },
+          { $limit: 1 }
+        ],
+        as: 'claimInfo'
+      }
+    },
+    { $unwind: { path: '$claimInfo', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'csc_agent_master',
+        let: { userLoginId: '$InsertUserID' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$UserLoginID', '$$userLoginId'] } } },
+          { $limit: 1 }
+        ],
+        as: 'agentInfo'
+      }
+    },
+    { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+
+    {
+      "$lookup": {
+        "from": "ticket_comment_journey",
+        "localField": "SupportTicketNo",
+        "foreignField": "SupportTicketNo",
+        "as": "ticket_comment_journey",
+        "pipeline": [
+          { "$sort": { "CreatedDate": -1 } },
+          {
+            "$group": {
+              "_id": "$ResolvedComment",
+              "unique_comments": { "$first": "$$ROOT" }
+            }
+          },
+          { "$replaceRoot": { "newRoot": "$unique_comments" } }
+        ]
+      }
+    },
+
+    {
+      $project: {
+        _id: 0,
+        "Agent ID": "$agentInfo.UserID",
+        "Calling ID": "$CallingUniqueID",
+        "NCIP Docket No": "$TicketNCIPDocketNo",
+        "Ticket No": "$SupportTicketNo",
+        "Creation Date": "$InsertDateTime",
+        "Re-Open Date": "$TicketReOpenDate",
+        "Ticket Status": "$TicketStatus",
+        "Status Date": "$StatusUpdateTime",
+        "State": "$StateMasterName",
+        "District": "$DistrictMasterName",
+        "Type": "$TicketHeadName",
+        "Category": "$TicketTypeName",
+        "Sub Category": "$TicketCategoryName",
+        "Season": "$RequestSeason",
+        "Year": "$RequestYear",
+        "Insurance Company": "$InsuranceCompany",
+        "Application No": "$ApplicationNo",
+        "Policy No": "$InsurancePolicyNo",
+        "Caller Mobile No": "$CallerContactNumber",
+        "Farmer Name": "$RequestorName",
+        "Mobile No": "$RequestorMobileNo",
+        "Created By": "$CreatedBY",
+        "Description": "$TicketDescription",
+        "ticket_comment_journey": "$ticket_comment_journey"
+      }
+    },
+    { $sort: { "Creation Date": -1 } },
+    { $skip: (page - 1) * limit },
+    { $limit: limit }
+  ];
+
+  let results = await db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true }).toArray();
+
+  if (results.length === 0) {
     return {
       data: results,
-      rmessage:message,
-      pagination: responsePayload.pagination,
-      code: 1,
+      rmessage: { msg: "No Record Found", code: 0 },
+      pagination: null,
+      code: 0,
     };
   }
+
+  results = Array.isArray(results) ? results : [results];
+
+  results.forEach(doc => {
+    if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+      const journey = doc.ticket_comment_journey;
+      journey.forEach((commentObj) => {
+        const fields = [
+          ['InprogressDate', 'InprogressComment', 'In-Progress Date', 'In-Progress Comment'],
+          ['ResolvedDate', 'ResolvedComment', 'Resolved-Date', 'Resolved Comment'],
+          ['ReOpenDate', 'ReOpenComment', 'Re-Open-Date', 'Re-Open Comment'],
+          ['Inprogress1Date', 'Inprogress1Comment', 'In-Progress Date 1', 'In-Progress Comment 1'],
+          ['Resolved1Date', 'Resolved1Comment', 'Resolved-Date 1', 'Resolved Comment 1'],
+          ['ReOpen1Date', 'ReOpen1Comment', 'Re-Open-Date 1', 'Re-Open Comment 1'],
+          ['Inprogress2Date', 'Inprogress2Comment', 'In-Progress Date 2', 'In-Progress Comment 2'],
+          ['Resolved2Date', 'Resolved2Comment', 'Resolved-Date 2', 'Resolved Comment 2'],
+          ['ReOpen2Date', 'ReOpen2Comment', 'Re-Open-Date 2', 'Re-Open Comment 2'],
+        ];
+
+        fields.forEach(([dateField, commentField, outDate, outComment]) => {
+          if (commentObj[dateField] && commentObj[commentField]) {
+            const formattedDate = this.formatToDDMMYYYY(commentObj[dateField]);
+            const cleanComment = (commentObj[commentField] || '').replace(/<\/?[^>]+(>|$)/g, '').trim() || 'NA';
+            doc[outDate] = formattedDate;
+            doc[outComment] = cleanComment === "" ? "NA" : cleanComment;
+          } else {
+            doc[outDate] = "NA";
+            doc[outComment] = "NA";
+          }
+        });
+      });
+      delete doc.ticket_comment_journey;
+    } else {
+      const keys = [
+        'In-Progress Date', 'In-Progress Comment', 'Resolved-Date', 'Resolved Comment', 'Re-Open-Date', 'Re-Open Comment',
+        'In-Progress Date 1', 'In-Progress Comment 1', 'Resolved-Date 1', 'Resolved Comment 1', 'Re-Open-Date 1', 'Re-Open Comment 1',
+        'In-Progress Date 2', 'In-Progress Comment 2', 'Resolved-Date 2', 'Resolved Comment 2', 'Re-Open-Date 2', 'Re-Open Comment 2'
+      ];
+      keys.forEach(key => doc[key] = "NA");
+    }
+  });
+
+  const message = { msg: "Success", code: 1 };
+  return {
+    data: results,
+    rmessage: message,
+    pagination: {
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1
+    },
+    code: 1,
+  };
+}
+
+
+
+async AddIndexForSupportTickets(db: any) {
+  await db.collection('SLA_KRPH_SupportTickets_Records').createIndexes([
+    { key: { SupportTicketNo: 1 }, name: 'idx_SupportTicketNo' },
+    { key: { InsertDateTime: -1 }, name: 'idx_InsertDateTime' },
+    { key: { InsuranceCompanyID: 1 }, name: 'idx_InsuranceCompanyID' },
+    { key: { FilterStateID: 1 }, name: 'idx_FilterStateID' },
+    { key: { TicketHeaderID: 1 }, name: 'idx_TicketHeaderID' },
+    { key: { FilterDistrictRequestorID: 1 }, name: 'idx_FilterDistrictRequestorID' },
+    {
+      key: {
+        InsuranceCompanyID: 1,
+        FilterStateID: 1,
+        InsertDateTime: -1
+      },
+      name: 'compound_idx_main_filter'
+    }
+  ]);
+
+  await db.collection('support_ticket_claim_intimation_report_history').createIndex(
+    { SupportTicketNo: 1 },
+    { name: 'idx_claim_SupportTicketNo' }
+  );
+
+  await db.collection('csc_agent_master').createIndex(
+    { UserLoginID: 1 },
+    { name: 'idx_agent_UserLoginID' }
+  );
+
+  await db.collection('ticket_comment_journey').createIndex(
+    { SupportTicketNo: 1, CreatedDate: -1 },
+    { name: 'idx_ticket_comment_journey_ticketNo' }
+  );
+}
+
 
 
 
