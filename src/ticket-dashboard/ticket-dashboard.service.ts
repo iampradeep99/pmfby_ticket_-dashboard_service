@@ -1358,10 +1358,10 @@ async AddIndexForSupportTickets(db: any) {
 
  
 
-  await db.collection('ticket_comment_journey').createIndex(
-    { SupportTicketNo: 1, CreatedDate: -1 },
-    { name: 'idx_ticket_comment_journey_ticketNo' }
-  );
+  // await db.collection('ticket_comment_journey').createIndex(
+  //   { SupportTicketNo: 1, CreatedDate: -1 },
+  //   { name: 'idx_ticket_comment_journey_ticketNo' }
+  // );
 }
 
 
