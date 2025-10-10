@@ -145,12 +145,11 @@ WHERE TicketHeaderID = 4
 
     // Email report
     const to = ['pmfbysystems@gmail.com'];
-    const subject = 'Support Ticket listing Data Update Completed';
+    const subject = 'Docket Number Updation For SLA_ticket_listing';
 
     const text = `
 Hello,
-
-The Support Ticket listing data update process has completed.
+Docket Number Updation For SLA_ticket_listing has completed.
 
 Total Rows from MySQL: ${totalRows}
 Total Existing Documents Updated: ${totalUpdated}
@@ -162,7 +161,8 @@ Your Automation System
 
     const html = `
 <p>Hello,</p>
-<p><strong>The Support Ticket listing data update process has completed.</strong></p>
+<p><strong>Docket Number Updation For SLA_ticket_listing has completed.
+</strong></p>
 <p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
 <p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
 <p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
