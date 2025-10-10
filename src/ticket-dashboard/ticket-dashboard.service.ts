@@ -1263,7 +1263,7 @@ async processTicketHistoryView(ticketPayload: any) {
     }
   ];
 
-  const aggregateResult = await db.collection('SLA_Ticket_listing').aggregate(pipeline, { allowDiskUse: true }).toArray();
+  const aggregateResult = await db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true }).toArray();
 
   const results = aggregateResult[0]?.data || [];
   const totalCount = aggregateResult[0]?.total || 0;
@@ -1358,10 +1358,10 @@ async AddIndexForSupportTickets(db: any) {
 
  
 
-  // await db.collection('ticket_comment_journey').createIndex(
-  //   { SupportTicketNo: 1, CreatedDate: -1 },
-  //   { name: 'idx_ticket_comment_journey_ticketNo' }
-  // );
+  await db.collection('ticket_comment_journey').createIndex(
+    { SupportTicketNo: 1, CreatedDate: -1 },
+    { name: 'idx_ticket_comment_journey_ticketNo' }
+  );
 }
 
 
