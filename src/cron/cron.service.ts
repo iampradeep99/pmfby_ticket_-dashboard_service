@@ -56,7 +56,7 @@ async handleCronUpdateDocketNumber() {
    
 //   }
 
-  @Cron('*/15 * * * *')
+  @Cron('0 * * * *')
   async handleCronUpdateDocketNumberForTicketHistory() {
     console.log('⏰ Cron running every 15 minutes');
 
