@@ -13,48 +13,48 @@ export class CronService {
     private mailService: MailService
   ) {}
 
-//  @Cron('0 */15 * * * *') // every 15 minutes
-// async handleCron() {
-//   console.log('⏰ Cron running every 15 minutes');
-//   this.SupportTicketInsertCronForTicketListing()
-//     .then((msg) => {
-//       console.log(msg);
-//     })
-//     .catch(err => console.error('❌ Cron failed:', err));
-// }
+ @Cron('0 */15 * * * *') // every 15 minutes
+async handleCron() {
+  console.log('⏰ Cron running every 15 minutes');
+  this.SupportTicketInsertCronForTicketListing()
+    .then((msg) => {
+      console.log(msg);
+    })
+    .catch(err => console.error('❌ Cron failed:', err));
+}
 
-//   @Cron(CronExpression.EVERY_HOUR)
-//   async handleCronUpdate() {
-//     console.log('⏰ Cron running every 30s');
-//     this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
-//             console.log(response)
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleCronUpdate() {
+    console.log('⏰ Cron running every 30s');
+    this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
+            console.log(response)
            
-//         }) .catch(err => console.error('❌ Cron failed:', err));
+        }) .catch(err => console.error('❌ Cron failed:', err));
     
    
-//   }
+  }
 
-// @Cron(CronExpression.EVERY_2_HOURS)
-// async handleCronUpdateDocketNumber() {
-//   console.log('⏰ Cron running every 2 hours');
-//   try {
-//     const response = await this.supportTicketSyncingUpdateForDocketNumber();
-//     console.log(response);
-//   } catch (err) {
-//     console.error('❌ Cron failed:', err);
-//   }
-// }
+@Cron(CronExpression.EVERY_2_HOURS)
+async handleCronUpdateDocketNumber() {
+  console.log('⏰ Cron running every 2 hours');
+  try {
+    const response = await this.supportTicketSyncingUpdateForDocketNumber();
+    console.log(response);
+  } catch (err) {
+    console.error('❌ Cron failed:', err);
+  }
+}
 
 
-//     @Cron(CronExpression.EVERY_HOUR)
-//   async handleCronUpdateDocketNumberForTicketHistory() {
-//     console.log('⏰ Cron running every 30s');
-//     this.supportTicketSyncingUpdateForDocketNumberForTicketHistory().then((response)=>{
-//             console.log(response)
-//         }) .catch(err => console.error('❌ Cron failed:', err));
+    @Cron(CronExpression.EVERY_HOUR)
+  async handleCronUpdateDocketNumberForTicketHistory() {
+    console.log('⏰ Cron running every 30s');
+    this.supportTicketSyncingUpdateForDocketNumberForTicketHistory().then((response)=>{
+            console.log(response)
+        }) .catch(err => console.error('❌ Cron failed:', err));
     
    
-//   }
+  }
 
   
 
