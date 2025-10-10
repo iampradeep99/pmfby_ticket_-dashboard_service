@@ -1264,7 +1264,7 @@ async processTicketHistoryView(ticketPayload: any) {
   ];
 
   const aggregateResult = await db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true }).toArray();
-
+console.log("test")
   const results = aggregateResult[0]?.data || [];
   const totalCount = aggregateResult[0]?.total || 0;
   const totalPages = Math.ceil(totalCount / limit);
