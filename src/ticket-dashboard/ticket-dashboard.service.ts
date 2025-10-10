@@ -1093,7 +1093,7 @@ async processTicketHistoryView(ticketPayload: any) {
   SPTicketHeaderID = Number(SPTicketHeaderID);
 
   const db = this.db;
-  // this.AddIndexForSupportTickets(db);
+  this.AddIndexForSupportTickets(db);
 
   if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
   if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
@@ -1263,7 +1263,7 @@ async processTicketHistoryView(ticketPayload: any) {
     }
   ];
 
-  const aggregateResult = await db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true }).toArray();
+  const aggregateResult = await db.collection('SLA_Ticket_listing').aggregate(pipeline, { allowDiskUse: true }).toArray();
 
   const results = aggregateResult[0]?.data || [];
   const totalCount = aggregateResult[0]?.total || 0;
