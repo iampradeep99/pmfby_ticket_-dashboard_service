@@ -46,14 +46,26 @@ async handleCronUpdateDocketNumber() {
 }
 
 
-@Cron(CronExpression.EVERY_HOUR)
-  async handleCronUpdateDocketNumberForTicketHistory() {
-    console.log('⏰ Cron running every 30s');
-    this.supportTicketSyncingUpdateForDocketNumberForTicketHistory().then((response)=>{
-            console.log(response)
-        }) .catch(err => console.error('❌ Cron failed:', err));
+// @Cron(CronExpression.EVERY_HOUR)
+//   async handleCronUpdateDocketNumberForTicketHistory() {
+//     console.log('⏰ Cron running every 30s');
+//     this.supportTicketSyncingUpdateForDocketNumberForTicketHistory().then((response)=>{
+//             console.log(response)
+//         }) .catch(err => console.error('❌ Cron failed:', err));
     
    
+//   }
+
+  @Cron('*/15 * * * *')
+  async handleCronUpdateDocketNumberForTicketHistory() {
+    console.log('⏰ Cron running every 15 minutes');
+
+    try {
+      const response = await this.supportTicketSyncingUpdateForDocketNumberForTicketHistory();
+      console.log(response);
+    } catch (err) {
+      console.error('❌ Cron failed:', err);
+    }
   }
 
   
