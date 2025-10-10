@@ -831,7 +831,7 @@ async  GetDetailsForDistrictUsers(userID:any) {
 
 
 
-async processTicketHistoryViewWorking(ticketPayload: any) {
+async processTicketHistoryView(ticketPayload: any) {
   let {
     SPFROMDATE,
     SPTODATE,
@@ -847,6 +847,8 @@ async processTicketHistoryViewWorking(ticketPayload: any) {
 
   const db = this.db;
   // this.AddIndexForSupportTickets(db);
+  this.AddIndexForSupportTickets(db);
+
 
   if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
   if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
@@ -1134,7 +1136,7 @@ async processTicketHistoryViewWorking(ticketPayload: any) {
   };
 }
 
-async processTicketHistoryView(ticketPayload: any) {
+async processTicketHistoryViewFacet(ticketPayload: any) {
   let {
     SPFROMDATE,
     SPTODATE,
