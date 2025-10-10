@@ -72,9 +72,12 @@ async handleCronUpdateDocketNumber() {
 
     // Step 1: Count rows in MySQL
     const [countResult]: any = await this.sequelize.query(`
-      SELECT COUNT(*) as totalCount
-      FROM mergeticketlisting 
-      WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+         SELECT COUNT(*) AS totalCount
+FROM mergeticketlisting
+WHERE TicketHeaderID = 4
+  AND TicketNCIPDocketNo IS NOT NULL
+  AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
+  AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
     `, { type: QueryTypes.SELECT });
 
     const totalRows: number = countResult?.totalCount || 0;
@@ -93,9 +96,11 @@ async handleCronUpdateDocketNumber() {
       console.log("➡️ Processing batch with offset:", offset);
 
       const rows: any[] = await this.sequelize.query(`
-        SELECT TicketNCIPDocketNo, TicketHeaderID, InsertDateTime, SupportTicketID, SupportTicketNo 
+        SELECT TicketNCIPDocketNo, TicketHeaderID, SupportTicketID
         FROM krishi_rakshak_pro.mergeticketlisting 
         WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+         AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
+  AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
         LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
       `, { type: QueryTypes.SELECT });
 
@@ -140,12 +145,11 @@ async handleCronUpdateDocketNumber() {
 
     // Email report
     const to = ['pmfbysystems@gmail.com'];
-    const subject = 'Support Ticket listing Data Update Completed';
+    const subject = 'Docket Number Updation For SLA_ticket_listing';
 
     const text = `
 Hello,
-
-The Support Ticket listing data update process has completed.
+Docket Number Updation For SLA_ticket_listing has completed.
 
 Total Rows from MySQL: ${totalRows}
 Total Existing Documents Updated: ${totalUpdated}
@@ -157,7 +161,8 @@ Your Automation System
 
     const html = `
 <p>Hello,</p>
-<p><strong>The Support Ticket listing data update process has completed.</strong></p>
+<p><strong>Docket Number Updation For SLA_ticket_listing has completed.
+</strong></p>
 <p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
 <p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
 <p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
@@ -185,10 +190,20 @@ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<strin
     console.log("📂 Connected to MongoDB collection: SLA_KRPH_SupportTickets_Records");
 
     console.log("🧮 Counting total rows from MySQL...");
+    // const [countResult]: any = await this.sequelize.query(`
+    //   SELECT COUNT(*) as totalCount
+    //   FROM mergeticketlisting 
+    //   WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+    // `, { type: QueryTypes.SELECT });
+
+
     const [countResult]: any = await this.sequelize.query(`
-      SELECT COUNT(*) as totalCount
-      FROM mergeticketlisting 
-      WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+     SELECT COUNT(*) AS totalCount
+FROM mergeticketlisting
+WHERE TicketHeaderID = 4
+  AND TicketNCIPDocketNo IS NOT NULL
+  AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
+  AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
     `, { type: QueryTypes.SELECT });
 
     const totalRows: number = countResult?.totalCount || 0;
@@ -212,6 +227,8 @@ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<strin
         SELECT TicketNCIPDocketNo, TicketHeaderID, SupportTicketID
         FROM krishi_rakshak_pro.mergeticketlisting 
         WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
+         AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
+  AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
         LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
       `, { type: QueryTypes.SELECT });
 
