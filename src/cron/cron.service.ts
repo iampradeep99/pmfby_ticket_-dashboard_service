@@ -46,9 +46,9 @@ async handleCronUpdateDocketNumber() {
 }
 
 
-@Cron(CronExpression.EVERY_15_MINUTES)
+@Cron(CronExpression.EVERY_HOUR)
   async handleCronUpdateDocketNumberForTicketHistory() {
-    console.log('Pradeep Test Cron');
+    console.log('⏰ Cron running every 30s');
     this.supportTicketSyncingUpdateForDocketNumberForTicketHistory().then((response)=>{
             console.log(response)
         }) .catch(err => console.error('❌ Cron failed:', err));
