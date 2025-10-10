@@ -181,6 +181,20 @@ const excelFilePath = path.join(folderPath, excelFileName);
     { header: 'Plot District', key: 'PlotDistrictName', width: 20 },
     { header: 'Plot Village', key: 'PlotVillageName', width: 20 },
     { header: 'Application Source', key: 'ApplicationSource', width: 20 },
+
+    // added fields
+    { header: 'Other Sub Category', key: 'CropCategoryOthers', width: 20 },
+    { header: 'Crop Stage Type', key: 'CropStage', width: 20 },
+    { header: 'Loss At', key: 'LossDate', width: 20 },
+    { header: 'Intimation', key: 'OnTimeIntimationFlag', width: 20 },
+    { header: 'Harvest Date', key: 'PostHarvestDate', width: 20 },
+
+
+
+
+
+    //
+
     { header: 'Crop Share', key: 'CropShare', width: 20 },
     { header: 'IFSC Code', key: 'IFSCCode', width: 20 },
     { header: 'Farmer Share', key: 'FarmerShare', width: 20 },
@@ -552,13 +566,17 @@ for (const doc of docs) {
     PlotDistrictName: doc.PlotDistrictName || '',
     PlotVillageName: doc.PlotVillageName || '',
     ApplicationSource: doc.ApplicationSource || '',
+    CropCategoryOthers:doc.CropCategoryOthers || '',
+    CropStage:doc.CropStage || '',
+    LossDate:doc.LossDate ? formatDate(doc.LossDate) : '',
+    OnTimeIntimationFlag:doc.OnTimeIntimationFlag || '',
+    PostHarvestDate:doc.PostHarvestDate ? formatDate(doc.PostHarvestDate) : '',
     CropShare: doc.CropShare || '',
     IFSCCode: doc.IFSCCode || '',
     FarmerShare: doc.FarmerShare || '',
     SowingDate: doc.SowingDate || '',
     CreatedBY: doc.CreatedBY || '',
     TicketDescription: doc.TicketDescription || '',
-   
 
     ...dynamicColumnsBatch
   }).commit();
