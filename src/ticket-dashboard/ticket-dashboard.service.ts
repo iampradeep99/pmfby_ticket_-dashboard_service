@@ -847,7 +847,7 @@ async processTicketHistoryView(ticketPayload: any) {
 
   const db = this.db;
   // this.AddIndexForSupportTickets(db);
-  this.AddIndexForSupportTickets(db);
+  // this.AddIndexForSupportTickets(db);
 
 
   if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
