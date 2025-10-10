@@ -923,6 +923,8 @@ async processTicketHistoryView(ticketPayload: any) {
   const pipeline: any[] = [
     { $match: match },
     { $sort: { InsertDateTime: -1 } },
+      { $skip: (page - 1) * limit },
+    { $limit: limit },
     {
       $group: {
         _id: "$SupportTicketNo",
@@ -1063,11 +1065,12 @@ async processTicketHistoryView(ticketPayload: any) {
           "ticket_comment_journey": "$ticket_comment_journey"
         }
       },
-    { $sort: { "Creation Date": -1 } },
-    { $skip: (page - 1) * limit },
-    { $limit: limit }
+    // { $sort: { "Creation Date": -1 } },
+    // { $skip: (page - 1) * limit },
+    // { $limit: limit }
   ];
-
+  console.log(JSON.stringify(pipeline), "test")
+  // return
   let results = await db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true }).toArray();
 
   if (results.length === 0) {
