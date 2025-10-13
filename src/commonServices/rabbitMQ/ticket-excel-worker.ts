@@ -12,6 +12,8 @@ import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from '../
 import { UtilService } from "../../commonServices/utilService";
 import { RedisWrapper } from '../../commonServices/redisWrapper';
 import { MailService } from '../../mail/mail.service';
+    import moment from 'moment';
+
 // import axios from 'axios'
 import { MongoClient, Db } from 'mongodb';
 const redisWrapper = new RedisWrapper()
@@ -237,7 +239,7 @@ worksheet.columns = staticColumns.concat(dynamicColumns);
     return `${day}-${month}-${year} ${hours}:${minutes}`;
   }
 
-  async function processDateWithChunking(currentDate: Date, endDate: Date) {
+  /* async function processDateWithChunking(currentDate: Date, endDate: Date) {
     if (currentDate > endDate) return;
 
     const startOfDay = new Date(currentDate);
@@ -497,7 +499,243 @@ for (const doc of docs) {
     const nextDate = new Date(currentDate);
     nextDate.setDate(nextDate.getDate() + 1);
     await processDateWithChunking(nextDate, endDate);
+  } */
+
+
+async function processDateWithChunking(currentDate: Date, endDate: Date) {
+  if (moment(currentDate).isAfter(endDate, 'day')) return;
+
+  // Set start and end of the current day in UTC
+  const startOfDay = moment(currentDate).utc().startOf('day').toDate();
+  const endOfDay = moment(currentDate).utc().endOf('day').toDate();
+
+  let skip = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: startOfDay, $lte: endOfDay } };
+    const pipeline: any[] = [
+      { $match: dailyMatch },
+      { $sort: { InsertDateTime: -1 } },
+
+      {
+        $group: {
+          _id: "$SupportTicketNo",
+          doc: { $first: "$$ROOT" }
+        }
+      },
+      { $replaceRoot: { newRoot: "$doc" } },
+
+      {
+        $lookup: {
+          from: "SLA_KRPH_SupportTicketsHistory_Records",
+          let: { ticketId: "$SupportTicketID" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$SupportTicketID", "$$ticketId"] },
+                    { $eq: ["$TicketStatusID", 109304] }
+                  ]
+                }
+              }
+            },
+            { $sort: { TicketHistoryID: -1 } },
+            { $limit: 1 }
+          ],
+          as: "ticketHistory"
+        }
+      },
+      { $unwind: { path: "$ticketHistory", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "support_ticket_claim_intimation_report_history",
+          let: { ticketNo: "$SupportTicketNo" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$SupportTicketNo", "$$ticketNo"] } } },
+            { $sort: { InsertDateTime: -1 } },
+            { $limit: 1 }
+          ],
+          as: "claimInfo"
+        }
+      },
+      { $unwind: { path: "$claimInfo", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "csc_agent_master",
+          let: { userLoginId: "$InsertUserID" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$UserLoginID", "$$userLoginId"] } } },
+            { $limit: 1 }
+          ],
+          as: "agentInfo"
+        }
+      },
+      { $unwind: { path: "$agentInfo", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "ticket_comment_journey",
+          localField: "SupportTicketNo",
+          foreignField: "SupportTicketNo",
+          as: "ticket_comment_journey",
+          pipeline: [
+            { $sort: { CreatedDate: -1 } },
+            {
+              $group: {
+                _id: "$ResolvedComment",
+                unique_comments: { $first: "$$ROOT" }
+              }
+            },
+            { $replaceRoot: { newRoot: "$unique_comments" } }
+          ]
+        }
+      },
+
+      { $skip: skip },
+      { $limit: CHUNK_SIZE }
+    ];
+
+    const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
+    const docs = await cursor.toArray();
+
+    for (const doc of docs) {
+      const dynamicColumnsBatch: any = {};
+
+      function buildTicketCommentJourneyFromDoc(source: any) {
+        const journey: any[] = [];
+
+        for (let i = 0; i < 3; i++) {
+          const suffix = i === 0 ? '' : `${i}`;
+
+          const inprogressDate = source[`Inprogress${suffix}Date`] ? (source[`Inprogress${suffix}Date`].$date || source[`Inprogress${suffix}Date`]) : null;
+          const inprogressComment = source[`Inprogress${suffix}Comment`] || null;
+
+          const resolvedDate = source[`Resolved${suffix}Date`] ? (source[`Resolved${suffix}Date`].$date || source[`Resolved${suffix}Date`]) : null;
+          const resolvedComment = source[`Resolved${suffix}Comment`] || null;
+
+          const reopenDate = source[`ReOpen${suffix}Date`] ? (source[`ReOpen${suffix}Date`].$date || source[`ReOpen${suffix}Date`]) : null;
+          const reopenComment = source[`ReOpen${suffix}Comment`] || null;
+
+          if (inprogressDate || inprogressComment || resolvedDate || resolvedComment || reopenDate || reopenComment) {
+            journey.push({
+              InprogressDate: inprogressDate,
+              InprogressComment: inprogressComment,
+              ResolvedDate: resolvedDate,
+              ResolvedComment: resolvedComment,
+              ReOpenDate: reopenDate,
+              ReOpenComment: reopenComment,
+            });
+          }
+        }
+
+        return journey;
+      }
+
+      const journey = (() => {
+        if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+          return buildTicketCommentJourneyFromDoc(doc.ticket_comment_journey[0]);
+        } else {
+          return buildTicketCommentJourneyFromDoc(doc);
+        }
+      })();
+
+      for (let idx = 0; idx < 3; idx++) {
+        const commentObj = journey[idx] || {};
+        const suffix = idx === 0 ? '' : `${idx}`;
+
+        const inProgressDate = commentObj.InprogressDate ? formatToDDMMYYYY(commentObj.InprogressDate) : 'NA';
+        const inProgressComment = commentObj.InprogressComment ? commentObj.InprogressComment.replace(/<\/?[^>]+(>|$)/g, '').trim() : 'NA';
+        dynamicColumnsBatch[`In-Progress Date${suffix}`] = inProgressDate;
+        dynamicColumnsBatch[`In-Progress Comment${suffix}`] = inProgressComment;
+
+        const resolvedDate = commentObj.ResolvedDate ? formatToDDMMYYYY(commentObj.ResolvedDate) : 'NA';
+        const resolvedComment = commentObj.ResolvedComment ? commentObj.ResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim() : 'NA';
+        dynamicColumnsBatch[`Resolved Date${suffix}`] = resolvedDate;
+        dynamicColumnsBatch[`Resolved Comment${suffix}`] = resolvedComment;
+
+        const reOpenDate = commentObj.ReOpenDate ? formatToDDMMYYYY(commentObj.ReOpenDate) : 'NA';
+        const reOpenComment = commentObj.ReOpenComment ? commentObj.ReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim() : 'NA';
+        dynamicColumnsBatch[`Re-Open Date${suffix}`] = reOpenDate;
+        dynamicColumnsBatch[`Re-Open Comment${suffix}`] = reOpenComment;
+      }
+
+      if (journey.length < 3) {
+        for (let i = journey.length; i < 3; i++) {
+          const suffix = i === 0 ? '' : `${i}`;
+
+          dynamicColumnsBatch[`In-Progress Date${suffix}`] = 'NA';
+          dynamicColumnsBatch[`In-Progress Comment${suffix}`] = 'NA';
+          dynamicColumnsBatch[`Resolved Date${suffix}`] = 'NA';
+          dynamicColumnsBatch[`Resolved Comment${suffix}`] = 'NA';
+          dynamicColumnsBatch[`Re-Open Date${suffix}`] = 'NA';
+          dynamicColumnsBatch[`Re-Open Comment${suffix}`] = 'NA';
+        }
+      }
+
+      worksheet.addRow({
+        AgentID: doc.agentInfo?.UserID?.toString() || '',
+        CallingUniqueID: doc.CallingUniqueID || '',
+        TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
+        SupportTicketNo: doc.SupportTicketNo?.toString() || '',
+        Created: doc.Created ? formatDate(doc.Created) : '',
+        TicketReOpenDate: doc.TicketReOpenDate || '',
+        TicketStatus: doc.TicketStatus || '',
+        StatusUpdateTime: doc.StatusUpdateTime ? formatDate(doc.StatusUpdateTime) : '',
+        StateMasterName: doc.StateMasterName || '',
+        DistrictMasterName: doc.DistrictMasterName || '',
+        SubDistrictName: doc.SubDistrictName || '',
+        TicketHeadName: doc.TicketHeadName || '',
+        TicketTypeName: doc.TicketTypeName || '',
+        TicketCategoryName: doc.TicketCategoryName || '',
+        CropSeasonName: doc.CropSeasonName || '',
+        RequestYear: doc.RequestYear || '',
+        InsuranceCompany: doc.InsuranceCompany || '',
+        ApplicationNo: doc.ApplicationNo || '',
+        InsurancePolicyNo: doc.InsurancePolicyNo || '',
+        CallerContactNumber: doc.CallerContactNumber || '',
+        RequestorName: doc.RequestorName || '',
+        RequestorMobileNo: doc.RequestorMobileNo || '',
+        Relation: doc.Relation || '',
+        RelativeName: doc.RelativeName || '',
+        PolicyPremium: doc.PolicyPremium || '',
+        PolicyArea: doc.PolicyArea || '',
+        PolicyType: doc.PolicyType || '',
+        LandSurveyNumber: doc.LandSurveyNumber || '',
+        LandDivisionNumber: doc.LandDivisionNumber || '',
+        CropName: doc.CropName || '',
+        ApplicationCropName: doc.ApplicationCropName || '',
+        PlotStateName: doc.PlotStateName || '',
+        PlotDistrictName: doc.PlotDistrictName || '',
+        PlotVillageName: doc.PlotVillageName || '',
+        ApplicationSource: doc.ApplicationSource || '',
+        CropCategoryOthers: doc.CropCategoryOthers || '',
+        CropStage: doc.CropStage || '',
+        LossDate: doc.LossDate ? formatDate(doc.LossDate) : '',
+        OnTimeIntimationFlag: doc.OnTimeIntimationFlag || '',
+        PostHarvestDate: doc.PostHarvestDate ? formatDate(doc.PostHarvestDate) : '',
+        CropShare: doc.CropShare || '',
+        IFSCCode: doc.IFSCCode || '',
+        FarmerShare: doc.FarmerShare || '',
+        SowingDate: doc.SowingDate || '',
+        CreatedBY: doc.CreatedBY || '',
+        TicketDescription: doc.TicketDescription || '',
+        ...dynamicColumnsBatch
+      }).commit();
+    }
+
+    hasMore = docs.length === CHUNK_SIZE;
+    skip += CHUNK_SIZE;
   }
+
+  // Move to next day recursively
+  const nextDate = moment(currentDate).add(1, 'day').toDate();
+  await processDateWithChunking(nextDate, endDate);
+}
+
 
   await processDateWithChunking(new Date(SPFROMDATE), new Date(SPTODATE));
   await workbook.commit();
