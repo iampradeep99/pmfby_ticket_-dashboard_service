@@ -34,7 +34,7 @@ async handleCron() {
    
   }
 
-@Cron(CronExpression.EVERY_2_HOURS)
+@Cron('0 0-23/1 * * *')
 async handleCronUpdateDocketNumber() {
   console.log('⏰ Cron running every 2 hours');
   try {
@@ -193,7 +193,7 @@ Your Automation System
 
 async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<string> {
   const MYSQL_BATCH_SIZE = 100000; // MySQL fetch size
-  const CHUNK_SIZE = 1000; // Mongo bulk update size
+  const CHUNK_SIZE = 1000;         // Mongo bulk update size
 
   try {
     console.log("🚀 Starting supportTicketSyncingUpdateForDocketNumberForTicketHistory...");
@@ -202,20 +202,14 @@ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<strin
     console.log("📂 Connected to MongoDB collection: SLA_KRPH_SupportTickets_Records");
 
     console.log("🧮 Counting total rows from MySQL...");
-    // const [countResult]: any = await this.sequelize.query(`
-    //   SELECT COUNT(*) as totalCount
-    //   FROM mergeticketlisting 
-    //   WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
-    // `, { type: QueryTypes.SELECT });
-
 
     const [countResult]: any = await this.sequelize.query(`
-     SELECT COUNT(*) AS totalCount
-FROM mergeticketlisting
-WHERE TicketHeaderID = 4
-  AND TicketNCIPDocketNo IS NOT NULL
-  AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
-  AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
+      SELECT COUNT(*) AS totalCount
+      FROM mergeticketlisting
+      WHERE TicketHeaderID = 4
+        AND TicketNCIPDocketNo IS NOT NULL
+        AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
+        AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
     `, { type: QueryTypes.SELECT });
 
     const totalRows: number = countResult?.totalCount || 0;
@@ -228,7 +222,7 @@ WHERE TicketHeaderID = 4
 
     let offset = 0;
     let totalUpdated = 0;
-    let totalMissing = 0;
+    let totalSkipped = 0;
 
     console.log("🔁 Beginning main sync loop...");
 
@@ -238,9 +232,10 @@ WHERE TicketHeaderID = 4
       const rows: any[] = await this.sequelize.query(`
         SELECT TicketNCIPDocketNo, TicketHeaderID, SupportTicketID
         FROM krishi_rakshak_pro.mergeticketlisting 
-        WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
-         AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
-  AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
+        WHERE TicketHeaderID = 4
+          AND TicketNCIPDocketNo IS NOT NULL
+          AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
+          AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
         LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
       `, { type: QueryTypes.SELECT });
 
@@ -251,7 +246,6 @@ WHERE TicketHeaderID = 4
 
       console.log(`✅ Rows fetched in this batch: ${rows.length}`);
 
-      // Split into smaller chunks for bulkWrite
       for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
         const chunk = rows.slice(i, i + CHUNK_SIZE);
         console.log(`🧩 Processing chunk ${i / CHUNK_SIZE + 1} (${chunk.length} records)`);
@@ -261,7 +255,7 @@ WHERE TicketHeaderID = 4
             filter: {
               TicketHeaderID: 4,
               SupportTicketID: record.SupportTicketID,
-              TicketNCIPDocketNo: null // only update null ones
+              TicketNCIPDocketNo: null // only update if null
             },
             update: {
               $set: { TicketNCIPDocketNo: record.TicketNCIPDocketNo }
@@ -272,18 +266,17 @@ WHERE TicketHeaderID = 4
         try {
           const result = await collection.bulkWrite(bulkOps, { ordered: false });
 
-          const matched = result.matchedCount || 0;
-          const modified = result.modifiedCount || 0;
+          const matched = result.matchedCount || 0;   // documents found for update
+          const modified = result.modifiedCount || 0; // documents actually updated
 
           totalUpdated += modified;
-          totalMissing += chunk.length - matched;
+          totalSkipped += chunk.length - matched;
 
           console.log(`✅ Chunk done → Matched: ${matched}, Updated: ${modified}, Skipped: ${chunk.length - matched}`);
         } catch (bulkErr) {
           console.error("❌ Bulk write error:", bulkErr.message);
         }
 
-        // free memory
         if (global.gc) {
           global.gc();
         }
@@ -294,35 +287,39 @@ WHERE TicketHeaderID = 4
     }
 
     console.log("🎉 Sync completed successfully!");
-    console.log(`🟢 Total Updated: ${totalUpdated}`);
-    console.log(`🔴 Total Missing/Skipped: ${totalMissing}`);
+    console.log(`🟢 Total Updated (filled nulls): ${totalUpdated}`);
+    console.log(`🔵 Total Skipped (already had docket or missing in Mongo): ${totalSkipped}`);
 
     // Email summary report
     console.log("📧 Preparing email summary...");
 
-    const to = ['pmfbysystems@gmail.com'];
-    const subject = 'Docket Number Updation Cron';
+    const to = ['pradeep.meandev@gmail.com'];
+    const subject = 'Support Ticket Docket Number Update Report';
 
     const text = `
-Hello,
+Hello Team,
 
-Docket Number Updation for Ticket History completed successfully.
+The Docket Number update for Ticket History has been completed.
 
-Total Rows from MySQL: ${totalRows}
-Total Documents Updated (where null): ${totalUpdated}
-Total Missing or Already Updated: ${totalMissing}
+Summary:
+- Total rows fetched from MySQL: ${totalRows}
+- Total documents updated in Mongo (where null): ${totalUpdated}
+- Total documents skipped (already had docket or missing in Mongo): ${totalSkipped}
 
 Regards,
-Your Automation System
+Automation System
     `;
 
     const html = `
-<p>Hello,</p>
-<p><strong>Docket Number Updation for Ticket History completed successfully.</strong></p>
-<p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
-<p><strong>Total Documents Updated (where null):</strong> ${totalUpdated}</p>
-<p><strong>Total Missing or Already Updated:</strong> ${totalMissing}</p>
-<p>Regards,<br/>Your Automation System</p>
+<p>Hello Team,</p>
+<p><strong>The Docket Number update for Ticket History has been completed.</strong></p>
+<p><strong>Summary:</strong></p>
+<ul>
+  <li>Total rows fetched from MySQL: ${totalRows}</li>
+  <li>Total documents updated in Mongo (where null): ${totalUpdated}</li>
+  <li>Total documents skipped (already had docket or missing in Mongo): ${totalSkipped}</li>
+</ul>
+<p>Regards,<br/>Automation System</p>
     `;
 
     console.log("📨 Sending email report...");
