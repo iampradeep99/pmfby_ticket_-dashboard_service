@@ -27,6 +27,7 @@ export class TicketDashboardService {
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
   public gcp = new GCPServices();
+    logDir = path.join(__dirname, '..', 'logs');
 
   // private redisWrapper: RedisWrapper;
 
@@ -8203,6 +8204,161 @@ Your Automation System
     throw err;
   }
 }
+
+
+ // ✅ Main function to update calling records
+  async updateCallingRecords(file: Express.Multer.File): Promise<void> {
+    const filePath = file?.path;
+    if (!filePath) {
+      console.error('❌ No file provided.');
+      return;
+    }
+
+    console.log(`Processing uploaded file: ${filePath}`);
+
+    try {
+      const workbook = XLSX.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const rawRecords = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      console.log(`Total rows found in Excel: ${rawRecords.length}`);
+
+      const records = rawRecords.map(row => ({
+        CallingUniqueID: row.Unique_ID,
+        Recording_Path: row.Recording_Path,
+      }));
+
+      const timestamp = Date.now();
+      const successLogPath = path.join(this.logDir, `update_success_${timestamp}.log`);
+      const failureLogPath = path.join(this.logDir, `update_failed_${timestamp}.log`);
+      const detailedLogPath = path.join(this.logDir, `update_detailed_${timestamp}.log`);
+      const chunkSize = 100000;
+
+      let totalSuccess = 0;
+      let totalFailure = 0;
+
+      const processChunksRecursively = async (startIndex: number) => {
+        if (startIndex >= records.length) return;
+
+        const chunk = records.slice(startIndex, startIndex + chunkSize);
+        console.log(`Processing chunk: ${startIndex} - ${startIndex + chunk.length}`);
+
+        const { successCount, failureCount } = await this.processChunk(
+          chunk,
+          successLogPath,
+          failureLogPath,
+          detailedLogPath
+        );
+
+        totalSuccess += successCount;
+        totalFailure += failureCount;
+
+        return processChunksRecursively(startIndex + chunkSize);
+      };
+
+      await processChunksRecursively(0);
+
+      console.log(`✅ Update completed. Success: ${totalSuccess}, Failures: ${totalFailure}`);
+      console.log('Logs:', { successLogPath, failureLogPath, detailedLogPath });
+    } catch (error) {
+      console.error('❌ Error in updateCallingRecords:', error);
+    } finally {
+      fs.unlink(filePath, (err) => {
+        if (err) console.error('Failed to delete uploaded file:', err);
+        else console.log('Uploaded file deleted:', filePath);
+      });
+    }
+  }
+
+  async processChunk(
+    records: any[],
+    successLogPath: string,
+    failureLogPath: string,
+    detailedLogPath: string
+  ) {
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (let index = 0; index < records.length; index++) {
+      const { CallingUniqueID, Recording_Path } = records[index];
+      if (!CallingUniqueID || !Recording_Path) {
+        const msg = `Skipped (missing data) at chunk index ${index}`;
+        this.logToFile(failureLogPath, msg);
+        this.logToFile(detailedLogPath, msg);
+        failureCount++;
+        continue;
+      }
+
+      try {
+        const existingRecords = await this.sequelize.query(
+          `SELECT AudioFile FROM krishi_rakshak_pro.farmers_calling_master WHERE CallingUniqueID = :callingUniqueId`,
+          {
+            replacements: { callingUniqueId: CallingUniqueID },
+            type: QueryTypes.SELECT,
+          }
+        );
+
+        if (existingRecords.length === 0) {
+          const msg = `Skipped (record not found): ${CallingUniqueID}`;
+          this.logToFile(failureLogPath, msg);
+          this.logToFile(detailedLogPath, msg);
+          failureCount++;
+          continue;
+        }
+
+        // Always update AudioFile
+        await this.sequelize.query(
+          `UPDATE krishi_rakshak_pro.farmers_calling_master
+           SET AudioFile = :recordingPath
+           WHERE CallingUniqueID = :callingUniqueId`,
+          {
+            replacements: {
+              callingUniqueId: CallingUniqueID,
+              recordingPath: Recording_Path,
+            },
+            type: QueryTypes.UPDATE,
+          }
+        );
+
+        const msg = `✅ Updated: ${CallingUniqueID}`;
+        this.logToFile(successLogPath, msg);
+        this.logToFile(detailedLogPath, msg);
+        successCount++;
+      } catch (err) {
+        console.error(`🔥 Error updating ${CallingUniqueID}:`, err);
+        const msg = `🔥 Error updating ${CallingUniqueID}: ${err.message}`;
+        this.logToFile(failureLogPath, msg);
+        this.logToFile(detailedLogPath, msg);
+        failureCount++;
+      }
+    }
+
+    return { successCount, failureCount };
+  }
+
+
+logToFile(filePath: string, content: string) {
+  const dir = path.dirname(filePath);
+
+  // Create directory if it doesn't exist
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  fs.appendFileSync(filePath, content + '\n', 'utf8');
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
