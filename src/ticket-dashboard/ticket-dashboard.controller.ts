@@ -4,9 +4,11 @@ import {
   Post,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-
+import { diskStorage } from 'multer';
 import { TicketDashboardService } from './ticket-dashboard.service';
 import { CreateTicketDto } from 'src/DTOs/createTicket.dto';
 import { UtilService } from '../commonServices/utilService';
@@ -15,6 +17,7 @@ import {
   jsonErrorHandler,
   jsonResponseHandler, jsonResponseHandlerCopy,jsonResponseHandlerReport
 } from '../commonServices/responseHandler';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('ticket-dashboard')
 export class TicketDashboardController {
@@ -283,6 +286,50 @@ async UpdateNCIPDocket(
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
+ 
+
+ @Post('UpdateCallingRecords')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: 'uploads/',
+        filename: (req, file, cb) => {
+          const uniqueName = `${Date.now()}-${file.originalname}`;
+          cb(null, uniqueName);
+        },
+      }),
+    }),
+  )
+  async UpdateCallingRecords(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    try {
+      // ✅ Send response immediately
+      res.status(202).json({
+        success: true,
+        message: 'Your file has been uploaded and will be processed in the background.',
+      });
+
+      // ✅ Continue background processing
+      setImmediate(async () => {
+        try {
+          console.log(`🚀 Background processing started for file: ${file?.filename}`);
+          await this.dashboardService.updateCallingRecords(file);
+          console.log('✅ Background processing completed successfully.');
+        } catch (backgroundErr) {
+          console.error('❌ Background processing failed:', backgroundErr);
+        }
+      });
+    } catch (err) {
+      console.error('Immediate error in UpdateCallingRecords:', err);
+      return jsonErrorHandler(err, req, res, () => {});
+    }
+  }
+
+
+
 
 
   }
