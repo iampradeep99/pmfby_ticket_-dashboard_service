@@ -61,23 +61,23 @@ async function processTicketHistory(ticketPayload: any) {
   const RequestDateTime = await getCurrentFormattedDateTime();
   const cacheKey = `ticketHist:${SPUserID}:${SPInsuranceCompanyID}:${SPStateID}:${SPTicketHeaderID}:${SPFROMDATE}:${SPTODATE}:${page}:${limit}`;
 
-  const cachedData = await redisWrapper.getRedisCache(cacheKey) as any;
-  if (cachedData) {
-    console.log('Using cached data');
-    await db.collection('support_ticket_download_logs').updateOne(
-      { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
-      {
-        $set: {
-          downloadUrl: cachedData.downloadUrl || '',
-          zipFileName: cachedData.zipFileName || '',
-          updatedAt: new Date()
-        },
-        $setOnInsert: { createdAt: new Date() }
-      },
-      { upsert: true }
-    );
-    return cachedData;
-  }
+  // const cachedData = await redisWrapper.getRedisCache(cacheKey) as any;
+  // if (cachedData) {
+  //   console.log('Using cached data');
+  //   await db.collection('support_ticket_download_logs').updateOne(
+  //     { SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID, SPFROMDATE, SPTODATE },
+  //     {
+  //       $set: {
+  //         downloadUrl: cachedData.downloadUrl || '',
+  //         zipFileName: cachedData.zipFileName || '',
+  //         updatedAt: new Date()
+  //       },
+  //       $setOnInsert: { createdAt: new Date() }
+  //     },
+  //     { upsert: true }
+  //   );
+  //   return cachedData;
+  // }
   const Delta = await getSupportTicketUserDetail(SPUserID);
   const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
   const item = (responseInfo.data as any)?.user?.[0];
@@ -358,100 +358,6 @@ worksheet.columns = staticColumns.concat(dynamicColumns);
       const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
 
       const docs = await cursor.toArray();
- /*  for (const doc of docs) {
-  const dynamicColumnsBatch = {};
-
-
-  
-     if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
-    const journey = doc.ticket_comment_journey;
-
-    for (let idx = 0; idx < 3; idx++) {
-      const commentObj = journey[idx] || {};
-
-      const suffix = (idx === 0) ? '' : `${idx}`; 
-
-      const inProgressDate = commentObj.InprogressDate ? formatToDDMMYYYY(commentObj.InprogressDate) : 'NA';
-      const inProgressComment = commentObj.InprogressComment
-        ? commentObj.InprogressComment.replace(/<\/?[^>]+(>|$)/g, '').trim() 
-        : 'NA';
-      dynamicColumnsBatch[`In-Progress Date${suffix}`] = inProgressDate;
-      dynamicColumnsBatch[`In-Progress Comment${suffix}`] = inProgressComment;
-
-      const resolvedDate = commentObj.ResolvedDate ? formatToDDMMYYYY(commentObj.ResolvedDate) : 'NA';
-      const resolvedComment = commentObj.ResolvedComment
-        ? commentObj.ResolvedComment.replace(/<\/?[^>]+(>|$)/g, '').trim()
-        : 'NA';
-      dynamicColumnsBatch[`Resolved Date${suffix}`] = resolvedDate;
-      dynamicColumnsBatch[`Resolved Comment${suffix}`] = resolvedComment;
-
-      const reOpenDate = commentObj.ReOpenDate ? formatToDDMMYYYY(commentObj.ReOpenDate) : 'NA';
-      const reOpenComment = commentObj.ReOpenComment
-        ? commentObj.ReOpenComment.replace(/<\/?[^>]+(>|$)/g, '').trim()
-        : 'NA';
-      dynamicColumnsBatch[`Re-Open Date${suffix}`] = reOpenDate;
-      dynamicColumnsBatch[`Re-Open Comment${suffix}`] = reOpenComment;
-    }
-  } else {
-    
-    for (let i = 0; i < 3; i++) {
-      const suffix = (i === 0) ? '' : `${i}`; 
-
-      dynamicColumnsBatch[`In-Progress Date${suffix}`] = 'NA';
-      dynamicColumnsBatch[`In-Progress Comment${suffix}`] = 'NA';
-      dynamicColumnsBatch[`Resolved Date${suffix}`] = 'NA';
-      dynamicColumnsBatch[`Resolved Comment${suffix}`] = 'NA';
-      dynamicColumnsBatch[`Re-Open Date${suffix}`] = 'NA';
-      dynamicColumnsBatch[`Re-Open Comment${suffix}`] = 'NA';
-    }
-  }
-    console.log('Dynamic Columns for Ticket:', dynamicColumnsBatch);
-
-  worksheet.addRow({
-    AgentID: doc.agentInfo?.UserID?.toString() || '',
-    CallingUniqueID: doc.CallingUniqueID || '',
-    TicketNCIPDocketNo: doc.TicketNCIPDocketNo || '',
-    SupportTicketNo: doc.SupportTicketNo?.toString() || '',
-    Created: doc.Created ? formatDate(doc.Created) : '',
-    TicketReOpenDate: doc.TicketReOpenDate || '',
-    TicketStatus: doc.TicketStatus || '',
-    StatusUpdateTime: doc.StatusUpdateTime ? formatDate(doc.StatusUpdateTime) : '',
-    StateMasterName: doc.StateMasterName || '',
-    DistrictMasterName: doc.DistrictMasterName || '',
-    SubDistrictName: doc.SubDistrictName || '',
-    TicketHeadName: doc.TicketHeadName || '',
-    TicketTypeName: doc.TicketTypeName || '',
-    TicketCategoryName: doc.TicketCategoryName || '',
-    CropSeasonName: doc.CropSeasonName || '',
-    RequestYear: doc.RequestYear || '',
-    InsuranceCompany: doc.InsuranceCompany || '',
-    ApplicationNo: doc.ApplicationNo || '',
-    InsurancePolicyNo: doc.InsurancePolicyNo || '',
-    CallerContactNumber: doc.CallerContactNumber || '',
-    RequestorName: doc.RequestorName || '',
-    RequestorMobileNo: doc.RequestorMobileNo || '',
-    Relation: doc.Relation || '',
-    RelativeName: doc.RelativeName || '',
-    PolicyPremium: doc.PolicyPremium || '',
-    PolicyArea: doc.PolicyArea || '',
-    PolicyType: doc.PolicyType || '',
-    LandSurveyNumber: doc.LandSurveyNumber || '',
-    LandDivisionNumber: doc.LandDivisionNumber || '',
-    PlotStateName: doc.PlotStateName || '',
-    PlotDistrictName: doc.PlotDistrictName || '',
-    PlotVillageName: doc.PlotVillageName || '',
-    ApplicationSource: doc.ApplicationSource || '',
-    CropShare: doc.CropShare || '',
-    IFSCCode: doc.IFSCCode || '',
-    FarmerShare: doc.FarmerShare || '',
-    SowingDate: doc.SowingDate || '',
-    CreatedBY: doc.CreatedBY || '',
-    TicketDescription: doc.TicketDescription || '',
-    ...dynamicColumnsBatch  
-  }).commit();
-} */
-
-
 for (const doc of docs) {
   const dynamicColumnsBatch = {};
 
@@ -654,7 +560,7 @@ for (const doc of docs) {
     console.error(`Failed to send email to ${userEmail}:`, err);
   }
 
-  await redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
+  // await redisWrapper.setRedisCache(cacheKey, responsePayload, 3600);
 
   return responsePayload;
 }
