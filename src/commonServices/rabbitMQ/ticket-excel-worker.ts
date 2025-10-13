@@ -12,7 +12,7 @@ import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from '../
 import { UtilService } from "../../commonServices/utilService";
 import { RedisWrapper } from '../../commonServices/redisWrapper';
 import { MailService } from '../../mail/mail.service';
-    import moment from 'moment';
+   import * as moment from 'moment';
 
 // import axios from 'axios'
 import { MongoClient, Db } from 'mongodb';
