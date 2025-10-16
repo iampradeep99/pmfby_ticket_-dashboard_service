@@ -847,7 +847,7 @@ async processTicketHistoryView(ticketPayload: any) {
   SPTicketHeaderID = Number(SPTicketHeaderID);
 
   const db = this.db;
-  // this.AddIndexForSupportTickets(db);
+  //  this.AddIndexForSupportTickets(db);
   // this.AddIndexForSupportTickets(db);
 
 
@@ -7720,6 +7720,8 @@ pipeline.push({
       }
     ];
 
+
+    console.log(JSON.stringify(pipeline), "testdd");
     const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
     const result = aggResult[0] || { data: [], totalCount: [], ticketStatusSummary: [] };
 
@@ -8305,7 +8307,6 @@ Your Automation System
           continue;
         }
 
-        // Always update AudioFile
         await this.sequelize.query(
           `UPDATE krishi_rakshak_pro.farmers_calling_master
            SET AudioFile = :recordingPath
@@ -8318,6 +8319,13 @@ Your Automation System
             type: QueryTypes.UPDATE,
           }
         );
+
+        await this.db
+  .collection("SLA_Ticket_listing")
+  .updateMany(
+    { CallingUniqueID: CallingUniqueID },
+    { $set: { CallingAudioFile: Recording_Path } }
+  );
 
         const msg = `✅ Updated: ${CallingUniqueID}`;
         this.logToFile(successLogPath, msg);
