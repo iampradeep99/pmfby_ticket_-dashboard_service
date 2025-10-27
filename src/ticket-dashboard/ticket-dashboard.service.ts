@@ -7393,7 +7393,7 @@ pipeline.push({
 
 
 
-  async fetchTicketListingOldWorkingwithFacet(payload: any) {
+  async fetchTicketListing(payload: any) {
   try {
     const db = this.db;
     await this.createIndexesForTicketListing(db);
@@ -7742,7 +7742,7 @@ pipeline.push({
   }
 }
 
-async fetchTicketListing(payload: any) {
+async fetchTicketListingDownload(payload: any) {
   try {
     const db = this.db;
     await this.createIndexesForTicketListing(db);
@@ -8695,6 +8695,201 @@ logToFile(filePath: string, content: string) {
 
 
 
+async GrievanceTicketDashboard(payload: any) {
+  try {
+    const db = this.db;
+
+    // Destructure payload
+    let {
+      fromdate,
+      toDate,
+      ticketHeaderID,
+      stateID,
+      insuranceCompanyID,
+      userID
+    } = payload;
+
+    // 🧩 Validate User ID
+    if (!userID || userID === "") {
+      return {
+        data: [],
+        message: { msg: "User Id is required", code: "0" }
+      };
+    }
+
+    // 🧠 Fetch user detail and decompress response
+    const [Delta] = await Promise.all([
+      this.getSupportTicketUserDetail(userID)
+    ]);
+
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+
+    if (!item) return { rcode: 0, rmessage: "User details not found." };
+
+    // 🎯 Extract user access details
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID
+        ? await this.convertStringToArray(item.InsuranceCompanyID)
+        : [],
+      StateMasterID: item.StateMasterID
+        ? await this.convertStringToArray(item.StateMasterID)
+        : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+      FromDay: item?.FromDay,
+      EscalationFlag: item?.EscalationFlag,
+      AppAccessID: item?.AppAccessID
+    };
+
+    const {
+      InsuranceCompanyID,
+      StateMasterID,
+      LocationTypeID,
+      AppAccessID
+    } = userDetail;
+
+    // 🌍 Location-based filter
+    let locationFilter: any = {};
+
+    if (LocationTypeID === 1 && StateMasterID?.length) {
+      // State-level access
+      locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
+    } else if (LocationTypeID === 2) {
+      // District-level access
+      const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
+      const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
+
+      if (collectedDistrictInfo?.masterdatabinding && Array.isArray(collectedDistrictInfo.masterdatabinding)) {
+        const districtIds = collectedDistrictInfo.masterdatabinding.map(
+          (d: any) => d.DistrictCodeAlpha
+        );
+        locationFilter = { FilterDistrictRequestorID: { $in: districtIds } };
+      } else {
+        console.warn("Invalid district info format:", collectedDistrictInfo);
+        locationFilter = {};
+      }
+    }
+
+    // 🧩 Build main match filter
+    const match: any = { ...locationFilter };
+
+    // Filter by Ticket Header
+    match.TicketHeaderID = ticketHeaderID && ticketHeaderID !== 0 ? ticketHeaderID : 1;
+
+    // Filter by Insurance Company
+    if (insuranceCompanyID && insuranceCompanyID !== 0) {
+      const requestedInsuranceIDs = String(insuranceCompanyID)
+        .split(",")
+        .map(id => Number(id.trim()));
+
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
+      const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
+        allowedInsuranceIDs.includes(id)
+      );
+
+      if (validInsuranceIDs.length === 0) {
+        return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." };
+      }
+
+      match.InsuranceCompanyID = { $in: validInsuranceIDs };
+    } else if (InsuranceCompanyID?.length) {
+      match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+    }
+
+    // Filter by State (only if not district-level)
+    if (stateID && stateID !== "" && LocationTypeID !== 2) {
+      const requestedStateIDs = String(stateID)
+        .split(",")
+        .map(id => Number(id.trim()));
+
+      const validStateIDs = requestedStateIDs.filter(id =>
+        StateMasterID.map(Number).includes(id)
+      );
+
+      if (validStateIDs.length === 0) {
+        return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
+      }
+
+      match.StateMasterID = { $in: validStateIDs };
+    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+      match.StateMasterID = { $in: StateMasterID.map(Number) };
+    }
+
+    // Filter by Date Range
+    if (fromdate && toDate) {
+      match.Created = {
+        $gte: new Date(`${fromdate}T00:00:00.000Z`),
+        $lte: new Date(`${toDate}T23:59:59.999Z`)
+      };
+    }
+
+    // 🧮 Aggregation pipeline
+    const pipeline: any[] = [
+      { $match: match },
+      {
+        $project: {
+          TicketStatusID: 1,
+          TicketHeaderID: 1,
+          customStatus: {
+            $switch: {
+              branches: [
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$TicketStatusID", 109303] },
+                      { $in: ["$TicketHeaderID", [1]] }
+                    ]
+                  },
+                  then: "Resolved"
+                },
+                { case: { $eq: ["$TicketStatusID", 109301] }, then: "Open" },
+                { case: { $eq: ["$TicketStatusID", 109302] }, then: "In-Progress" },
+                { case: { $eq: ["$TicketStatusID", 109304] }, then: "Re-Open" }
+              ],
+              default: "Other"
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$customStatus",
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          Status: "$_id",
+          count: 1
+        }
+      },
+      {
+        $sort: { count: -1 }
+      }
+    ];
+
+    console.log("Aggregation pipeline:", JSON.stringify(pipeline, null, 2));
+
+    // Execute aggregation
+    const aggResult = await db
+      .collection("SLA_Ticket_listing")
+      .aggregate(pipeline, { allowDiskUse: true })
+      .toArray();
+
+    console.log("Aggregation Result:", aggResult);
+
+    return {
+      data: aggResult,
+      message: { msg: "Dashboard data fetched successfully", code: "1" }
+    };
+  } catch (err) {
+    console.error("❌ Top-level error:", err);
+    return { data: [], message: "Unexpected error occurred" };
+  }
+}
+  
 
 
 
