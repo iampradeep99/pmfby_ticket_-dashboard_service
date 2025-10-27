@@ -251,6 +251,43 @@ async supportTicketListing(
   }
 }
 
+@Post('GrievanceTicketDashboard')
+async GrievanceTicketDashboard(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const { obj, message }: any = await this.dashboardService.GrievanceTicketDashboard(payload);
+
+    const compressedData = obj ? await this.utilService.GZip(obj) : null;
+    console.log("test")
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
+
+
+@Post('SupportTicketListingDownload')
+async supportTicketListingDownload(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const { obj, message }: any = await this.dashboardService.fetchTicketListingDownload(payload);
+
+    const compressedData = obj ? await this.utilService.GZip(obj) : null;
+    console.log("test")
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
 @Post('UpdateNCIPDocket')
 async UpdateNCIPDocket(
   @Body() ticketPayload: any,
