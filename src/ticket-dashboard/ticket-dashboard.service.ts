@@ -7493,16 +7493,16 @@ pipeline.push({
       match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
     }
 
-    if (stateID && stateID !== "" && LocationTypeID !== 2) {
-      const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
-      const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
-      if (validStateIDs.length === 0) {
-        return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
-      }
-      match.StateMasterID = { $in: validStateIDs };
-    } else if (StateMasterID?.length && LocationTypeID !== 2) {
-      match.StateMasterID = { $in: StateMasterID.map(Number) };
-    }
+    // if (stateID && stateID !== "" && LocationTypeID !== 2) {
+    //   const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
+    //   const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
+    //   if (validStateIDs.length === 0) {
+    //     return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
+    //   }
+    //   match.StateMasterID = { $in: validStateIDs };
+    // } else if (StateMasterID?.length && LocationTypeID !== 2) {
+    //   match.StateMasterID = { $in: StateMasterID.map(Number) };
+    // }
 
     if (viewTYP === "FILTER") {
       if (fromdate && toDate) {
