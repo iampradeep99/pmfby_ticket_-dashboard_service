@@ -8897,6 +8897,106 @@ async GrievanceTicketDashboard(payload: any) {
 
 
 
+async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string> {
+  const MYSQL_BATCH_SIZE = 100000;
+  const CHUNK_SIZE = 1000;
+
+  try {
+    const collection: Collection<any> = this.db.collection('SLA_Ticket_listing');
+    const logCollection: Collection<any> = this.db.collection('SLA_Ticket_Update_Logs');
+
+    const formatDate = (dateStr: string) => {
+      const [day, month, year] = dateStr.split('-').map(Number);
+      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    };
+
+    const startDate = formatDate(fromDate);
+    const endDate = formatDate(toDate);
+
+    const [countResult]: any = await this.sequelize.query(`
+      SELECT COUNT(*) as totalCount
+      FROM krishi_rakshak_pro.mergeticketlisting 
+      WHERE DATE(InsertDateTime) BETWEEN '${startDate}' AND '${endDate}'
+    `, { type: QueryTypes.SELECT });
+
+    const totalRows: number = countResult?.totalCount || 0;
+    if (totalRows === 0) return 'No rows to sync for the given date range.';
+
+    let offset = 0;
+    let totalUpdated = 0;
+    let totalMissing = 0;
+    const successLogs: any[] = [];
+    const failedLogs: any[] = [];
+
+    while (offset < totalRows) {
+      const rows: any[] = await this.sequelize.query(`
+        SELECT TicketStatusID, TicketStatus, SupportTicketID
+        FROM krishi_rakshak_pro.mergeticketlisting 
+        WHERE DATE(InsertDateTime) BETWEEN '${startDate}' AND '${endDate}'
+        LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
+      `, { type: QueryTypes.SELECT });
+
+      if (!rows.length) break;
+
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
+
+        const bulkOps = chunk.map(record => ({
+          updateOne: {
+            filter: { SupportTicketID: record.SupportTicketID },
+            update: { $set: { TicketStatusID: record.TicketStatusID, TicketStatus: record.TicketStatus } }
+          }
+        }));
+
+        try {
+          const result = await collection.bulkWrite(bulkOps, { ordered: false });
+          const matched = result.matchedCount || 0;
+          const modified = result.modifiedCount || 0;
+          totalUpdated += modified;
+          totalMissing += chunk.length - matched;
+
+          const success = chunk
+            .filter(r => r.SupportTicketID)
+            .map(r => ({
+              SupportTicketID: r.SupportTicketID,
+              TicketStatusID: r.TicketStatusID,
+              TicketStatus: r.TicketStatus,
+              status: 'updated',
+              updatedAt: new Date()
+            }));
+
+          successLogs.push(...success);
+        } catch (bulkErr) {
+          const failed = chunk.map(r => ({
+            SupportTicketID: r.SupportTicketID,
+            TicketStatusID: r.TicketStatusID,
+            TicketStatus: r.TicketStatus,
+            status: 'failed',
+            error: bulkErr.message,
+            updatedAt: new Date()
+          }));
+          failedLogs.push(...failed);
+        }
+
+        if (global.gc) global.gc();
+      }
+
+      offset += MYSQL_BATCH_SIZE;
+    }
+
+    if (successLogs.length > 0) await logCollection.insertMany(successLogs);
+    if (failedLogs.length > 0) await logCollection.insertMany(failedLogs);
+
+    return `✅ Sync completed successfully. Updated: ${totalUpdated}, Failed: ${failedLogs.length}`;
+  } catch (err: any) {
+    console.error('❌ Error:', err);
+    throw err;
+  }
+}
+
+
+
+
 
 
 
