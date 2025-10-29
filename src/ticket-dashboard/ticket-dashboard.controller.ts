@@ -405,7 +405,7 @@ async updateTicketStatus(
   }
 }
 
- @Post('copyTicket')
+@Post('copyTicket')
 async copyTicket(
   @Body() ticketPayload: any,
   @Req() req: Request,
@@ -413,28 +413,52 @@ async copyTicket(
 ) {
   try {
     const userEmail = ticketPayload?.userEmail?.trim();
+    const prodCollectionName = ticketPayload?.prodCollectionName?.trim();
+    const uatCollectionName = ticketPayload?.uatCollectionName?.trim();
+    const fromDate = ticketPayload?.fromDate?.trim();
+    const toDate = ticketPayload?.toDate?.trim();
+    const chunkSize = Number(ticketPayload?.chunkSize) || 1000;
 
-    // ✅ Send response immediately
+    if (!prodCollectionName || !uatCollectionName || !fromDate || !toDate) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Missing required fields. Please provide prodCollectionName, uatCollectionName, fromDate, and toDate.",
+      });
+    }
+
+    // ✅ Immediate response to user
     const rmessage =
-      'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
+      "Your request has been accepted and is being processed in the background. You will soon see the result logs in the system.";
 
-    // Send success response first
     res.status(200).json({
       success: true,
       message: rmessage,
       data: [],
     });
 
-    // ✅ Continue background task asynchronously (after response)
+    // ✅ Continue background processing asynchronously
     setImmediate(async () => {
       try {
-        await this.dashboardService.copyTicketListingFromProdToUAT(ticketPayload?.fromDate, ticketPayload?.toDate);
-        console.log('✅ UpdateTicketStatus background process completed successfully.');
+        console.log("🚀 Background Job: Copying from Prod to UAT...");
+        console.log("📁 Source:", prodCollectionName);
+        console.log("📁 Destination:", uatCollectionName);
+        console.log("📅 Date Range:", fromDate, "→", toDate);
+        console.log("⚙️ Chunk Size:", chunkSize);
+
+        const resultMessage = await this.dashboardService.copyTicketListingFromProdToUAT(
+          prodCollectionName,
+          uatCollectionName,
+          fromDate,
+          toDate,
+          chunkSize
+        );
+
+        console.log("✅ Copy operation completed successfully:", resultMessage);
       } catch (backgroundErr) {
-        console.error('❌ UpdateTicketStatus update failed:', backgroundErr);
+        console.error("❌ CopyTicket background process failed:", backgroundErr);
       }
     });
-
   } catch (err) {
     // Handle any immediate (synchronous) errors
     return jsonErrorHandler(err, req, res, () => {});

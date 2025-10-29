@@ -9032,44 +9032,52 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
 
 
 
-async copyTicketListingFromProdToUAT(fromDate: string, toDate: string): Promise<string> {
+async copyTicketListingFromProdToUAT(
+  prodCollectionName: string,
+  uatCollectionName: string,
+  fromDate: string,
+  toDate: string,
+  chunkSize: number = 1000
+): Promise<string> {
   const PROD_URI = "mongodb://10.128.60.45:27017/krph_db";
   const UAT_URI = "mongodb://10.128.60.46:27017/krph_db";
-  const COLLECTION_NAME = "SLA_Ticket_listing";
-  const BATCH_SIZE = 1000;
   const MAX_RETRIES = 3;
 
- const startDate = moment.utc(fromDate, "DD-MM-YYYY", true);
-const endDate = moment.utc(toDate, "DD-MM-YYYY", true);
+  const startDate = moment.utc(fromDate, "DD-MM-YYYY", true);
+  const endDate = moment.utc(toDate, "DD-MM-YYYY", true);
 
-if (!startDate.isValid() || !endDate.isValid()) {
-  throw new Error(
-    `❌ Invalid date format. Expected 'DD-MM-YYYY'. Got fromDate='${fromDate}', toDate='${toDate}'`
-  );
-}
+  if (!startDate.isValid() || !endDate.isValid()) {
+    throw new Error(
+      `❌ Invalid date format. Expected 'DD-MM-YYYY'. Got fromDate='${fromDate}', toDate='${toDate}'`
+    );
+  }
 
-const DATE_FILTER = {
-  InsertDateTime: {
-    $gte: startDate.startOf("day").toDate(),
-    $lte: endDate.endOf("day").toDate(),
-  },
-};
+  const DATE_FILTER = {
+    InsertDateTime: {
+      $gte: startDate.startOf("day").toDate(),
+      $lte: endDate.endOf("day").toDate(),
+    },
+  };
 
-console.log("🕒 DATE_FILTER:", JSON.stringify(DATE_FILTER, null, 2));
+  console.log("🕒 DATE_FILTER:", JSON.stringify(DATE_FILTER, null, 2));
 
   const prodClient = new MongoClient(PROD_URI);
   const uatClient = new MongoClient(UAT_URI);
 
   try {
     console.log("🚀 Starting copyTicketListingFromProdToUAT...");
+    console.log(`📁 Source (Prod): ${prodCollectionName}`);
+    console.log(`📁 Destination (UAT): ${uatCollectionName}`);
+    console.log(`📦 Batch Size: ${chunkSize}`);
+
     await prodClient.connect();
     await uatClient.connect();
 
     const prodDB = prodClient.db();
     const uatDB = uatClient.db();
 
-    const prodCol = prodDB.collection(COLLECTION_NAME);
-    const uatCol = uatDB.collection(COLLECTION_NAME);
+    const prodCol = prodDB.collection(prodCollectionName);
+    const uatCol = uatDB.collection(uatCollectionName);
 
     // Ensure index on InsertDateTime for both DBs
     await Promise.all([
@@ -9087,14 +9095,14 @@ console.log("🕒 DATE_FILTER:", JSON.stringify(DATE_FILTER, null, 2));
     }
 
     // Start copying process
-    const cursor = prodCol.find(DATE_FILTER).batchSize(BATCH_SIZE);
+    const cursor = prodCol.find(DATE_FILTER).batchSize(chunkSize);
     let totalInserted = 0;
     let batchNumber = 1;
 
     while (await cursor.hasNext()) {
       const batch: any[] = [];
 
-      for (let i = 0; i < BATCH_SIZE && await cursor.hasNext(); i++) {
+      for (let i = 0; i < chunkSize && await cursor.hasNext(); i++) {
         const doc = await cursor.next();
         batch.push(doc);
       }
@@ -9138,7 +9146,7 @@ console.log("🕒 DATE_FILTER:", JSON.stringify(DATE_FILTER, null, 2));
 
     if (prodCount === uatCount) {
       console.log("🎉 Counts match! Data copied successfully.");
-      return `✅ Success: Copied ${prodCount} documents to UAT.`;
+      return `✅ Success: Copied ${prodCount} documents to ${uatCollectionName}.`;
     } else {
       console.warn("⚠️ Mismatch detected! Please verify manually.");
       return `⚠️ Mismatch: Production=${prodCount}, UAT=${uatCount}`;
@@ -9152,6 +9160,7 @@ console.log("🕒 DATE_FILTER:", JSON.stringify(DATE_FILTER, null, 2));
     console.log("🔒 MongoDB connections closed.");
   }
 }
+
 
 
 
