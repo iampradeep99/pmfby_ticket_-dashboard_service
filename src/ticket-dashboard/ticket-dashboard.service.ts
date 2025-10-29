@@ -18,7 +18,7 @@ import { format } from '@fast-csv/format';
 import { pipe } from 'rxjs';
 import { Sequelize } from 'sequelize-typescript';
 import { QueryTypes } from 'sequelize'; // ✅ import QueryTypes
-
+import { MongoClient } from 'mongodb';
 
 
 // import * as ExcelJS from 'exceljs';
@@ -9027,6 +9027,119 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
 
 
 
+
+
+
+
+async copyTicketListingFromProdToUAT(fromDate: string, toDate: string): Promise<string> {
+  const PROD_URI = "mongodb://10.128.60.45:27017/krph_db";
+  const UAT_URI = "mongodb://10.128.60.45:27017/krph_db";
+  const COLLECTION_NAME = "SLA_Ticket_listing";
+  const BATCH_SIZE = 1000;
+  const MAX_RETRIES = 3;
+
+  const DATE_FILTER = {
+    InsertDateTime: {
+      $gte: new Date(`${fromDate}T00:00:00.000Z`),
+      $lte: new Date(`${toDate}T23:59:59.999Z`),
+    },
+  };
+
+  const prodClient = new MongoClient(PROD_URI);
+  const uatClient = new MongoClient(UAT_URI);
+
+  try {
+    console.log("🚀 Starting copyTicketListingFromProdToUAT...");
+    await prodClient.connect();
+    await uatClient.connect();
+
+    const prodDB = prodClient.db();
+    const uatDB = uatClient.db();
+
+    const prodCol = prodDB.collection(COLLECTION_NAME);
+    const uatCol = uatDB.collection(COLLECTION_NAME);
+
+    // Ensure index on InsertDateTime for both DBs
+    await Promise.all([
+      prodCol.createIndex({ InsertDateTime: 1 }),
+      uatCol.createIndex({ InsertDateTime: 1 }),
+    ]);
+
+    console.log("🔍 Counting documents in Production...");
+    const prodCount = await prodCol.countDocuments(DATE_FILTER);
+    console.log(`📦 Found ${prodCount} documents in Production for given date range.`);
+
+    if (prodCount === 0) {
+      console.log("❌ No documents found for given date range. Exiting.");
+      return "No documents found for given date range.";
+    }
+
+    // Start copying process
+    const cursor = prodCol.find(DATE_FILTER).batchSize(BATCH_SIZE);
+    let totalInserted = 0;
+    let batchNumber = 1;
+
+    while (await cursor.hasNext()) {
+      const batch: any[] = [];
+
+      for (let i = 0; i < BATCH_SIZE && await cursor.hasNext(); i++) {
+        const doc = await cursor.next();
+        batch.push(doc);
+      }
+
+      if (batch.length > 0) {
+        let success = false;
+        let attempts = 0;
+
+        while (!success && attempts < MAX_RETRIES) {
+          try {
+            await uatCol.insertMany(batch, { ordered: false });
+            totalInserted += batch.length;
+            console.log(
+              `✅ Batch ${batchNumber} inserted (${totalInserted}/${prodCount} total)`
+            );
+            success = true;
+          } catch (insertErr) {
+            attempts++;
+            console.error(
+              `⚠️ Insert batch ${batchNumber} failed (attempt ${attempts}):`,
+              insertErr.message
+            );
+            if (attempts < MAX_RETRIES) {
+              console.log("⏳ Retrying in 2 seconds...");
+              await new Promise((res) => setTimeout(res, 2000));
+            } else {
+              console.error(`❌ Skipping batch ${batchNumber} after ${MAX_RETRIES} retries.`);
+            }
+          }
+        }
+      }
+
+      batchNumber++;
+    }
+
+    // Verify counts
+    const uatCount = await uatCol.countDocuments(DATE_FILTER);
+    console.log("\n📊 Final Count Check:");
+    console.log(`   Production Count: ${prodCount}`);
+    console.log(`   UAT Count:        ${uatCount}`);
+
+    if (prodCount === uatCount) {
+      console.log("🎉 Counts match! Data copied successfully.");
+      return `✅ Success: Copied ${prodCount} documents to UAT.`;
+    } else {
+      console.warn("⚠️ Mismatch detected! Please verify manually.");
+      return `⚠️ Mismatch: Production=${prodCount}, UAT=${uatCount}`;
+    }
+  } catch (err) {
+    console.error("❌ Error in copyTicketListingFromProdToUAT:", err);
+    throw err;
+  } finally {
+    await prodClient.close();
+    await uatClient.close();
+    console.log("🔒 MongoDB connections closed.");
+  }
+}
 
 
 
