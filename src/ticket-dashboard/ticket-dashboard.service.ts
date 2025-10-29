@@ -8902,6 +8902,9 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
   const CHUNK_SIZE = 1000;
 
   try {
+    console.log("🚀 Starting updateStatusOfAllTickets...");
+    console.log(`📅 Input Date Range: ${fromDate} → ${toDate}`);
+
     const collection: Collection<any> = this.db.collection('SLA_Ticket_listing');
     const logCollection: Collection<any> = this.db.collection('SLA_Ticket_Update_Logs');
 
@@ -8912,7 +8915,9 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
 
     const startDate = formatDate(fromDate);
     const endDate = formatDate(toDate);
+    console.log(`🗓️ Formatted Dates: start=${startDate}, end=${endDate}`);
 
+    console.log("📊 Counting total rows in MySQL...");
     const [countResult]: any = await this.sequelize.query(`
       SELECT COUNT(*) as totalCount
       FROM krishi_rakshak_pro.mergeticketlisting 
@@ -8920,7 +8925,9 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
     `, { type: QueryTypes.SELECT });
 
     const totalRows: number = countResult?.totalCount || 0;
-    if (totalRows === 0) return 'No rows to sync for the given date range.';
+    console.log(`📦 Total rows to process: ${totalRows}`);
+
+    if (totalRows === 0) return '⚠️ No rows to sync for the given date range.';
 
     let offset = 0;
     let totalUpdated = 0;
@@ -8929,6 +8936,8 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
     const failedLogs: any[] = [];
 
     while (offset < totalRows) {
+      console.log(`\n📥 Fetching MySQL batch with OFFSET = ${offset}, LIMIT = ${MYSQL_BATCH_SIZE}...`);
+
       const rows: any[] = await this.sequelize.query(`
         SELECT TicketStatusID, TicketStatus, SupportTicketID
         FROM krishi_rakshak_pro.mergeticketlisting 
@@ -8936,10 +8945,16 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
         LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
       `, { type: QueryTypes.SELECT });
 
-      if (!rows.length) break;
+      if (!rows.length) {
+        console.log("⚠️ No rows returned from MySQL. Breaking loop.");
+        break;
+      }
+
+      console.log(`✅ Fetched ${rows.length} rows. Splitting into chunks of ${CHUNK_SIZE}...`);
 
       for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
         const chunk = rows.slice(i, i + CHUNK_SIZE);
+        console.log(`🔄 Processing chunk ${i / CHUNK_SIZE + 1} (${chunk.length} records)`);
 
         const bulkOps = chunk.map(record => ({
           updateOne: {
@@ -8955,18 +8970,20 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
           totalUpdated += modified;
           totalMissing += chunk.length - matched;
 
-          const success = chunk
-            .filter(r => r.SupportTicketID)
-            .map(r => ({
-              SupportTicketID: r.SupportTicketID,
-              TicketStatusID: r.TicketStatusID,
-              TicketStatus: r.TicketStatus,
-              status: 'updated',
-              updatedAt: new Date()
-            }));
+          console.log(`✅ Mongo BulkWrite Success → Matched: ${matched}, Modified: ${modified}, Missing: ${chunk.length - matched}`);
 
+          const success = chunk.map(r => ({
+            SupportTicketID: r.SupportTicketID,
+            TicketStatusID: r.TicketStatusID,
+            TicketStatus: r.TicketStatus,
+            status: 'updated',
+            updatedAt: new Date()
+          }));
           successLogs.push(...success);
+
         } catch (bulkErr) {
+          console.error(`❌ Mongo BulkWrite Error on chunk ${i / CHUNK_SIZE + 1}:`, bulkErr.message);
+
           const failed = chunk.map(r => ({
             SupportTicketID: r.SupportTicketID,
             TicketStatusID: r.TicketStatusID,
@@ -8978,21 +8995,36 @@ async updateStatusOfAllTickets(fromDate: string, toDate: string): Promise<string
           failedLogs.push(...failed);
         }
 
-        if (global.gc) global.gc();
+        if (global.gc) {
+          global.gc();
+          console.log("🧹 Memory cleaned up (global.gc invoked).");
+        }
       }
 
       offset += MYSQL_BATCH_SIZE;
+      console.log(`📤 Completed MySQL batch. New offset: ${offset}`);
     }
 
-    if (successLogs.length > 0) await logCollection.insertMany(successLogs);
-    if (failedLogs.length > 0) await logCollection.insertMany(failedLogs);
+    console.log("📝 Inserting logs into Mongo...");
+    if (successLogs.length > 0) {
+      await logCollection.insertMany(successLogs);
+      console.log(`✅ Inserted ${successLogs.length} success logs`);
+    }
+    if (failedLogs.length > 0) {
+      await logCollection.insertMany(failedLogs);
+      console.log(`⚠️ Inserted ${failedLogs.length} failed logs`);
+    }
+
+    console.log("🎯 Sync completed!");
+    console.log(`📈 Summary → Updated: ${totalUpdated}, Failed: ${failedLogs.length}, Missing: ${totalMissing}`);
 
     return `✅ Sync completed successfully. Updated: ${totalUpdated}, Failed: ${failedLogs.length}`;
   } catch (err: any) {
-    console.error('❌ Error:', err);
+    console.error('❌ Fatal Error in updateStatusOfAllTickets:', err);
     throw err;
   }
 }
+
 
 
 
