@@ -369,6 +369,44 @@ async UpdateNCIPDocket(
 
 
 
+  @Post('UpdateTicketStatus')
+async updateTicketStatus(
+  @Body() ticketPayload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const userEmail = ticketPayload?.userEmail?.trim();
+
+    // ✅ Send response immediately
+    const rmessage =
+      'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
+
+    // Send success response first
+    res.status(200).json({
+      success: true,
+      message: rmessage,
+      data: [],
+    });
+
+    // ✅ Continue background task asynchronously (after response)
+    setImmediate(async () => {
+      try {
+        await this.dashboardService.updateStatusOfAllTickets(ticketPayload?.fromDate, ticketPayload?.toDate);
+        console.log('✅ UpdateTicketStatus background process completed successfully.');
+      } catch (backgroundErr) {
+        console.error('❌ UpdateTicketStatus update failed:', backgroundErr);
+      }
+    });
+
+  } catch (err) {
+    // Handle any immediate (synchronous) errors
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+ 
+
+
   }
 
 
