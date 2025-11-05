@@ -378,18 +378,15 @@ async updateTicketStatus(
   try {
     const userEmail = ticketPayload?.userEmail?.trim();
 
-    // ✅ Send response immediately
     const rmessage =
       'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
 
-    // Send success response first
     res.status(200).json({
       success: true,
       message: rmessage,
       data: [],
     });
 
-    // ✅ Continue background task asynchronously (after response)
     setImmediate(async () => {
       try {
         await this.dashboardService.updateStatusOfAllTickets(ticketPayload?.fromDate, ticketPayload?.toDate);
@@ -427,7 +424,6 @@ async copyTicket(
       });
     }
 
-    // ✅ Immediate response to user
     const rmessage =
       "Your request has been accepted and is being processed in the background. You will soon see the result logs in the system.";
 
@@ -437,7 +433,6 @@ async copyTicket(
       data: [],
     });
 
-    // ✅ Continue background processing asynchronously
     setImmediate(async () => {
       try {
         console.log("🚀 Background Job: Copying from Prod to UAT...");
@@ -466,6 +461,23 @@ async copyTicket(
 }
 
 
+
+@Post('SaveCDRFilePath')
+async CDRFilePath(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const { obj, message }: any = await this.dashboardService.saveCDRFilesPaths(payload);
+
+    const compressedData = obj ? await this.utilService.GZip(obj) : null;
+    console.log("test")
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
 
  
 

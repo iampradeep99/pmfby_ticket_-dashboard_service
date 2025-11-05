@@ -7430,7 +7430,7 @@ pipeline.push({
     schemeID = Number(schemeID);
 
     // Validate user ID
-    if (!objCommon.insertedUserID || objCommon.insertedUserID === "") {
+    if (!objCommon && objCommon.insertedUserID && objCommon.insertedUserID === "") {
       return {
         data: [],
         message: { msg: "User Id is required", code: "0" }
@@ -9165,6 +9165,98 @@ async copyTicketListingFromProdToUAT(
   }
 }
 
+
+
+
+
+async saveCDRFilesPaths(payload: any) {
+  try {
+    if (!this.db) {
+      console.error("❌ Database instance not found.");
+      return { data: [], message: "Database connection not initialized" };
+    }
+
+    const collection = this.db.collection("KRPH_Calling_CDR_files_paths");
+
+    if (!payload || typeof payload !== "object") {
+      return { data: [], message: "Invalid payload: expected an object" };
+    }
+
+    const payloads = Array.isArray(payload) ? payload : [payload];
+    const validDocs: any[] = [];
+    const invalidDocs: any[] = [];
+
+    for (const item of payloads) {
+      const { path, fileInfo, insertedBy } = item || {};
+      const errors: string[] = [];
+
+      if (!path || typeof path !== "string" || !path.trim()) {
+        errors.push("Invalid or missing 'path'");
+      }
+      if (!fileInfo || typeof fileInfo !== "string" || !fileInfo.trim()) {
+        errors.push("Invalid or missing 'fileInfo'");
+      }
+      if (insertedBy && typeof insertedBy !== "string") {
+        errors.push("'insertedBy' must be a string if provided");
+      }
+
+      if (errors.length > 0) {
+        invalidDocs.push({ item, errors });
+        continue;
+      }
+
+      validDocs.push({
+        path: path.trim(),
+        fileInfo: fileInfo.trim(),
+        insertedAt: new Date(),
+        insertedBy: insertedBy?.trim() || "system",
+      });
+    }
+
+    if (validDocs.length === 0) {
+      return {
+        data: [],
+        message:
+          invalidDocs.length > 0
+            ? "All provided entries are invalid"
+            : "No data to insert",
+        invalidDocs,
+      };
+    }
+
+    let result;
+    if (validDocs.length === 1) {
+      result = await collection.insertOne(validDocs[0]);
+    } else {
+      result = await collection.insertMany(validDocs);
+    }
+
+    if (!result || (!result.insertedId && !result.insertedCount)) {
+      return { data: [], message: "Failed to insert document(s)" };
+    }
+
+    return {
+      data: result.insertedIds || result.insertedId,
+      message:
+        validDocs.length > 1
+          ? `Successfully inserted ${validDocs.length} document(s)`
+          : "File path saved successfully",
+      invalidDocs: invalidDocs.length ? invalidDocs : undefined,
+    };
+  } catch (err: any) {
+    console.error("❌ Error in saveCDRFilesPaths:", err?.message || err);
+
+    if (err.name === "MongoNetworkError") {
+      return { data: [], message: "Database network error" };
+    }
+
+    if (err.name === "MongoServerError") {
+      return { data: [], message: "Database server error" };
+    }
+
+    return { data: [], message: "Unexpected error occurred" };
+  }
+}
 
 
 
