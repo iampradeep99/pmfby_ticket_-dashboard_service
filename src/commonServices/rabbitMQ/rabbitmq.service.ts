@@ -538,7 +538,12 @@ import { runWorker } from './worker-runner';
 
 @Injectable()
 export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
-  private readonly RABBITMQ_URL = 'amqp://user:password@10.128.60.11:5672';
+// private readonly RABBITMQ_URL = 'amqp://user:password@10.128.60.11:5672';
+// private readonly RABBITMQ_URL = 'amqp://myuser:mypassword@localhost:5672';
+ private readonly RABBITMQ_URL = process.env.RabbitmqURL;
+
+
+
   private readonly QUEUE_NAME = 'support_ticket_download';
 
   private connection: amqp.Connection;
