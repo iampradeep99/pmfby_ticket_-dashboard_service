@@ -9261,6 +9261,43 @@ async saveCDRFilesPaths(payload: any) {
 
 
 
+async  GetNCIPUserRole(payload: any) {
+  try {
+    const response = await axios.get(
+      "http://10.128.60.5:3007/v1/user/user/stakeholders",
+      {
+        params: { apiType: "ROL" },
+        headers: {
+          "Content-Type": "application/json",
+          // Add authorization if required
+          // Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const result = response.data;
+
+    return {
+      data: result?.data || [],
+      message: "User roles fetched successfully",
+    };
+  } catch (err: any) {
+    console.error("❌ Error in GetNCIPUserRole:", err?.message || err);
+
+    if (err.code === "ENETUNREACH" || err.message?.includes("Network Error")) {
+      return { data: [], message: "Database network error" };
+    }
+
+    if (err.response?.status >= 500) {
+      return { data: [], message: "Database server error" };
+    }
+
+    return { data: [], message: "Unexpected error occurred" };
+  }
+}
+
+
+
 
 
 }
