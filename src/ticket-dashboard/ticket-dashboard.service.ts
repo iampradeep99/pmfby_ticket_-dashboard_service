@@ -7457,7 +7457,6 @@ pipeline.push({
     };
 
     const { InsuranceCompanyID, StateMasterID, LocationTypeID, EscalationFlag, AppAccessID } = userDetail;
-
     let locationFilter: any = {};
     if (LocationTypeID === 1 && StateMasterID?.length) {
       locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
@@ -7503,7 +7502,7 @@ pipeline.push({
       }
       match.StateMasterID = { $in: validStateIDs };
     } else if (StateMasterID?.length && LocationTypeID !== 2) {
-      match.StateMasterID = { $in: StateMasterID.map(Number) };
+      match.FilterStateID = { $in: StateMasterID.map(Number) };
     }
     }
 
