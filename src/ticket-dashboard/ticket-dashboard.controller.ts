@@ -497,12 +497,53 @@ async GetNCIPUserRole(
 }
 
 
+ @Post('excelImport')
+@UseInterceptors(FileInterceptor('file')) // 'file' = form field name
+async excelImport(
+  @UploadedFile() file: Express.Multer.File,
+  @Body() body: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response,
+) {
+  try {
+    if (!file) return jsonErrorHandler({ message: "No file uploaded" }, req, res, () => {});
 
+    // ✅ Build payload with file + metadata
+    const payload = {
+      file: file.buffer,                 // file as Buffer
+      collectionName: body.collectionName,
+      insertedBy: body.insertedBy || 'system',
+    };
+
+    // ✅ Immediately respond to user
+    jsonResponseHandler(
+      { message: 'Excel import started' },
+      'File received successfully',
+      req,
+      res,
+      () => {},
+    );
+
+    // ✅ Run import in background
+    this.dashboardService.csvImportService(payload)
+      .then((result) => {
+        console.log('✅ Excel import completed:', result.message);
+      })
+      .catch((err) => {
+        console.error('❌ Excel import failed:', err?.message || err);
+      });
+
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+}
 
  
 
 
-  }
+  
 
 
 
