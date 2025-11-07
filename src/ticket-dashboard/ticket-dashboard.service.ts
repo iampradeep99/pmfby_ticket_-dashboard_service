@@ -20,6 +20,8 @@ import { Sequelize } from 'sequelize-typescript';
 import { QueryTypes } from 'sequelize'; // ✅ import QueryTypes
 import { MongoClient } from 'mongodb';
 import * as moment from "moment";
+import { parse } from "csv-parse/sync";
+
 
 
 // import * as ExcelJS from 'exceljs';
@@ -9391,6 +9393,103 @@ async  GetNCIPUserRole(payload: any) {
 }
 
 
+
+async csvImportService(payload: any) {
+  try {
+    if (!this.db) {
+      console.error("❌ Database instance not found.");
+      return { data: [], message: "Database connection not initialized" };
+    }
+
+    const { file, collectionName, insertedBy = "system", chunkSize = 100000 } = payload || {};
+
+    if (!file) return { data: [], message: "Missing CSV file in payload" };
+    if (!collectionName || typeof collectionName !== "string")
+      return { data: [], message: "Missing or invalid collection name" };
+
+    // 🔹 Normalize file into string
+    let csvString: string;
+    if (Buffer.isBuffer(file)) {
+      csvString = file.toString("utf-8");
+    } else if (file instanceof ArrayBuffer) {
+      csvString = Buffer.from(file).toString("utf-8");
+    } else if (ArrayBuffer.isView(file)) {
+      csvString = Buffer.from(file.buffer, file.byteOffset, file.byteLength).toString("utf-8");
+    } else if (typeof file === "string") {
+      csvString = Buffer.from(file, "base64").toString("utf-8");
+    } else {
+      return { data: [], message: "Invalid file format" };
+    }
+
+    // 🔹 Parse CSV
+    const jsonData: any[] = parse(csvString, {
+      columns: true, // use first row as headers
+      skip_empty_lines: true,
+      trim: true,
+    });
+
+    if (!jsonData.length) return { data: [], message: "CSV file contains no data rows" };
+
+    const targetCollection = this.db.collection(collectionName);
+    const logCollection = this.db.collection("ExcelImportLogs");
+
+    const totalRecords = jsonData.length;
+    let insertedCount = 0;
+
+    // 🔹 Chunk data
+    const chunks: any[][] = [];
+    for (let i = 0; i < totalRecords; i += chunkSize) {
+      chunks.push(jsonData.slice(i, i + chunkSize));
+    }
+
+    // 🔹 Insert log entry
+    const logId = (await logCollection.insertOne({
+      collectionName,
+      totalRecords,
+      insertedCount: 0,
+      status: "IN_PROGRESS",
+      insertedBy,
+      startedAt: new Date(),
+    })).insertedId;
+
+    // 🔹 Insert chunks sequentially
+    for (const chunk of chunks) {
+      if (!chunk.length) continue;
+      const result = await targetCollection.insertMany(chunk);
+      insertedCount += result.insertedCount;
+
+      await logCollection.updateOne(
+        { _id: logId },
+        { $set: { insertedCount, updatedAt: new Date() } }
+      );
+    }
+
+    // 🔹 Final update log
+    await logCollection.updateOne(
+      { _id: logId },
+      { $set: { status: "COMPLETED", completedAt: new Date() } }
+    );
+
+    return {
+      data: { totalRecords, insertedCount },
+      message: `✅ Successfully uploaded ${insertedCount} records into ${collectionName}`,
+    };
+  } catch (err: any) {
+    console.error("❌ Error in csvImportService:", err?.message || err);
+    try {
+      const logCollection = this.db.collection("ExcelImportLogs");
+      await logCollection.insertOne({
+        error: err?.message || err,
+        status: "FAILED",
+        failedAt: new Date(),
+      });
+    } catch {}
+
+    if (err.name === "MongoNetworkError") return { data: [], message: "Database network error" };
+    if (err.name === "MongoServerError") return { data: [], message: "Database server error" };
+    return { data: [], message: "Unexpected error occurred" };
+  }
+}
 
 
 
