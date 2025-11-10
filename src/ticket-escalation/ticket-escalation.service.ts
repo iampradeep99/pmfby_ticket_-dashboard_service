@@ -310,7 +310,7 @@ export class TicketEscalationService {
 //       return { data: [], message: "Unexpected error" };
 //     }
 //   }
-async fetchTicketListing(payload: any) {
+async insuracneTicketListingService(payload: any) {
   try {
     const db = this.db;
 
@@ -485,11 +485,11 @@ async fetchTicketListing(payload: any) {
       }
     ]; */
 
-    const pipeline: any[] = [
+/*     const pipeline: any[] = [
   { 
     $match: {
       ...match, 
-      TicketStatusID: { $ne: 109303 } // exclude tickets with status 109303
+      TicketStatusID: { $ne: 109303 } 
     }
   },
   {
@@ -549,8 +549,92 @@ async fetchTicketListing(payload: any) {
       ]
     }
   }
-];
+]; */
 
+    const pipeline: any[] = [
+  { 
+    $match: {
+      ...match,
+      TicketStatusID: { $ne: 109303 }
+    }
+  },
+
+  {
+    $lookup: {
+      from: "Ticket_Assignment_History",
+      localField: "SupportTicketID", 
+      foreignField: "SupportTicketID",
+      as: "assignmentHistory"
+    }
+  },
+
+  {
+    $match: {
+      assignmentHistory: { $size: 0 }
+    }
+  },
+
+  {
+    $facet: {
+      data: [
+        { $sort: { InsertDateTime: -1 } },
+        ...(pageIndex !== -1
+          ? [
+              { $skip: (pageIndex - 1) * pageSize },
+              { $limit: pageSize }
+            ]
+          : []),
+        {
+          $project: {
+            _id: 0,
+            SupportTicketNo: 1,
+            SupportTicketID:1,
+            RequestorName: 1,
+            RequestorMobileNo: 1,
+            RequestYear: 1,
+            RequestSeason: 1,
+            ApplicationNo: 1,
+            InsurancePolicyNo: 1,
+            TicketCategoryName: 1,
+            TicketTypeName: 1,
+            TicketHeadName: 1,
+            CreatedAt: {
+              $dateToString: {
+                date: { $toDate: "$Created" },
+                format: "%Y-%m-%dT%H:%M:%S",
+                timezone: "Asia/Kolkata"
+              }
+            }
+          }
+        }
+      ],
+
+      totalCount: [
+        { $count: "count" }
+      ],
+
+      ticketStatusSummary: [
+        {
+          $project: {
+            TicketStatusID: 1,
+            TicketHeaderID: 1,
+            customStatus: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$TicketStatusID", 109301] }, then: "Open" },
+                  { case: { $eq: ["$TicketStatusID", 109302] }, then: "In-Progress" },
+                  { case: { $eq: ["$TicketStatusID", 109304] }, then: "Re-Open" }
+                ],
+                default: "Other"
+              }
+            }
+          }
+        },
+        { $group: { _id: "$customStatus", count: { $sum: 1 } } }
+      ]
+    }
+  }
+];
 
     console.log(JSON.stringify(pipeline), "Aggregation Pipeline");
     const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
@@ -582,6 +666,85 @@ async fetchTicketListing(payload: any) {
     return { data: [], message: "Unexpected error" };
   }
 }
+
+
+async AssignTicketServie(payload: any) {
+  const db = this.db;
+  const ticketCollection = db.collection('SLA_Ticket_listing');
+  const assignHistoryCollection = db.collection('Ticket_Assignment_History');
+
+  // Validate payload
+  if (!payload || typeof payload !== 'object') {
+    return { success: false, message: 'Invalid payload format' };
+  }
+
+  const { ticketIds, assignedBy, assignedTo, Role } = payload;
+
+  if (!ticketIds || typeof ticketIds !== 'string' || ticketIds.trim() === '') {
+    return { success: false, message: 'ticketIds is required and must be a comma-separated string' };
+  }
+
+  if (!assignedBy || !assignedTo || !Role) {
+    return { success: false, message: 'assignedBy, assignedTo, and Role are required fields' };
+  }
+
+  const ticketIdArray = ticketIds
+    .split(',')
+    .map(id => id.trim())
+    .filter(id => id !== '');
+
+  if (ticketIdArray.length === 0) {
+    return { success: false, message: 'No valid ticket IDs found' };
+  }
+
+  const results = [];
+  const now = new Date();
+
+  for (const ticketId of ticketIdArray) {
+    try {
+      const ticketIdNum = Number(ticketId);
+      const existingTicket = await ticketCollection.findOne({ SupportTicketID: ticketIdNum });
+
+      if (!existingTicket) {
+        results.push({ ticketId, status: 'Failed', reason: 'Ticket not found' });
+        continue;
+      }
+
+      const currentStatusId = existingTicket.TicketStatusID || null;
+      const currentStatusName = existingTicket.TicketStatus || null;
+
+      const assignmentRecord = {
+        SupportTicketID: ticketIdNum,
+        TicketStatusID: currentStatusId,
+        TicketStatus: currentStatusName,
+        assignedBy,
+        assignedTo,
+        Role,
+        AssignedDate: now,
+      };
+
+      const insertResult = await assignHistoryCollection.insertOne(assignmentRecord);
+
+      if (!insertResult.insertedId) {
+        results.push({ ticketId, status: 'Failed', reason: 'History insert failed' });
+        continue;
+      }
+
+      results.push({ ticketId, status: 'Success' });
+    } catch (err: any) {
+      results.push({ ticketId, status: 'Error', reason: err.message || 'Unexpected error' });
+    }
+  }
+
+  const summary = {
+    successCount: results.filter(r => r.status === 'Success').length,
+    failedCount: results.filter(r => r.status === 'Failed' || r.status === 'Error').length,
+    totalTickets: ticketIdArray.length,
+  };
+
+  return { success: true, summary, details: results };
+}
+
 
 
 

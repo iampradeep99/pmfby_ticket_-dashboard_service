@@ -48,13 +48,13 @@ export class TicketEscalationController {
 
 
   @Post('InsuranceTicketList')
-async supportTicketListing(
+async InsuranceTicketListing(
   @Body() payload: any,
   @Req() req: Request,
   @Res({ passthrough: false }) res: Response
 ) {
   try {
-    const { obj, message }: any = await this.dashboardService.fetchTicketListing(payload);
+    const { obj, message }: any = await this.dashboardService.insuracneTicketListingService(payload);
 
     const compressedData = obj ? await this.utilService.GZip(obj) : null;
     console.log("test")
@@ -64,6 +64,23 @@ async supportTicketListing(
   }
 }
 
+
+@Post('AssignTickets')
+async AssignTickets(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const { obj, message }: any = await this.dashboardService.AssignTicketServie(payload);
+
+    const compressedData = obj ? await this.utilService.GZip(obj) : null;
+    console.log("test")
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
 
 
 
