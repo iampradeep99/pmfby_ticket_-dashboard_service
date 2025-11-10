@@ -30,7 +30,8 @@
     "@nestjs/sequelize": "^11.0.0",
     "amqplib": "^0.10.9",
     "archiver": "^7.0.1",
-    "axios": "^1.11.0",
+    "axios": "^1.13.2",
+
     "csv-parse": "^6.1.0",
     "exceljs": "^4.4.0",
     "form-data": "^4.0.4",
