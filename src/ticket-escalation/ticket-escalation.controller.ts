@@ -64,7 +64,6 @@ async InsuranceTicketListing(
   }
 }
 
-
 @Post('AssignTickets')
 async AssignTickets(
   @Body() payload: any,
@@ -72,15 +71,21 @@ async AssignTickets(
   @Res({ passthrough: false }) res: Response
 ) {
   try {
-    const { obj, message }: any = await this.dashboardService.AssignTicketServie(payload);
+    const result: any = await this.dashboardService.AssignTicketServie(payload);
 
-    const compressedData = obj ? await this.utilService.GZip(obj) : null;
-    console.log("test")
-    return jsonResponseHandler(compressedData, message, req, res, () => {});
+    const responseData = {
+      summary: result.summary,
+      details: result.details, 
+    };
+
+    const compressedData = responseData ? await this.utilService.GZip(responseData) : null;
+
+    return jsonResponseHandler(compressedData, result.summary.message, req, res, () => {});
   } catch (err) {
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
+
 
 
 
