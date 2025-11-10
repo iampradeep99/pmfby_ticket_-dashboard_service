@@ -1,6 +1,8 @@
 import * as zlib from "zlib";
 import jwt from "jsonwebtoken";
 import { Injectable } from "@nestjs/common";
+import axios from 'axios'
+
 @Injectable()
 export class UtilService {
     constructor() {}
@@ -76,4 +78,62 @@ export class UtilService {
         }
         return result;
     }
+
+      async convertStringToArray(str) {
+    return str.split(",").map(Number);
+  }
+
+  async getSupportTicketUserDetail(userID) {
+    const data = { userID };
+    const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk'
+
+    const url = 'https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail'
+    return axios.post(url, data, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': TOKEN
+      }
+    })
+      .then(response => {
+        return response.data;
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        throw error;
+      });
+  };
+
+  async  GetDetailsForDistrictUsers(userID:any) {
+  const data = {
+    filterID: userID,
+    filterID1: 0,
+    masterName: "DISTASIGN",
+    searchText: "#ALL",
+    searchCriteria: "AW",
+    objCommon: {
+      insertedUserID: userID?.toString() || "3",
+      insertedIPAddress: "10.234.55.44",
+      dateShort: "yyyy-MM-dd",
+      dateLong: "yyyy-MM-dd HH:mm:ss"
+    }
+  };
+
+  const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk';
+
+  const url = 'https://pmfby.gov.in/krphapi/FGMS/GetMasterDataBinding';
+
+  try {
+    const response = await axios.post(url, data, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': TOKEN
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
 }
