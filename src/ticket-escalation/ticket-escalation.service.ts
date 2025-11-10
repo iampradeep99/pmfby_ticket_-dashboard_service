@@ -667,7 +667,6 @@ async insuracneTicketListingService(payload: any) {
   }
 }
 
-
 async AssignTicketServie(payload: any) {
   const db = this.db;
   const ticketCollection = db.collection('SLA_Ticket_listing');
@@ -675,17 +674,17 @@ async AssignTicketServie(payload: any) {
 
   // Validate payload
   if (!payload || typeof payload !== 'object') {
-    return { success: false, message: 'Invalid payload format' };
+    return { success: false, summary: null, details: [], message: 'Invalid payload: payload must be an object.' };
   }
 
-  const { ticketIds, assignedBy, assignedTo, Role } = payload;
+  const { ticketIds, assignedBy, assignedTo, roleRightsMasterID, stakeholderUserID } = payload;
 
   if (!ticketIds || typeof ticketIds !== 'string' || ticketIds.trim() === '') {
-    return { success: false, message: 'ticketIds is required and must be a comma-separated string' };
+    return { success: false, summary: null, details: [], message: 'Invalid payload: ticketIds is required and must be a comma-separated string.' };
   }
 
-  if (!assignedBy || !assignedTo || !Role) {
-    return { success: false, message: 'assignedBy, assignedTo, and Role are required fields' };
+  if (!assignedBy || !assignedTo || !roleRightsMasterID || !stakeholderUserID) {
+    return { success: false, summary: null, details: [], message: 'Missing required fields: assignedBy, assignedTo, roleRightsMasterID, and stakeholderUserID are all required.' };
   }
 
   const ticketIdArray = ticketIds
@@ -694,56 +693,78 @@ async AssignTicketServie(payload: any) {
     .filter(id => id !== '');
 
   if (ticketIdArray.length === 0) {
-    return { success: false, message: 'No valid ticket IDs found' };
+    return { success: false, summary: null, details: [], message: 'No valid ticket IDs provided in ticketIds.' };
   }
 
-  const results = [];
+  const results: { ticketId: string; ticketNo?: string; status: string; reason?: string }[] = [];
   const now = new Date();
 
   for (const ticketId of ticketIdArray) {
     try {
       const ticketIdNum = Number(ticketId);
-      const existingTicket = await ticketCollection.findOne({ SupportTicketID: ticketIdNum });
-
-      if (!existingTicket) {
-        results.push({ ticketId, status: 'Failed', reason: 'Ticket not found' });
+      if (isNaN(ticketIdNum)) {
+        results.push({ ticketId, status: 'Failed', reason: 'Invalid ticket ID format' });
         continue;
       }
 
-      const currentStatusId = existingTicket.TicketStatusID || null;
-      const currentStatusName = existingTicket.TicketStatus || null;
+      const existingTicket = await ticketCollection.findOne({ SupportTicketID: ticketIdNum });
+      if (!existingTicket) {
+        results.push({ ticketId, status: 'Failed', reason: 'Ticket not found in the system' });
+        continue;
+      }
+
+      const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketIdNum });
+      if (alreadyAssigned) {
+        results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Failed', reason: 'Ticket is already assigned' });
+        continue;
+      }
 
       const assignmentRecord = {
         SupportTicketID: ticketIdNum,
-        TicketStatusID: currentStatusId,
-        TicketStatus: currentStatusName,
+        SupportTicketNo: existingTicket.SupportTicketNo,
+        TicketStatusID: existingTicket.TicketStatusID || null,
+        TicketStatus: existingTicket.TicketStatus || null,
         assignedBy,
         assignedTo,
-        Role,
+        RoleRightMasterID: roleRightsMasterID,
+        StakeHolderUserID: stakeholderUserID,
         AssignedDate: now,
       };
 
       const insertResult = await assignHistoryCollection.insertOne(assignmentRecord);
 
       if (!insertResult.insertedId) {
-        results.push({ ticketId, status: 'Failed', reason: 'History insert failed' });
+        results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Failed', reason: 'Failed to save assignment history' });
         continue;
       }
 
-      results.push({ ticketId, status: 'Success' });
+      results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Success', reason: `Ticket ${existingTicket.SupportTicketNo} assigned successfully` });
     } catch (err: any) {
-      results.push({ ticketId, status: 'Error', reason: err.message || 'Unexpected error' });
+      results.push({ ticketId, status: 'Error', reason: err.message || 'Unexpected error occurred' });
     }
   }
 
+  const successCount = results.filter(r => r.status === 'Success').length;
+  const failedCount = results.filter(r => r.status === 'Failed' || r.status === 'Error').length;
+
+  const summaryMessage =
+    successCount === ticketIdArray.length
+      ? 'All tickets assigned successfully.'
+      : successCount === 0
+      ? 'No tickets were assigned. All failed.'
+      : `${successCount} ticket(s) assigned successfully, ${failedCount} ticket(s) failed.`;
+
   const summary = {
-    successCount: results.filter(r => r.status === 'Success').length,
-    failedCount: results.filter(r => r.status === 'Failed' || r.status === 'Error').length,
     totalTickets: ticketIdArray.length,
+    successCount,
+    failedCount,
+    message: summaryMessage,
   };
 
   return { success: true, summary, details: results };
 }
+
+
 
 
 
