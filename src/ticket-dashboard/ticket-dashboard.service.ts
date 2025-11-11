@@ -7472,7 +7472,7 @@ pipeline.push({
         for (const itemData of collectedDistrictInfo.masterdatabinding) {
           districtId.push(itemData.DistrictCodeAlpha);
         }
-        locationFilter = { FilterDistrictRequestorID: { $in: districtId } };
+        locationFilter = { DistrictMasterID: { $in: districtId } };
       } else {
         console.warn("Invalid district info format:", collectedDistrictInfo);
         locationFilter = {};
