@@ -666,7 +666,7 @@ async insuracneTicketListingServicePrevious(payload: any) {
   }
 }
 
-async insuranceTicketListingService(payload: any) {
+async insuracneTicketListingService(payload: any) {
   try {
     const db = this.db;
 
