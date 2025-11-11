@@ -818,7 +818,9 @@ async insuracneTicketListingService(payload: any) {
                 TicketCategoryName: 1,
                 TicketTypeName: 1,
                 TicketHeadName: 1,
-                CreatedAt: {
+                StateMasterName:1,
+                TicketDescription:1,
+                Created: {
                   $dateToString: {
                     date: { $toDate: "$Created" },
                     format: "%Y-%m-%dT%H:%M:%S",
