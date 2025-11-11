@@ -105,6 +105,25 @@ async UserWiseState(
 }
 
 
+@Post('RoleWiseAssignedTickets')
+async RoleWiseAssignedTicketList(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const { data, message }: any = await this.dashboardService.RoleWiseAssignedTickets(payload);
+
+    // Compress data if available
+    const compressedData = data?.length ? await this.utilService.GZip(data) : null;
+
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
 
 
   

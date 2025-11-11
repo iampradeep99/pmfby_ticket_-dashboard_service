@@ -1079,7 +1079,158 @@ async UserWiseState(payload: any) {
 }
 
 
+// async RoleWiseAssignedTickets(payload: any) {
+//     try {
+//         const db = this.db;
+//         const { loggedInUserId } = payload;
 
+//         const pipeline = [
+//             {
+//                 $match: {
+//                     RoleRightMasterID: loggedInUserId,
+//                 },
+//             },
+//             {
+//                 $lookup: {
+//                     from: "SLA_Ticket_listing",
+//                     localField: "SupportTicketID",
+//                     foreignField: "SupportTicketID",
+//                     as: "TicketRecords",
+//                 },
+//             },
+//             {
+//                 $group: {
+//                     _id: "$RoleRightMasterID",
+//                     TicketRecords: { $push: "$TicketRecords" },
+//                 },
+//             },
+//             {
+//                 $project: {
+//                     _id: 0,
+//                     RoleRightMasterID: "$_id",
+//                     TicketRecords: {
+//                         $reduce: {
+//                             input: "$TicketRecords",
+//                             initialValue: [],
+//                             in: { $concatArrays: ["$$value", "$$this"] },
+//                         },
+//                     },
+//                     TicketCount: {
+//                         $size: {
+//                             $reduce: {
+//                                 input: "$TicketRecords",
+//                                 initialValue: [],
+//                                 in: { $concatArrays: ["$$value", "$$this"] },
+//                             },
+//                         },
+//                     },
+//                 },
+//             },
+//         ];
+
+//        const data = await db.collection('Ticket_Assignment_History').aggregate(pipeline).toArray();
+
+//        console.log(data.length, "test")
+//        if (data.length > 0){
+//         return {
+//             data,
+//             msg: "Success",
+//             code: "1"
+//         };
+//        }else{
+//         return {
+//         data: [],
+//         msg: "No tickets found",
+//         code: "0"
+//     };
+//        }
+
+
+
+       
+
+//     } catch (error) {
+//         console.error(error);
+//         return {
+//             data: null,
+//             msg: error.message || "Failed",
+//             code: "0"
+//         };
+//     }
+// }
+
+
+async RoleWiseAssignedTickets(payload: any) {
+  try {
+    if (!payload || !payload.loggedInUserId) {
+      return {
+        data: [],
+        message: { msg: "Invalid payload", code: "0" },
+      };
+    }
+
+    const db = this.db;
+    const { loggedInUserId } = payload;
+
+    const pipeline = [
+      { $match: { RoleRightMasterID: loggedInUserId } },
+      {
+        $lookup: {
+          from: "SLA_Ticket_listing",
+          localField: "SupportTicketID",
+          foreignField: "SupportTicketID",
+          as: "TicketRecords",
+        },
+      },
+      {
+        $group: {
+          _id: "$RoleRightMasterID",
+          TicketRecords: { $push: "$TicketRecords" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          RoleRightMasterID: "$_id",
+          TicketRecords: {
+            $reduce: {
+              input: "$TicketRecords",
+              initialValue: [],
+              in: { $concatArrays: ["$$value", { $ifNull: ["$$this", []] }] },
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          TicketCount: { $size: { $ifNull: ["$TicketRecords", []] } },
+        },
+      },
+    ];
+
+    const collection = db.collection("Ticket_Assignment_History");
+    if (!collection) {
+      return {
+        data: [],
+        message: { msg: "Collection not found", code: "0" },
+      };
+    }
+
+    const data = await collection.aggregate(pipeline).toArray();
+
+    return {
+      data: Array.isArray(data) && data.length ? data : [],
+      message: Array.isArray(data) && data.length
+        ? { msg: "Success", code: "1" }
+        : { msg: "No Record Found", code: "0" },
+    };
+  } catch (error) {
+    return {
+      data: null,
+      message: { msg: error?.message || "Failed", code: "0" },
+    };
+  }
+}
 
 
 
