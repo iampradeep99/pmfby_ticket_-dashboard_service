@@ -1333,6 +1333,7 @@ async RoleWiseAssignedTicketsWithPagination(payload: any) {
 }
 
 
+
 async RoleWiseAssignedTickets(payload: any) {
   try {
     if (!payload || !payload.loggedInUserId) {
@@ -1348,10 +1349,10 @@ async RoleWiseAssignedTickets(payload: any) {
       fromDate,
       toDate,
       page = 1,
-      limit = 20,
+      limit = 20
     } = payload;
 
-    TicketHeaderID = Number(TicketHeaderID);
+    TicketHeaderID = TicketHeaderID ? Number(TicketHeaderID) : null;
 
     const collection = db.collection("Ticket_Assignment_History");
     if (!collection) {
@@ -1391,56 +1392,51 @@ async RoleWiseAssignedTickets(payload: any) {
         },
       },
       {
+        $group: {
+          _id: "$RoleRightMasterID",
+          TicketRecords: { $push: "$TicketRecords" },
+        },
+      },
+      {
         $project: {
           _id: 0,
-          RoleRightMasterID: 1,
-          TicketRecords: 1,
-        },
-      },
-      { $unwind: "$TicketRecords" },
-      {
-        $replaceRoot: { newRoot: "$TicketRecords" },
-      },
-      {
-        $sort: { Created: -1 },
-      },
-      {
-        $facet: {
-          metadata: [{ $count: "total" }],
-          data: [
-            { $skip: (Number(page) - 1) * Number(limit) },
-            { $limit: Number(limit) },
-          ],
+          RoleRightMasterID: "$_id",
+          TicketRecords: {
+            $reduce: {
+              input: "$TicketRecords",
+              initialValue: [],
+              in: { $concatArrays: ["$$value", { $ifNull: ["$$this", []] }] },
+            },
+          },
         },
       },
       {
-        $project: {
-          total: { $ifNull: [{ $arrayElemAt: ["$metadata.total", 0] }, 0] },
-          data: "$data",
+        $addFields: {
+          TicketCount: { $size: { $ifNull: ["$TicketRecords", []] } },
+        },
+      },
+      {
+        $addFields: {
+          TicketRecords: {
+            $slice: ["$TicketRecords", (Number(page) - 1) * Number(limit), Number(limit)],
+          },
         },
       },
     ];
 
-    const result = await collection.aggregate(pipeline).toArray();
-    const response = result[0] || { total: 0, data: [] };
+    const data = await collection.aggregate(pipeline).toArray();
 
     return {
-      data: response.data || [],
-      pagination: {
-        totalRecords: response.total || 0,
-        currentPage: Number(page),
-        pageSize: Number(limit),
-        totalPages: Math.ceil((response.total || 0) / Number(limit)),
-      },
-      message:
-        response.data && response.data.length
-          ? { msg: "Success", code: "1" }
-          : { msg: "No Record Found", code: "0" },
+      data: Array.isArray(data) && data.length ? data : [],
+      message: Array.isArray(data) && data.length
+        ? { msg: "Success", code: "1" }
+        : { msg: "No Record Found", code: "0" },
     };
   } catch (error) {
     return { data: null, message: { msg: error?.message || "Failed", code: "0" } };
   }
 }
+
 
 
 
