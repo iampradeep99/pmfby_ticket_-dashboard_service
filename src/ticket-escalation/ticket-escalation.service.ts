@@ -1234,7 +1234,7 @@ async RoleWiseAssignedTicketsWorking(payload: any) {
 
 
 
-async RoleWiseAssignedTickets(payload: any) {
+async RoleWiseAssignedTicketsWithPagination(payload: any) {
   try {
     if (!payload || !payload.loggedInUserId) {
       return { data: [], message: { msg: "Invalid payload", code: "0" } };
@@ -1332,6 +1332,115 @@ async RoleWiseAssignedTickets(payload: any) {
   }
 }
 
+
+async RoleWiseAssignedTickets(payload: any) {
+  try {
+    if (!payload || !payload.loggedInUserId) {
+      return { data: [], message: { msg: "Invalid payload", code: "0" } };
+    }
+
+    const db = this.db;
+    let {
+      loggedInUserId,
+      SupportTicketNo,
+      ApplicationNo,
+      TicketHeaderID,
+      fromDate,
+      toDate,
+      page = 1,
+      limit = 20,
+    } = payload;
+
+    TicketHeaderID = Number(TicketHeaderID);
+
+    const collection = db.collection("Ticket_Assignment_History");
+    if (!collection) {
+      return { data: [], message: { msg: "Collection not found", code: "0" } };
+    }
+
+    const fromDateISO = fromDate ? moment(fromDate, "YYYY-MM-DD").startOf("day").toDate() : null;
+    const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
+
+    const pipeline: any[] = [
+      { $match: { RoleRightMasterID: loggedInUserId } },
+      {
+        $lookup: {
+          from: "SLA_Ticket_listing",
+          localField: "SupportTicketID",
+          foreignField: "SupportTicketID",
+          as: "TicketRecords",
+        },
+      },
+      {
+        $addFields: {
+          TicketRecords: {
+            $filter: {
+              input: "$TicketRecords",
+              as: "ticket",
+              cond: {
+                $and: [
+                  SupportTicketNo ? { $eq: ["$$ticket.SupportTicketNo", SupportTicketNo] } : {},
+                  ApplicationNo ? { $eq: ["$$ticket.ApplicationNo", ApplicationNo] } : {},
+                  TicketHeaderID ? { $eq: ["$$ticket.TicketHeaderID", TicketHeaderID] } : {},
+                  fromDateISO ? { $gte: ["$$ticket.Created", fromDateISO] } : {},
+                  toDateISO ? { $lte: ["$$ticket.Created", toDateISO] } : {},
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          RoleRightMasterID: 1,
+          TicketRecords: 1,
+        },
+      },
+      { $unwind: "$TicketRecords" },
+      {
+        $replaceRoot: { newRoot: "$TicketRecords" },
+      },
+      {
+        $sort: { Created: -1 },
+      },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          data: [
+            { $skip: (Number(page) - 1) * Number(limit) },
+            { $limit: Number(limit) },
+          ],
+        },
+      },
+      {
+        $project: {
+          total: { $ifNull: [{ $arrayElemAt: ["$metadata.total", 0] }, 0] },
+          data: "$data",
+        },
+      },
+    ];
+
+    const result = await collection.aggregate(pipeline).toArray();
+    const response = result[0] || { total: 0, data: [] };
+
+    return {
+      data: response.data || [],
+      pagination: {
+        totalRecords: response.total || 0,
+        currentPage: Number(page),
+        pageSize: Number(limit),
+        totalPages: Math.ceil((response.total || 0) / Number(limit)),
+      },
+      message:
+        response.data && response.data.length
+          ? { msg: "Success", code: "1" }
+          : { msg: "No Record Found", code: "0" },
+    };
+  } catch (error) {
+    return { data: null, message: { msg: error?.message || "Failed", code: "0" } };
+  }
+}
 
 
 
