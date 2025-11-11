@@ -702,6 +702,8 @@ async insuracneTicketListingService(payload: any) {
 
     const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
     const item = (responseInfo.data as any)?.user?.[0];
+
+    console.log(responseInfo, "dfdfd");
     if (!item) return { rcode: 0, rmessage: "User details not found." };
 
     const userDetail = {
@@ -984,6 +986,100 @@ async AssignTicketServie(payload: any) {
 
   return { success: true, summary, details: results };
 }
+
+async UserWiseState(payload: any) {
+  try {
+    const db = this.db;
+
+    if (!payload || typeof payload !== "object") {
+      return { data: [], msg: "Invalid payload", code: "0" };
+    }
+
+    const { userID } = payload;
+
+    if (!userID || (typeof userID !== "string" && typeof userID !== "number")) {
+      return { data: [], msg: "User ID is required and must be valid", code: "0" };
+    }
+
+    const utilService = new UtilService();
+    let Delta;
+    try {
+      [Delta] = await Promise.all([utilService.getSupportTicketUserDetail(userID)]);
+    } catch (dbFetchError) {
+      console.error("❌ Error fetching user details:", dbFetchError);
+      return { data: [], msg: "Failed to fetch user details", code: "0" };
+    }
+
+    if (!Delta || !Delta.responseDynamic) {
+      return { data: [], msg: "User does not exist", code: "0" };
+    }
+
+    let responseInfo;
+    try {
+      responseInfo = await utilService.unGZip(Delta.responseDynamic);
+    } catch (gzipError) {
+      console.error("❌ Error unGZip user data:", gzipError);
+      return { data: [], msg: "Failed to process user data", code: "0" };
+    }
+
+    const item = (responseInfo?.data?.user?.[0]) || null;
+
+    if (!item) {
+      return { data: [], msg: "User does not exist", code: "0" };
+    }
+
+    let StateMasterID: number[] = [];
+    try {
+      if (item.StateMasterID) {
+        const arr = await utilService.convertStringToArray(item.StateMasterID);
+        StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
+      }
+    } catch (convertError) {
+      console.error("❌ Error converting StateMasterID:", convertError);
+      return { data: [], msg: "Invalid StateMasterID format", code: "0" };
+    }
+
+    if (!StateMasterID.length) {
+      return { data: [], msg: "No states assigned to user", code: "0" };
+    }
+
+    const pipeline = [
+      { $match: { StateMasterID: { $in: StateMasterID } } },
+      {
+        $group: {
+          _id: "$StateMasterID",
+          StateMasterName: { $first: "$StateMasterName" },
+        },
+      },
+      { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
+      { $sort: { order: 1 } },
+      {
+        $project: {
+          _id: 0,
+          StateMasterID: "$_id",
+          StateName: "$StateMasterName",
+        },
+      },
+    ];
+
+    let extractedData = [];
+    try {
+      extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
+    } catch (dbError) {
+      console.error("❌ Error fetching state data:", dbError);
+      return { data: [], msg: "Failed to fetch state data", code: "0" };
+    }
+
+    return { data: extractedData, msg: "Fetched successfully", code: "1" };
+
+  } catch (err) {
+    console.error("❌ Top-level error:", err);
+    return { data: [], msg: "Unexpected error occurred", code: "0" };
+  }
+}
+
+
+
 
 
 

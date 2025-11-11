@@ -87,6 +87,24 @@ async AssignTickets(
 }
 
 
+  @Post('UserWiseState')
+async UserWiseState(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    const { data, message }: any = await this.dashboardService.UserWiseState(payload);
+    
+
+    const compressedData = data ? await this.utilService.GZip(data) : null;
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
 
 
   
