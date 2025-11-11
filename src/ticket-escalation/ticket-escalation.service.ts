@@ -1006,7 +1006,7 @@ async UserWiseState(payload: any) {
     try {
       [Delta] = await Promise.all([utilService.getSupportTicketUserDetail(userID)]);
     } catch (dbFetchError) {
-      console.error("❌ Error fetching user details:", dbFetchError);
+      console.log("Error fetching user details:", dbFetchError);
       return { data: [], msg: "Failed to fetch user details", code: "0" };
     }
 
@@ -1018,7 +1018,7 @@ async UserWiseState(payload: any) {
     try {
       responseInfo = await utilService.unGZip(Delta.responseDynamic);
     } catch (gzipError) {
-      console.error("❌ Error unGZip user data:", gzipError);
+      console.log("Error unGZip user data:", gzipError);
       return { data: [], msg: "Failed to process user data", code: "0" };
     }
 
@@ -1035,7 +1035,7 @@ async UserWiseState(payload: any) {
         StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
       }
     } catch (convertError) {
-      console.error("❌ Error converting StateMasterID:", convertError);
+      console.log("Error converting StateMasterID:", convertError);
       return { data: [], msg: "Invalid StateMasterID format", code: "0" };
     }
 
@@ -1066,17 +1066,18 @@ async UserWiseState(payload: any) {
     try {
       extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
     } catch (dbError) {
-      console.error("❌ Error fetching state data:", dbError);
+      console.log("Error fetching state data:", dbError);
       return { data: [], msg: "Failed to fetch state data", code: "0" };
     }
 
     return { data: extractedData, msg: "Fetched successfully", code: "1" };
 
   } catch (err) {
-    console.error("❌ Top-level error:", err);
+    console.log("Top-level error:", err);
     return { data: [], msg: "Unexpected error occurred", code: "0" };
   }
 }
+
 
 
 
