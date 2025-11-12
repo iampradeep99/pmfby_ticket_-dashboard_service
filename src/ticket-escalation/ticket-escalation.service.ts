@@ -31,6 +31,8 @@ import config from '../environment/config'; // import dynamic config
 export class TicketEscalationService {
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
+    private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
+
   public gcp = new GCPServices();
   logDir = path.join(__dirname, '..', 'logs');
 
@@ -40,7 +42,6 @@ export class TicketEscalationService {
     private readonly redisWrapper: RedisWrapper,
     private readonly mailService: MailService,
     private readonly utilServices : UtilService,
-    private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
   ) {
     this.ticketCollection = this.db.collection('tickets');
     this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
