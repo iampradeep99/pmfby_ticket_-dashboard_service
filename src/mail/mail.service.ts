@@ -1,6 +1,8 @@
 // src/mail/mail.service.ts
 import { Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import config from '../environment/config'; // import dynamic config
+
 
 interface SendMailPayload {
   to: any;
@@ -12,6 +14,10 @@ interface SendMailPayload {
 @Injectable()
 export class MailService {
   private transporter: nodemailer.Transporter;
+      private readonly emailUser = config.mail?.user
+      private readonly emailPassword = config.mail?.password
+
+  
 
   constructor() {
     this.transporter = nodemailer.createTransport({
@@ -19,8 +25,8 @@ export class MailService {
       port: 587,
       secure: false,                     // TLS on port 587
       auth: {
-        user: process.env.SEND_MAIL_USER,
-        pass: process.env.APP_PASSWORD_GMAIL, // ✅ Gmail App Password
+        user: this.emailUser,
+        pass: this.emailPassword, // ✅ Gmail App Password
       },
     });
   }
