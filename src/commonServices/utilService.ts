@@ -136,4 +136,18 @@ export class UtilService {
   }
 }
 
+
+async generateCacheKey(prefix: string, payload: any) {
+  if (!prefix) prefix = 'cache';
+  let payloadString: string;
+  try {
+    payloadString = JSON.stringify(payload || {});
+  } catch {
+    payloadString = String(payload);
+  }
+  const normalized = payloadString.replace(/\s+/g, '').toLowerCase();
+  const hash = require('crypto').createHash('sha256').update(normalized).digest('hex');
+  return `${prefix}:${hash}`;
+}
+
 }
