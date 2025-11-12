@@ -24,6 +24,7 @@ interface Config {
   rabbitmq: string;
   mail: MailConfig;
   gcpUpload: string;
+  pmfbyRoleURL:string
 }
 
 const env = process.env.NODE_ENV || "uat";
@@ -44,7 +45,8 @@ const config: { [key: string]: Config } = {
       user: process.env.LOCAL_MAIL_USER!,
       password: process.env.LOCAL_MAIL_PASS!
     },
-    gcpUpload: process.env.LOCAL_GCP_UPLOAD!
+    gcpUpload: process.env.LOCAL_GCP_UPLOAD!,
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
   },
   uat: {
     mongodb: process.env.UAT_MONGO!,
@@ -61,7 +63,9 @@ const config: { [key: string]: Config } = {
       user: process.env.UAT_MAIL_USER!,
       password: process.env.UAT_MAIL_PASS!
     },
-    gcpUpload: process.env.UAT_GCP_UPLOAD!
+    gcpUpload: process.env.UAT_GCP_UPLOAD!,
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+
   },
   prod: {
     mongodb: process.env.PROD_MONGO!,
@@ -78,7 +82,9 @@ const config: { [key: string]: Config } = {
       user: process.env.PROD_MAIL_USER!,
       password: process.env.PROD_MAIL_PASS!
     },
-    gcpUpload: process.env.PROD_GCP_UPLOAD!
+    gcpUpload: process.env.PROD_GCP_UPLOAD!,
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+
   }
 };
 

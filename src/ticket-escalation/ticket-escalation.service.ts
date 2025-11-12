@@ -22,6 +22,8 @@ import { QueryTypes } from 'sequelize'; // ✅ import QueryTypes
 import { MongoClient } from 'mongodb';
 import * as moment from "moment";
 import { parse } from "csv-parse/sync";
+import config from '../environment/config'; // import dynamic config
+
 
 // import * as ExcelJS from 'exceljs';
 
@@ -37,7 +39,8 @@ export class TicketEscalationService {
     @Inject('SEQUELIZE') private readonly sequelize: Sequelize,
     private readonly redisWrapper: RedisWrapper,
     private readonly mailService: MailService,
-    private readonly utilServices : UtilService
+    private readonly utilServices : UtilService,
+    private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
   ) {
     this.ticketCollection = this.db.collection('tickets');
     this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
@@ -64,7 +67,7 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
 
     console.log("No cache found, fetching data from API");
 
-    const response: AxiosResponse<any> = await axios.get(process.env.pmfby_ROLE_URL, {
+    const response: AxiosResponse<any> = await axios.get(this.PMFBY_ROLE_URL, {
       params: payload || {},
       timeout: 10000,
       headers: { "Content-Type": "application/json" },
