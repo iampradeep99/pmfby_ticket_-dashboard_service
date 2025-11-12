@@ -442,19 +442,20 @@ async insuracneTicketListingService(payload: any) {
 
     const pipeline: any[] = [
       { $match: { ...match, TicketStatusID: { $ne: 109303 } } },
+      { $limit: pageSize * 2 },
       { $sort: { InsertDateTime: -1 } },
+      { $lookup: {
+          from: "Ticket_Assignment_History",
+          localField: "SupportTicketID",
+          foreignField: "SupportTicketID",
+          as: "assignmentHistory"
+        }
+      },
+      { $match: { assignmentHistory: { $size: 0 } } },
       { $facet: {
           data: [
             { $skip: (pageIndex - 1) * pageSize },
             { $limit: pageSize },
-            { $lookup: {
-                from: "Ticket_Assignment_History",
-                localField: "SupportTicketID",
-                foreignField: "SupportTicketID",
-                as: "assignmentHistory"
-              }
-            },
-            { $match: { assignmentHistory: { $size: 0 } } },
             { $project: {
                 _id: 0,
                 SupportTicketNo: 1,
