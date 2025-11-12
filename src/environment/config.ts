@@ -1,69 +1,4 @@
-// import * as dotenv from "dotenv"; // ✅ use '* as dotenv' to avoid the default import issue
 
-// dotenv.config();
-
-// interface DBConfig {
-//   host: string;
-//   port: number;
-//   user: string;
-//   password: string;
-//   database: string;
-// }
-
-// interface MailConfig {
-//   user: string;
-//   password: string;
-// }
-
-// interface Config {
-//   mongodb: string;
-//   redis: string;
-//   mysql: DBConfig;
-//   rabbitmq: string;
-//   mail: MailConfig;
-//   gcpUpload: string;
-// }
-
-// const env = process.env.NODE_ENV || "uat";
-
-// const config: { [key: string]: Config } = {
-//   uat: {
-//     mongodb: process.env.UAT_MONGO!,
-//     redis: process.env.UAT_REDIS!,
-//     mysql: {
-//       host: process.env.UAT_DB_HOST!,
-//       port: Number(process.env.UAT_DB_PORT),
-//       user: process.env.UAT_DB_USER!,
-//       password: process.env.UAT_DB_PASS!,
-//       database: process.env.UAT_DB_NAME!
-//     },
-//     rabbitmq: process.env.UAT_RABBIT!,
-//     mail: {
-//       user: process.env.UAT_MAIL_USER!,
-//       password: process.env.UAT_MAIL_PASS!
-//     },
-//     gcpUpload: process.env.UAT_GCP_UPLOAD!
-//   },
-//   prod: {
-//     mongodb: process.env.PROD_MONGO!,
-//     redis: process.env.PROD_REDIS!,
-//     mysql: {
-//       host: process.env.PROD_DB_HOST!,
-//       port: Number(process.env.PROD_DB_PORT),
-//       user: process.env.PROD_DB_USER!,
-//       password: process.env.PROD_DB_PASS!,
-//       database: process.env.PROD_DB_NAME!
-//     },
-//     rabbitmq: process.env.PROD_RABBIT!,
-//     mail: {
-//       user: process.env.PROD_MAIL_USER!,
-//       password: process.env.PROD_MAIL_PASS!
-//     },
-//     gcpUpload: process.env.PROD_GCP_UPLOAD!
-//   }
-// };
-
-// export default config[env];
 
 import * as dotenv from "dotenv";
 
@@ -89,6 +24,7 @@ interface Config {
   rabbitmq: string;
   mail: MailConfig;
   gcpUpload: string;
+  pmfbyRoleURL:string
 }
 
 const env = process.env.NODE_ENV || "uat";
@@ -109,7 +45,8 @@ const config: { [key: string]: Config } = {
       user: process.env.LOCAL_MAIL_USER!,
       password: process.env.LOCAL_MAIL_PASS!
     },
-    gcpUpload: process.env.LOCAL_GCP_UPLOAD!
+    gcpUpload: process.env.LOCAL_GCP_UPLOAD!,
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
   },
   uat: {
     mongodb: process.env.UAT_MONGO!,
@@ -126,7 +63,9 @@ const config: { [key: string]: Config } = {
       user: process.env.UAT_MAIL_USER!,
       password: process.env.UAT_MAIL_PASS!
     },
-    gcpUpload: process.env.UAT_GCP_UPLOAD!
+    gcpUpload: process.env.UAT_GCP_UPLOAD!,
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+
   },
   prod: {
     mongodb: process.env.PROD_MONGO!,
@@ -143,7 +82,9 @@ const config: { [key: string]: Config } = {
       user: process.env.PROD_MAIL_USER!,
       password: process.env.PROD_MAIL_PASS!
     },
-    gcpUpload: process.env.PROD_GCP_UPLOAD!
+    gcpUpload: process.env.PROD_GCP_UPLOAD!,
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+
   }
 };
 
