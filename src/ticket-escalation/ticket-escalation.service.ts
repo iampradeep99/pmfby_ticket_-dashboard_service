@@ -51,7 +51,7 @@ export class TicketEscalationService {
 
 
   
-async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+/* async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; code: number } }> {
   try {
     const cacheKey = await this.utilServices.generateCacheKey('roles', payload);
     console.log("Generated cache key:", cacheKey);
@@ -108,8 +108,76 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
     };
   }
 }
+ */
 
 
+async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; code: number } }> {
+  try {
+    const cacheKey = await this.utilServices.generateCacheKey("roles", payload);
+    const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
+
+    if (cachedData) {
+      return {
+        data: cachedData,
+        message: { msg: "Data fetched from cache", code: 1 },
+      };
+    }
+
+    const response: AxiosResponse<any> = await axios.get(this.PMFBY_ROLE_URL, {
+      params: payload || {},
+      timeout: 10000,
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response?.data?.data) {
+      return {
+        data: null,
+        message: { msg: "No data received from API", code: 0 },
+      };
+    }
+
+    const allRoles = response.data.data;
+
+    if (!payload?.type) {
+      const uniqueUserTypes = Array.from(new Set(allRoles.map((r: any) => r.userType)))
+        .filter(Boolean)
+        .sort()
+        .map((type) => ({ userType: type }));
+
+      await this.redisWrapper.setRedisCache(cacheKey, uniqueUserTypes, 86400);
+
+      return {
+        data: uniqueUserTypes,
+        message: { msg: "Fetched all unique user types", code: 1 },
+      };
+    }
+
+    const filteredRoles = allRoles.filter(
+      (r: any) => r.userType?.toLowerCase() === payload.type.toLowerCase()
+    );
+
+    await this.redisWrapper.setRedisCache(cacheKey, filteredRoles, 86400);
+
+    return {
+      data: filteredRoles,
+      message: { msg: `Fetched roles for userType: ${payload.type}`, code: 1 },
+    };
+  } catch (error: any) {
+    let errorMsg = "Failed to fetch roles";
+    if (error.response) {
+      errorMsg = `API responded with status ${error.response.status}`;
+    } else if (error.request) {
+      errorMsg = "No response received from API";
+    } else if (error.message) {
+      errorMsg = `Error: ${error.message}`;
+    }
+
+    return {
+      data: null,
+      message: { msg: errorMsg, code: 0 },
+    };
+  }
+}
 
 
 
