@@ -143,17 +143,17 @@ async FarmerSelectCallingHistoryRoute(
   try {
     const responsePayload = await this.dashboardService.FarmerSelectCallingHistoryService(payload);
 
-    const { data: resultArray, pagination } = responsePayload;
+    const { data: resultArray, pagination, message } = responsePayload;
 
     let gzippedData = null;
     if (resultArray && resultArray.length > 0) {
-      const stringifiedData: any = JSON.stringify(resultArray);
+      const stringifiedData: any = resultArray;
       gzippedData = await this.utilService.GZip(stringifiedData); // ✅ Make sure this returns a Buffer
     }
 
     return jsonResponseHandlerReport(
       gzippedData,
-      "✅ Data fetched successfully",
+      message,
       pagination,
       req,
       res,
@@ -171,6 +171,51 @@ async FarmerSelectCallingHistoryRoute(
     );
   }
 }
+
+
+
+
+
+
+  @Post('getSupportTicketHistory')
+  async FarmerSelectCallingHistoryDownload(@Body() ticketPayload: any, @Req() req: Request,
+    @Res({ passthrough: false }) res: Response) {
+
+    const userEmail = ticketPayload?.userEmail?.trim();
+
+    if (!userEmail) {
+      return {
+        rcode: 0,
+        rmessage: 'User Email is required',
+      };
+    }
+     await this.rabbitMQService.sendToQueue(ticketPayload);
+    // await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
+    let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
+    return jsonResponseHandler([], rmessage, req, res, () => { });
+
+  }
+
+ @Post('FarmerSelectCallingHistoryDownload')
+  async downloadFarmerCallingReport(
+    @Body() ticketPayload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const userEmail = ticketPayload?.userEmail?.trim();
+
+     
+
+    await this.dashboardService.downloadFarmerCallingReportService(ticketPayload);
+
+
+    let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
+    return jsonResponseHandler([], rmessage, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
 
 
  @Post('assignAllIndexed')
