@@ -113,16 +113,6 @@ export class TicketEscalationService {
 
 async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; code: number } }> {
   try {
-    const cacheKey = await this.utilServices.generateCacheKey("roles", payload);
-    const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
-
-    if (cachedData) {
-      return {
-        data: cachedData,
-        message: { msg: "Data fetched from cache", code: 1 },
-      };
-    }
-
     const response: AxiosResponse<any> = await axios.get(this.PMFBY_ROLE_URL, {
       params: payload || {},
       timeout: 10000,
@@ -144,8 +134,6 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
         .sort()
         .map((type) => ({ userType: type }));
 
-      await this.redisWrapper.setRedisCache(cacheKey, uniqueUserTypes, 86400);
-
       return {
         data: uniqueUserTypes,
         message: { msg: "Fetched all unique user types", code: 1 },
@@ -155,8 +143,6 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
     const filteredRoles = allRoles.filter(
       (r: any) => r.userType?.toLowerCase() === payload.type.toLowerCase()
     );
-
-    await this.redisWrapper.setRedisCache(cacheKey, filteredRoles, 86400);
 
     return {
       data: filteredRoles,
