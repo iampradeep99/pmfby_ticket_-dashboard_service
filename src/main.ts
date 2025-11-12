@@ -1,73 +1,118 @@
+// import { NestFactory } from '@nestjs/core';
+// import { AppModule } from './app.module';
+// import * as express from 'express';
+// import * as path from 'path';
+// import { RedisWrapper } from './commonServices/redisWrapper';
+// import * as crypto from 'crypto';
+// (global as any).crypto = crypto;
+
+// async function bootstrap() {
+//   const app = await NestFactory.create(AppModule);
+
+//   app.setGlobalPrefix('krphdashboard');
+
+//   app.use('/downloads', express.static(path.join(__dirname, '../downloads')));
+
+//   app.enableCors({
+//     origin: '*',                       
+//     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', 
+//     allowedHeaders: '*',            
+//   });
+
+//   const redis = new RedisWrapper();
+//   try {
+//     await redis.connectionInit({ url: process.env.REDIS_URL});
+//     console.log('✅ Redis connected and subscriber started');
+//   } catch (err) {
+//     console.error('❌ Redis init error:', err);
+//   }
+
+//   await app.listen(process.env.PORT ?? 5500);
+// }
+// bootstrap();
+
+
+
+
+
+
+
+
+
+// // // main.ts
+// // import { NestFactory } from '@nestjs/core';
+// // import { AppModule } from './app.module';
+// // import * as express from 'express';
+// // import * as path from 'path';
+// // import { RedisWrapper } from './commonServices/redisWrapper';
+
+// // async function bootstrap() {
+// //   const app = await NestFactory.create(AppModule);
+
+// //   // ✅ Global prefix
+// //   app.setGlobalPrefix('krphdashboard');
+
+// //   // ✅ Serve downloads
+// //   app.use('/downloads', express.static(path.join(__dirname, '../downloads')));
+
+// //   // ✅ Optional: Redis initialization
+// //   const redis = new RedisWrapper();
+// //   try {
+// //     await redis.connectionInit({ url: "redis://10.128.60.9:6379" });
+// //     console.log('✅ Redis connected and subscriber started');
+// //   } catch (err) {
+// //     console.error('❌ Redis init error:', err);
+// //   }
+
+// //   // ✅ Enable CORS if needed
+// //   app.enableCors();
+
+// //   await app.listen(process.env.PORT ?? 5500);
+// // }
+// // bootstrap();
+
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as express from 'express';
 import * as path from 'path';
 import { RedisWrapper } from './commonServices/redisWrapper';
 import * as crypto from 'crypto';
+import config from './environment/config'; // import your dynamic config
+
 (global as any).crypto = crypto;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Global prefix
   app.setGlobalPrefix('krphdashboard');
 
+  // Serve static downloads
   app.use('/downloads', express.static(path.join(__dirname, '../downloads')));
 
+  // Enable CORS
   app.enableCors({
-    origin: '*',                       
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', 
-    allowedHeaders: '*',            
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: '*',
   });
 
+  // Initialize Redis using dynamic config
   const redis = new RedisWrapper();
   try {
-    await redis.connectionInit({ url: process.env.REDIS_URL});
+    await redis.connectionInit({ url: config.redis });
     console.log('✅ Redis connected and subscriber started');
   } catch (err) {
     console.error('❌ Redis init error:', err);
   }
 
-  await app.listen(process.env.PORT ?? 5500);
+  // Start server
+  const port = process.env.PORT ? Number(process.env.PORT) : 5500;
+  await app.listen(port);
+  console.log(`🚀 Server running on port ${port}`);
 }
+
 bootstrap();
 
-
-
-
-
-
-
-
-
-// // main.ts
-// import { NestFactory } from '@nestjs/core';
-// import { AppModule } from './app.module';
-// import * as express from 'express';
-// import * as path from 'path';
-// import { RedisWrapper } from './commonServices/redisWrapper';
-
-// async function bootstrap() {
-//   const app = await NestFactory.create(AppModule);
-
-//   // ✅ Global prefix
-//   app.setGlobalPrefix('krphdashboard');
-
-//   // ✅ Serve downloads
-//   app.use('/downloads', express.static(path.join(__dirname, '../downloads')));
-
-//   // ✅ Optional: Redis initialization
-//   const redis = new RedisWrapper();
-//   try {
-//     await redis.connectionInit({ url: "redis://10.128.60.9:6379" });
-//     console.log('✅ Redis connected and subscriber started');
-//   } catch (err) {
-//     console.error('❌ Redis init error:', err);
-//   }
-
-//   // ✅ Enable CORS if needed
-//   app.enableCors();
-
-//   await app.listen(process.env.PORT ?? 5500);
-// }
-// bootstrap();
 
