@@ -94,15 +94,20 @@ export class TicketEscalationService {
   
 async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; code: number } }> {
   try {
-    const cacheKey =  await this.utilServices.generateCacheKey('roles', payload);
+    const cacheKey = await this.utilServices.generateCacheKey('roles', payload);
+    console.log("Generated cache key:", cacheKey);
+
     const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
 
     if (cachedData) {
+      console.log("Data fetched from Redis cache");
       return {
         data: cachedData,
         message: { msg: "Data fetched from cache", code: 1 },
       };
     }
+
+    console.log("No cache found, fetching data from API");
 
     const response: AxiosResponse<any> = await axios.get(process.env.pmfby_ROLE_URL, {
       params: payload || {},
@@ -111,6 +116,7 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
     });
 
     if (!response || !response.data) {
+      console.log("No data received from API");
       return {
         data: null,
         message: { msg: "No data received from API", code: 0 },
@@ -118,13 +124,16 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
     }
 
     const responseData = response.data.data;
-    await this.redisWrapper.setRedisCache(cacheKey, responseData, 3600);
+    console.log("Data fetched from API, caching it now");
+    await this.redisWrapper.setRedisCache(cacheKey, responseData, 86400);
 
     return {
       data: responseData,
       message: { msg: "Data fetched successfully", code: 1 },
     };
   } catch (error: any) {
+    console.log("Error fetching roles:", error);
+
     let errorMsg = "Failed to fetch roles";
     if (error.response) {
       errorMsg = `API responded with status ${error.response.status}`;
@@ -140,6 +149,7 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
     };
   }
 }
+
 
 
 
@@ -821,21 +831,35 @@ async AssignTicketServie(payload: any) {
   return { success: true, summary, details: results };
 }
 
+
 async UserWiseState(payload: any) {
   try {
     const db = this.db;
+    const utilService = new UtilService();
 
     if (!payload || typeof payload !== "object") {
+      console.log("Invalid payload");
       return { data: [], msg: "Invalid payload", code: "0" };
     }
 
     const { userID } = payload;
 
     if (!userID || (typeof userID !== "string" && typeof userID !== "number")) {
+      console.log("User ID is required and must be valid");
       return { data: [], msg: "User ID is required and must be valid", code: "0" };
     }
 
-    const utilService = new UtilService();
+    const cacheKey = await this.utilServices.generateCacheKey("UserWiseState", payload);
+    console.log("Generated cache key:", cacheKey);
+
+    const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
+    if (cachedData) {
+      console.log("Data fetched from Redis cache");
+      return { data: cachedData, msg: "Data fetched from cache", code: "1" };
+    }
+
+    console.log("No cache found, fetching data from DB");
+
     let Delta;
     try {
       [Delta] = await Promise.all([utilService.getSupportTicketUserDetail(userID)]);
@@ -845,6 +869,7 @@ async UserWiseState(payload: any) {
     }
 
     if (!Delta || !Delta.responseDynamic) {
+      console.log("User does not exist");
       return { data: [], msg: "User does not exist", code: "0" };
     }
 
@@ -859,6 +884,7 @@ async UserWiseState(payload: any) {
     const item = (responseInfo?.data?.user?.[0]) || null;
 
     if (!item) {
+      console.log("User does not exist after unGZip");
       return { data: [], msg: "User does not exist", code: "0" };
     }
 
@@ -874,6 +900,7 @@ async UserWiseState(payload: any) {
     }
 
     if (!StateMasterID.length) {
+      console.log("No states assigned to user");
       return { data: [], msg: "No states assigned to user", code: "0" };
     }
 
@@ -899,10 +926,14 @@ async UserWiseState(payload: any) {
     let extractedData = [];
     try {
       extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
+      console.log("Data fetched from DB");
     } catch (dbError) {
       console.log("Error fetching state data:", dbError);
       return { data: [], msg: "Failed to fetch state data", code: "0" };
     }
+
+    await this.redisWrapper.setRedisCache(cacheKey, extractedData, 86400);
+    console.log("Cached DB result in Redis");
 
     return { data: extractedData, msg: "Fetched successfully", code: "1" };
 
