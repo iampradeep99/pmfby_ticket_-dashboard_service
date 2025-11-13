@@ -1,7 +1,4 @@
-// import { parentPort, workerData } from 'worker_threads';
 const { parentPort, workerData } = require('worker_threads');
-// import fs from 'fs';
-// import path from 'path';
 const fs = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
