@@ -10,6 +10,9 @@ import { UtilService } from "../../commonServices/utilService";
 import { RedisWrapper } from '../../commonServices/redisWrapper';
 import { MailService } from '../../mail/mail.service';
    import * as moment from 'moment';
+   import * as FormData from 'form-data';
+
+   import { gunzipSync } from 'zlib';
 
 // import axios from 'axios'
 import { MongoClient, Db } from 'mongodb';
@@ -755,13 +758,49 @@ async function processDateWithChunking(currentDate: Date, endDate: Date) {
   // ===== Upload to GCP =====
   const gcpService = new GCPServices();
   const fileBuffer = await fs.promises.readFile(zipFilePath);
-  const uploadResult = await gcpService.uploadFileToGCP({
-    filePath: 'krph/reports/',
-    uploadedBy: 'KRPH',
-    file: { buffer: fileBuffer, originalname: zipFileName },
-  });
-  const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
-  if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+
+
+   const form = new FormData();
+    form.append('filePath', 'krph_reports/October2025/'); // adjust path if needed
+    form.append('uploadedBy', 'KRPH');
+    form.append('documents', fileBuffer, zipFileName);
+
+        const uploadResult = await axios.post(
+    'https://pmfby.gov.in/krphapi/FGMS/GCPFileUpload',
+    form,
+    {
+      headers: form.getHeaders(), // Node FormData method
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    }
+  );
+
+  const data = uploadResult.data;
+   if (data.responseCode !== '1') {
+      throw new Error(`Upload failed: ${data.responseMessage}`);
+    }
+
+     const compressedBuffer = Buffer.from(data.responseDynamic, 'base64');
+    const decompressedBuffer = gunzipSync(compressedBuffer);
+    const uploadedFiles = JSON.parse(decompressedBuffer.toString());
+   const gcpDownloadUrl = uploadedFiles?.[0]?.gcsUrl || '';   
+   
+    if (gcpDownloadUrl) {
+      await fs.promises.unlink(zipFilePath).catch(console.error);
+      console.log('Local file deleted after upload.');
+    }
+
+  // const uploadResultss = await gcpService.uploadFileToGCP({
+  //   filePath: 'krph/reports/',
+  //   uploadedBy: 'KRPH',
+  //   file: { buffer: fileBuffer, originalname: zipFileName },
+  // });
+  // const gcpDownloadUrl = uploadResult?.file?.[0]?.gcsUrl || '';
+  // if (gcpDownloadUrl) await fs.promises.unlink(zipFilePath).catch(console.error);
+
+
+
+
 
 //   await (ticketPayload as any).insertOrUpdateDownloadLog(
 //     SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
@@ -772,6 +811,9 @@ async function processDateWithChunking(currentDate: Date, endDate: Date) {
     SPUserID, SPInsuranceCompanyID, SPStateID, SPTicketHeaderID,
     SPFROMDATE, SPTODATE, zipFileName, gcpDownloadUrl, db
   );
+
+
+  
 
 
 
