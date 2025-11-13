@@ -1222,6 +1222,7 @@ async uploadTicketPDFService(payload: any) {
       TicketHistoryID,
       TicketStatusID,
       LastTicketStatusID,
+      RequestorMobileNo,
       UpdatedByID,
       UpdatedBy,
       UpdateDateTime,
@@ -1301,6 +1302,7 @@ async uploadTicketPDFService(payload: any) {
       TicketHistoryID,
       TicketStatusID: TicketStatusID || null,
       LastTicketStatusID: LastTicketStatusID || null,
+      RequestorMobileNo:RequestorMobileNo || null,
       UpdatedByID: UpdatedByID || null,
       UpdatedBy: UpdatedBy || 'Unknown',
       UpdateDateTime: UpdateDateTime || new Date().toISOString(),
@@ -1374,6 +1376,7 @@ async InsertToDBService(payload: any, db: any) {
       LastTicketStatus: payload.LastTicketStatusID
         ? await this.utilServices.getStatusName(toNumber(payload.LastTicketStatusID))
         : 'Unknown',
+        RequestorMobileNo:payload?.RequestorMobileNo,
       TicketFileURl: payload.gcpDownloadUrl || '',
       UpdatedByID: toNumber(payload.UpdatedByID),
       UpdatedBy: payload.UpdatedBy || 'Unknown',
