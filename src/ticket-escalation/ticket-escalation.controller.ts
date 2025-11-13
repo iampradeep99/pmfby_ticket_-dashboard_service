@@ -125,9 +125,61 @@ async RoleWiseAssignedTicketList(
 
 
 
+ @Post('uploadTicketPDF')
+  @UseInterceptors(FileInterceptor('file')) // expecting "file" in form-data
+  async uploadTicketPDF(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any, // will contain your ticket fields
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    try {
+      if (!file) {
+        throw new Error('No file uploaded');
+      }
+
+      const { buffer, originalname, mimetype } = file;
+
+      // Extract ticket info from request body
+      const {
+        SupportTicketID,
+        SupportTicketNo,
+        TicketHistoryID,
+        TicketStatusID,
+        LastTicketStatusID,
+        UpdatedByID,
+        UpdatedBy,
+        UpdateDateTime,
+      } = body;
+
+      // Call your service to handle file + ticket info
+      let { data, message } = await this.dashboardService.uploadTicketPDFService({
+        SupportTicketID,
+        SupportTicketNo,
+        TicketHistoryID,
+        TicketStatusID,
+        LastTicketStatusID,
+        UpdatedByID,
+        UpdatedBy,
+        UpdateDateTime,
+        fileBuffer: buffer,
+        fileName: originalname,
+        mimeType: mimetype,
+      });
+      
+      if (data) data = await this.utilService.GZip(data);
+
+      return jsonResponseHandler(data, message, req, res, () => {});
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => {});
+    }
+  }
+}
+
+ 
 
   
-}
+
 
  
 

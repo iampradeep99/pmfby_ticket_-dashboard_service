@@ -599,7 +599,7 @@ async function processDateWithChunking(currentDate: Date, endDate: Date) {
       { $limit: CHUNK_SIZE }
     ];
 
-    const cursor = db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true });
+    const cursor = db.collection('SLA_Ticket_listing').aggregate(pipeline, { allowDiskUse: true });
     const docs = await cursor.toArray();
 
     for (const doc of docs) {
