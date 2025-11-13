@@ -150,4 +150,29 @@ async generateCacheKey(prefix: string, payload: any) {
   return `${prefix}:${hash}`;
 }
 
+async getStatusName(statusID: any): Promise<string> {
+  let statusName = '';
+    statusID = Number(statusID)
+  switch (statusID) {
+    case 109301:
+      statusName = 'Open';
+      break;
+    case 109302:
+      statusName = 'In-Progress';
+      break;
+    case 109303:
+      statusName = 'Resolved';
+      break;
+    case 109304:
+      statusName = 'Re-Open';
+      break;
+    default:
+      statusName = 'Unknown Status';
+      break;
+  }
+
+  return statusName;
+}
+
+
 }
