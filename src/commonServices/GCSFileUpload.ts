@@ -2,6 +2,10 @@
 
 import axios from 'axios';
 import * as FormData from 'form-data';
+import config from '../environment/config'
+
+
+
 interface UploadFileData {
   filePath: string;
   uploadedBy: string;
@@ -19,6 +23,11 @@ interface UploadResponse {
 }
 
 export class GCPServices {
+    private readonly gcpFileUploadUrl = config.gcpUpload
+
+  constructor(){
+
+  }
   async uploadFileToGCP(fileData: UploadFileData): Promise<UploadResponse> {
     try {
       const { filePath, uploadedBy, file } = fileData;
@@ -32,7 +41,7 @@ export class GCPServices {
       formData.append('documents', file.buffer, file.originalname);
       formData.append('uploadedBy', uploadedBy);
 
-      const uploadUrl = process.env.GCP_UPLOAD_URL;
+      const uploadUrl = this.gcpFileUploadUrl;
       if (!uploadUrl) throw new Error("Missing GCP_UPLOAD_URL environment variable");
 
       const response = await axios.post(uploadUrl, formData, {
