@@ -1310,12 +1310,12 @@ async uploadTicketPDFService(payload: any) {
     };
 
     const insertedRecords = await this.InsertToDBService(craftedPayloadForDB, database);
-    if (!insertedRecords || !insertedRecords.insertedId) {
+    if (!insertedRecords || !insertedRecords.ticketUrl) {
       throw new Error('Database insertion failed');
     }
 
     return {
-      data: insertedRecords.insertedId,
+      data: insertedRecords.ticketUrl,
       message: {
         msg: 'PDF uploaded successfully to GCP and ticket info processed',
         code: 1,
@@ -1335,7 +1335,7 @@ async uploadTicketPDFService(payload: any) {
 
 
 
-async InsertToDBService(payload: any, db: any) {
+/* async InsertToDBService(payload: any, db: any) {
   try {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid payload');
@@ -1391,7 +1391,7 @@ async InsertToDBService(payload: any, db: any) {
 
     return {
       success: true,
-      insertedId: result.TicketFileURl,
+      insertedId: result?.insertedId,
       message: 'Ticket PDF info inserted successfully',
     };
   } catch (err: any) {
@@ -1402,8 +1402,75 @@ async InsertToDBService(payload: any, db: any) {
     };
   }
 }
+ */
 
+async InsertToDBService(payload: any, db: any) {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid payload');
+    }
 
+    if (!db) {
+      throw new Error('Database instance is required');
+    }
+
+    const collectionName = 'KRPH_Ticket_PDF_History';
+
+    try {
+      const collections = await db.listCollections({ name: collectionName }).toArray();
+      if (!Array.isArray(collections)) {
+        throw new Error('Failed to list collections from DB');
+      }
+      if (collections.length === 0) {
+        await db.createCollection(collectionName);
+      }
+    } catch (err) {
+      throw new Error('Failed to verify or create collection: ' + err);
+    }
+
+    const toNumber = (value: any) => {
+      const num = Number(value);
+      return isNaN(num) ? null : num;
+    };
+
+    const document = {
+      SupportTicketID: toNumber(payload.SupportTicketID),
+      SupportTicketNo: payload.SupportTicketNo || '',
+      TicketHistoryID: toNumber(payload.TicketHistoryID),
+      TicketStatusID: toNumber(payload.TicketStatusID),
+      TicketStatus: payload.TicketStatusID
+        ? await this.utilServices.getStatusName(toNumber(payload.TicketStatusID))
+        : 'Unknown',
+      LastTicketStatusID: toNumber(payload.LastTicketStatusID),
+      LastTicketStatus: payload.LastTicketStatusID
+        ? await this.utilServices.getStatusName(toNumber(payload.LastTicketStatusID))
+        : 'Unknown',
+      RequestorMobileNo: payload?.RequestorMobileNo,
+      TicketFileURl: payload.gcpDownloadUrl || '',
+      UpdatedByID: toNumber(payload.UpdatedByID),
+      UpdatedBy: payload.UpdatedBy || 'Unknown',
+      UpdateDateTime: payload.UpdateDateTime || new Date().toISOString(),
+      InsertedDateTime: new Date(),
+    };
+
+    const result = await db.collection(collectionName).insertOne(document);
+    if (!result?.insertedId) {
+      throw new Error('Failed to insert document into database');
+    }
+
+    return {
+      success: true,
+      ticketUrl: document.TicketFileURl,
+      message: 'Ticket PDF info inserted successfully',
+    };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : 'Unknown error occurred';
+    return {
+      success: false,
+      message: msg,
+    };
+  }
+}
 
 
 
