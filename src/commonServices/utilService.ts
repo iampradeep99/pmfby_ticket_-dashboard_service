@@ -2,6 +2,9 @@ import * as zlib from "zlib";
 import jwt from "jsonwebtoken";
 import { Injectable } from "@nestjs/common";
 import axios from 'axios'
+import * as moment from "moment";
+import { fixedHolidays, floatingHolidays } from './holidays'; 
+
 
 @Injectable()
 export class UtilService {
@@ -172,6 +175,52 @@ async getStatusName(statusID: any): Promise<string> {
   }
 
   return statusName;
+}
+
+
+
+async getWorkingDays(year, month) {
+    let workingDays = 0;
+
+    const start = moment(`${year}-${String(month).padStart(2, "0")}-01`, "YYYY-MM-DD");
+    const end = start.clone().endOf("month");
+
+    const current = start.clone();
+
+    while (current.isSameOrBefore(end)) {
+        workingDays++;
+        current.add(1, "day");
+    }
+
+    return workingDays;
+}
+
+
+
+
+
+getNationalHolidays(year: number, month: number) {
+  const allHolidays: moment.Moment[] = [];
+
+  for (const key of Object.keys(fixedHolidays)) {
+    const [holidayMonth, day] = key.split("-");
+    allHolidays.push(moment(`${year}-${holidayMonth.padStart(2, "0")}-${day.padStart(2, "0")}`, "YYYY-MM-DD"));
+  }
+
+  if (floatingHolidays[year]) {
+    for (const key of Object.keys(floatingHolidays[year])) {
+      const [holidayMonth, day] = key.split("-");
+      allHolidays.push(moment(`${year}-${holidayMonth.padStart(2, "0")}-${day.padStart(2, "0")}`, "YYYY-MM-DD"));
+    }
+  }
+
+  return allHolidays.filter(h => h.month() + 1 === month);
+}
+
+
+    shuffleTotalMinutes(totalMinutes) {
+    const variation = Math.random() * 0.2 - 0.1;
+    return totalMinutes * (1 + variation);
 }
 
 

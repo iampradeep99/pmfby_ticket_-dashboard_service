@@ -129,7 +129,7 @@ async RoleWiseAssignedTicketList(
   @UseInterceptors(FileInterceptor('file')) // expecting "file" in form-data
   async uploadTicketPDF(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: any, // will contain your ticket fields
+    @Body() body: any, 
     @Req() req: Request,
     @Res({ passthrough: false }) res: Response,
   ) {
@@ -140,7 +140,6 @@ async RoleWiseAssignedTicketList(
 
       const { buffer, originalname, mimetype } = file;
 
-      // Extract ticket info from request body
       const {
         SupportTicketID,
         SupportTicketNo,
@@ -153,7 +152,6 @@ async RoleWiseAssignedTicketList(
         UpdateDateTime,
       } = body;
 
-      // Call your service to handle file + ticket info
       let { data, message } = await this.dashboardService.uploadTicketPDFService({
         SupportTicketID,
         SupportTicketNo,
