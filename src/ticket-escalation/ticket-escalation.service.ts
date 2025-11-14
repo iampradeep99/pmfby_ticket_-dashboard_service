@@ -1391,7 +1391,7 @@ async InsertToDBService(payload: any, db: any) {
 
     return {
       success: true,
-      insertedId: result.insertedId,
+      insertedId: result.TicketFileURl,
       message: 'Ticket PDF info inserted successfully',
     };
   } catch (err: any) {
