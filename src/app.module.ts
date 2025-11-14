@@ -6,6 +6,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MysqlModule } from './database/mysql.module';
 import { CronModule } from './cron/cron.module';
 import { TicketEscalationModule } from './ticket-escalation/ticket-escalation.module';
+import { SlaReportModule } from './sla-report/sla-report.module';
 
 @Module({
   imports: [
@@ -15,7 +16,8 @@ import { TicketEscalationModule } from './ticket-escalation/ticket-escalation.mo
     TicketDashboardModule,
     MysqlModule,
     CronModule,
-    TicketEscalationModule
+    TicketEscalationModule,
+    SlaReportModule
   ],
   controllers: [AppController],
   providers: [AppService],
