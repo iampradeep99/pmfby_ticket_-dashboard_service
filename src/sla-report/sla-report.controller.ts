@@ -16,6 +16,7 @@ import {
 } from '../commonServices/responseHandler';
 import { UtilService } from '../commonServices/utilService';
 import { RabbitMQService } from 'src/commonServices/rabbitMQ/rabbitmq.service';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 
 @Controller('sla-report')
@@ -42,6 +43,83 @@ async calculateSLA(
       return jsonErrorHandler(err, req, res, () => { });
     }
   }
+
+
+/* @Post('UploadCallQualityRecords')
+@UseInterceptors(FileInterceptor('file'))
+async uploadCallQualityFile(
+  @UploadedFile() file: Express.Multer.File,
+  @Body('year_month') yearMonth: string, // Capture the year_month from formData
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    // Pass both file and yearMonth to the service
+    const { data, message } =
+      await this.slaReportService.uploadCallQualityFileService(file, yearMonth);
+
+    // GZip the data if it exists
+    const zipped = data ? await this.utilService.GZip(data) : null;
+
+    return jsonResponseHandler(zipped, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+} */
+
+/* @Post('UploadCallQualityRecords')
+@UseInterceptors(FileInterceptor('file'))
+async uploadCallQualityFile(
+  @UploadedFile() file: Express.Multer.File,
+  @Body('year_month') yearMonth: string, // Capture the year_month from formData
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    // Immediately respond with an acknowledgment to the client
+    res.status(200).json({ message: 'File upload started. Processing in the background.' });
+
+    // Start background processing without blocking the response
+    setImmediate(async () => {
+      try {
+        // Pass both file and yearMonth to the service for processing
+        const { data, message } = await this.slaReportService.uploadCallQualityFileService(file, yearMonth);
+
+        // GZip the data if it exists
+        const zipped = data ? await this.utilService.GZip(data) : null;
+
+        // Optionally, handle the zipped data (store, email, etc.)
+        // For example, saving to a file or database, sending an email, etc.
+        // Your post-processing logic can go here
+        console.log('File processed successfully:', message);
+      } catch (err) {
+        console.error('Error in background processing:', err);
+      }
+    });
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+ */
+
+@Post('UploadCallQualityRecords')
+@UseInterceptors(FileInterceptor('file'))
+async uploadCallQualityFile(
+  @UploadedFile() file: Express.Multer.File,
+  @Body('year_month') yearMonth: string,
+  @Req() req: Request,
+  @Res() res: Response
+) {
+  try {
+    const response = await this.slaReportService.startCallQualityFileUploading(file, yearMonth);
+
+    return res.status(200).json(response);
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
 
 
 }
