@@ -21,6 +21,7 @@ import { QueryTypes } from 'sequelize'; // ✅ import QueryTypes
 import { MongoClient } from 'mongodb';
 import * as moment from "moment";
 import { parse } from "csv-parse/sync";
+import { pipeline } from 'stream';
 
 
 
@@ -8058,6 +8059,7 @@ async fetchTicketListingDownload(payload: any) {
       { $group: { _id: "$customStatus", count: { $sum: 1 } } }
     ];
 
+    console.log(JSON.stringify(dataPipeline), "dataPipeline")
     // Run all three in parallel
     const [data, totalCountArr, ticketStatusSummary] = await Promise.all([
       db.collection("SLA_Ticket_listing").aggregate(dataPipeline, { allowDiskUse: true }).toArray(),
@@ -8065,6 +8067,7 @@ async fetchTicketListingDownload(payload: any) {
       db.collection("SLA_Ticket_listing").aggregate(statusPipeline).toArray()
     ]);
 
+   
     if (data.length === 0) {
       return {
         data: [],

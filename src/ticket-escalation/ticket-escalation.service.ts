@@ -2,7 +2,6 @@ import { Injectable, Inject } from '@nestjs/common';
 import * as streamBuffers from 'stream-buffers';
 import { Db, Collection } from 'mongodb';
 import * as NodeCache from 'node-cache';
-// import axios from 'axios';
 import axios, { AxiosResponse } from 'axios';
 import { UtilService } from "../commonServices/utilService";
 import * as fs from 'fs-extra';
@@ -10,7 +9,6 @@ import * as path from 'path';
 import * as archiver from 'archiver';
 import { RedisWrapper } from '../commonServices/redisWrapper';
 const XLSX = require('xlsx');
-// const ExcelJS = require('exceljs');
 import * as ExcelJS from 'exceljs';
 import { MailService } from '../mail/mail.service';
 import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from '../templates/mailTemplates';
@@ -18,11 +16,15 @@ import { GCPServices } from '../commonServices/GCSFileUpload';
 import { format } from '@fast-csv/format';
 import { pipe } from 'rxjs';
 import { Sequelize } from 'sequelize-typescript';
-import { QueryTypes } from 'sequelize'; // ✅ import QueryTypes
+import { QueryTypes } from 'sequelize';
 import { MongoClient } from 'mongodb';
 import * as moment from "moment";
 import { parse } from "csv-parse/sync";
-import config from '../environment/config'; // import dynamic config
+import config from '../environment/config';
+import { randomBytes } from 'crypto';
+import * as FormData from 'form-data';
+import { gunzipSync } from 'zlib';
+
 
 
 // import * as ExcelJS from 'exceljs';
@@ -31,8 +33,7 @@ import config from '../environment/config'; // import dynamic config
 export class TicketEscalationService {
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
-    private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
-
+  private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
   public gcp = new GCPServices();
   logDir = path.join(__dirname, '..', 'logs');
 
@@ -1085,8 +1086,399 @@ async RoleWiseAssignedTickets(payload: any) {
 }
 
 
+ 
+// async uploadTicketPDFService(payload: {
+//   fileBuffer: Buffer;
+//   fileName: string;
+//   mimeType: string;
+//   uploadedBy: string;
+// }): Promise<{ data: any; message: { msg: string; code: number } }> {
+//   try {
+//     const { fileBuffer, fileName, mimeType, uploadedBy } = payload;
 
+//     const uniqueHash = randomBytes(16).toString('hex');
+//     const timestamp = new Date().getTime();
+//     const sanitizedName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+//     const safeFileName = `${timestamp}_${uniqueHash}_${sanitizedName}`;
+//     const filePath = path.join('tickets', safeFileName);
+
+//     const gcpService = new GCPServices();
+//     const uploadResponse = await gcpService.uploadFileToGCP({
+//       filePath,
+//       uploadedBy,
+//       file: {
+//         buffer: fileBuffer,
+//         originalname: safeFileName,
+//       },
+//     });
+
+//     if (!uploadResponse.success) {
+//       throw new Error(uploadResponse.message || 'GCP upload failed');
+//     }
+
+//     return {
+//       data: {
+//         fileName: safeFileName,
+//         mimeType,
+//         filePath: uploadResponse.url || filePath,
+//         size: fileBuffer.length,
+//         integrity: uniqueHash,
+//       },
+//       message: {
+//         msg: 'PDF uploaded successfully to GCP',
+//         code: 200,
+//       },
+//     };
+//   } catch (err: any) {
+//     const msg = err instanceof Error ? err.message : 'Unknown error occurred';
+//     throw {
+//       message: {
+//         msg,
+//         code: 500,
+//       },
+//     };
+//   }
+// }
+
+
+
+
+
+
+/* async uploadTicketPDFService(payload: {
+  fileBuffer: Buffer;
+  fileName: string;
+  mimeType: string;
+}): Promise<{ data: any; message: { msg: string; code: number } }> {
+  try {
+    const { fileBuffer, fileName, mimeType } = payload;
+
+    const uniqueHash = randomBytes(16).toString('hex');
+    const timestamp = new Date().getTime();
+    const sanitizedName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const safeFileName = `${timestamp}_${uniqueHash}_${sanitizedName}`;
+
+    const form = new FormData();
+    form.append('filePath', 'krph_reports/October2025/'); 
+    form.append('uploadedBy', 'KRPH'); 
+    form.append('documents', fileBuffer, safeFileName);
+
+    // Call external API
+    const response = await axios.post(
+      'https://pmfby.gov.in/krphapi/FGMS/GCPFileUpload',
+      form,
+      {
+        headers: form.getHeaders(),
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      }
+    );
+
+    const responseData = response.data;
+
+    if (responseData.responseCode !== '1') {
+      throw new Error(responseData.responseMessage || 'File upload failed');
+    }
+
+    const compressedBuffer = Buffer.from(responseData.responseDynamic, 'base64');
+    const decompressedBuffer = gunzipSync(compressedBuffer);
+    const uploadedFiles = JSON.parse(decompressedBuffer.toString());
+    const gcpDownloadUrl = uploadedFiles?.[0]?.gcsUrl || '';
+    return {
+      data: {
+        fileName: safeFileName,
+        mimeType,
+        filePath: gcpDownloadUrl,
+        size: fileBuffer.length,
+        integrity: uniqueHash,
+      },
+      message: {
+        msg: 'PDF uploaded successfully to GCP',
+        code: 1,
+      },
+    };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : 'Unknown error occurred';
+    throw {
+      message: {
+        msg,
+        code: 500,
+      },
+    };
+  }
+}
+ */
+
+
+
+
+async uploadTicketPDFService(payload: any) {
+  try {
+    const {
+      fileBuffer,
+      fileName,
+      SupportTicketID,
+      SupportTicketNo,
+      TicketHistoryID,
+      TicketStatusID,
+      LastTicketStatusID,
+      RequestorMobileNo,
+      UpdatedByID,
+      UpdatedBy,
+      UpdateDateTime,
+    } = payload;
+
+    if (!fileBuffer || !(fileBuffer instanceof Buffer) || fileBuffer.length === 0) {
+      throw new Error('Invalid or missing fileBuffer');
+    }
+
+    if (!fileName || typeof fileName !== 'string' || !fileName.trim()) {
+      throw new Error('Invalid or missing fileName');
+    }
+
+    if (!SupportTicketID || !TicketHistoryID) {
+      throw new Error('Missing essential ticket identifiers');
+    }
+
+    const database = this.db;
+
+    const uniqueHash = require('crypto').randomBytes(16).toString('hex');
+    const timestamp = Date.now();
+    const sanitizedName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const safeFileName = `${timestamp}_${uniqueHash}_${sanitizedName}`;
+
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('filePath', 'krph_reports/October2025/');
+    form.append('uploadedBy', "KRPH");
+    form.append('documents', fileBuffer, {
+      filename: safeFileName,
+      contentType: 'application/pdf',
+    });
+
+    const axios = require('axios');
+    const response = await axios.post(
+      'https://pmfby.gov.in/krphapi/FGMS/GCPFileUpload',
+      form,
+      {
+        headers: { ...form.getHeaders() },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        timeout: 30000,
+        validateStatus: status => status >= 200 && status < 500,
+      }
+    );
+
+    const responseData = response.data;
+    if (!responseData || responseData.responseCode !== '1') {
+      throw new Error(responseData?.responseMessage || 'External file upload failed');
+    }
+
+    let gcpDownloadUrl = '';
+    try {
+      const compressedBuffer = Buffer.from(responseData.responseDynamic || '', 'base64');
+      if (!compressedBuffer || compressedBuffer.length === 0) throw new Error('Empty compressed response');
+
+      const { gunzipSync } = require('zlib');
+      const decompressedBuffer = gunzipSync(compressedBuffer);
+      if (!decompressedBuffer || decompressedBuffer.length === 0) throw new Error('Failed to decompress response');
+
+      const uploadedFiles = JSON.parse(decompressedBuffer.toString());
+      if (!Array.isArray(uploadedFiles) || !uploadedFiles[0]?.gcsUrl) {
+        throw new Error('Invalid response structure from GCP upload');
+      }
+
+      gcpDownloadUrl = uploadedFiles[0].gcsUrl;
+      if (!gcpDownloadUrl.startsWith('https://')) {
+        throw new Error('Invalid GCP download URL');
+      }
+    } catch (err) {
+      throw new Error('Failed to parse or decompress upload response: ' + err);
+    }
+
+    const craftedPayloadForDB = {
+      SupportTicketID,
+      SupportTicketNo: SupportTicketNo || '',
+      TicketHistoryID,
+      TicketStatusID: TicketStatusID || null,
+      LastTicketStatusID: LastTicketStatusID || null,
+      RequestorMobileNo:RequestorMobileNo || null,
+      UpdatedByID: UpdatedByID || null,
+      UpdatedBy: UpdatedBy || 'Unknown',
+      UpdateDateTime: UpdateDateTime || new Date().toISOString(),
+      gcpDownloadUrl,
+    };
+
+    const insertedRecords = await this.InsertToDBService(craftedPayloadForDB, database);
+    if (!insertedRecords || !insertedRecords.ticketUrl) {
+      throw new Error('Database insertion failed');
+    }
+
+    return {
+      data: insertedRecords.ticketUrl,
+      message: {
+        msg: 'PDF uploaded successfully to GCP and ticket info processed',
+        code: 1,
+      },
+    };
+  } catch (err: any) {
+    console.error('[uploadTicketPDFService] Error:', err);
+    return {
+      data: null,
+      message: {
+        msg: err instanceof Error ? err.message : 'Unknown error occurred',
+        code: 500,
+      },
+    };
+  }
+}
+
+
+
+/* async InsertToDBService(payload: any, db: any) {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid payload');
+    }
+
+    if (!db) {
+      throw new Error('Database instance is required');
+    }
+
+    const collectionName = 'KRPH_Ticket_PDF_History';
+
+    try {
+      const collections = await db.listCollections({ name: collectionName }).toArray();
+      if (!Array.isArray(collections)) {
+        throw new Error('Failed to list collections from DB');
+      }
+      if (collections.length === 0) {
+        await db.createCollection(collectionName);
+      }
+    } catch (err) {
+      throw new Error('Failed to verify or create collection: ' + err);
+    }
+
+    const toNumber = (value: any) => {
+      const num = Number(value);
+      return isNaN(num) ? null : num;
+    };
+
+    const document = {
+      SupportTicketID: toNumber(payload.SupportTicketID),
+      SupportTicketNo: payload.SupportTicketNo || '',
+      TicketHistoryID: toNumber(payload.TicketHistoryID),
+      TicketStatusID: toNumber(payload.TicketStatusID),
+      TicketStatus: payload.TicketStatusID
+        ? await this.utilServices.getStatusName(toNumber(payload.TicketStatusID))
+        : 'Unknown',
+      LastTicketStatusID: toNumber(payload.LastTicketStatusID),
+      LastTicketStatus: payload.LastTicketStatusID
+        ? await this.utilServices.getStatusName(toNumber(payload.LastTicketStatusID))
+        : 'Unknown',
+        RequestorMobileNo:payload?.RequestorMobileNo,
+      TicketFileURl: payload.gcpDownloadUrl || '',
+      UpdatedByID: toNumber(payload.UpdatedByID),
+      UpdatedBy: payload.UpdatedBy || 'Unknown',
+      UpdateDateTime: payload.UpdateDateTime || new Date().toISOString(),
+      InsertedDateTime: new Date(),
+    };
+
+    const result = await db.collection(collectionName).insertOne(document);
+    if (!result?.insertedId) {
+      throw new Error('Failed to insert document into database');
+    }
+
+    return {
+      success: true,
+      insertedId: result?.insertedId,
+      message: 'Ticket PDF info inserted successfully',
+    };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : 'Unknown error occurred';
+    return {
+      success: false,
+      message: msg,
+    };
+  }
+}
+ */
+
+async InsertToDBService(payload: any, db: any) {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid payload');
+    }
+
+    if (!db) {
+      throw new Error('Database instance is required');
+    }
+
+    const collectionName = 'KRPH_Ticket_PDF_History';
+
+    try {
+      const collections = await db.listCollections({ name: collectionName }).toArray();
+      if (!Array.isArray(collections)) {
+        throw new Error('Failed to list collections from DB');
+      }
+      if (collections.length === 0) {
+        await db.createCollection(collectionName);
+      }
+    } catch (err) {
+      throw new Error('Failed to verify or create collection: ' + err);
+    }
+
+    const toNumber = (value: any) => {
+      const num = Number(value);
+      return isNaN(num) ? null : num;
+    };
+
+    const document = {
+      SupportTicketID: toNumber(payload.SupportTicketID),
+      SupportTicketNo: payload.SupportTicketNo || '',
+      TicketHistoryID: toNumber(payload.TicketHistoryID),
+      TicketStatusID: toNumber(payload.TicketStatusID),
+      TicketStatus: payload.TicketStatusID
+        ? await this.utilServices.getStatusName(toNumber(payload.TicketStatusID))
+        : 'Unknown',
+      LastTicketStatusID: toNumber(payload.LastTicketStatusID),
+      LastTicketStatus: payload.LastTicketStatusID
+        ? await this.utilServices.getStatusName(toNumber(payload.LastTicketStatusID))
+        : 'Unknown',
+      RequestorMobileNo: payload?.RequestorMobileNo,
+      TicketFileURl: payload.gcpDownloadUrl || '',
+      UpdatedByID: toNumber(payload.UpdatedByID),
+      UpdatedBy: payload.UpdatedBy || 'Unknown',
+      UpdateDateTime: payload.UpdateDateTime || new Date().toISOString(),
+      InsertedDateTime: new Date(),
+    };
+
+    const result = await db.collection(collectionName).insertOne(document);
+    if (!result?.insertedId) {
+      throw new Error('Failed to insert document into database');
+    }
+
+    return {
+      success: true,
+      ticketUrl: document.TicketFileURl,
+      message: 'Ticket PDF info inserted successfully',
+    };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : 'Unknown error occurred';
+    return {
+      success: false,
+      message: msg,
+    };
+  }
+}
 
 
 
 }
+
+
+
+
+
+
+
