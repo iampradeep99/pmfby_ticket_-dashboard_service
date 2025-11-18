@@ -351,21 +351,27 @@ async FetchInboundRecordService(payload: any) {
       { $sort: { Call_Start_Time: 1 } },
       { $skip: (pageNumber - 1) * pageSize },
       { $limit: pageSize },
-      {
-        $project: {
-          _id: 1,
-          Farmer_Number: 1,
-          Campaign_Name: 1,
-          Status: 1,
-          Agent_ID: 1,
-          Agent_Name: 1,
-          Call_Start_Time: 1,
-          Call_End_Time: 1,
-          Customer_Call_Sec: 1,
-          Agent_TalkTime: 1,
-          Recording_Path: 1
-        }
-      }
+    //   {
+    //     $project: {
+    //       _id: 1,
+    //       Farmer_Number: 1,
+    //       Campaign_Name: 1,
+    //       Status: 1,
+    //       Agent_ID: 1,
+    //       Agent_Name: 1,
+    //       Call_Start_Time: 1,
+    //       Call_End_Time: 1,
+    //       Customer_Call_Sec: 1,
+    //       Agent_TalkTime: 1,
+    //       Recording_Path: 1
+    //     }
+    //   }
+    {
+  $project: {
+    _id: 0
+  }
+}
+
     ];
 
     // ---------------------------------------
