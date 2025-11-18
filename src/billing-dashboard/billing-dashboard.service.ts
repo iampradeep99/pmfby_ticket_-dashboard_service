@@ -230,7 +230,7 @@ async uploadInboundCallsFileService(file: Express.Multer.File, yearMonth: string
 
 
 
-async FetchInboundRecordService(payload: any) {
+/* async FetchInboundRecordService(payload: any) {
   try {
     const { year_month, page = 1, limit = 50 } = payload;
     const db = this.db;
@@ -252,8 +252,7 @@ async FetchInboundRecordService(payload: any) {
 
     const collection = db.collection('SLA_Inbound_Calls');
     if (!collection) throw new Error('Database collection not found');
-
-    const result = await collection.aggregate([
+    let pipeline = [
       {
         $match: {
           Call_Start_Time: { $gte: fromDateStr, $lte: toDateStr }
@@ -288,7 +287,10 @@ async FetchInboundRecordService(payload: any) {
           totalCount: [{ $count: "count" }]
         }
       }
-    ]).toArray();
+    ];
+
+    console.log(JSON.stringify(pipeline));
+    const result = await collection.aggregate(pipeline).toArray();
 
     const records = result[0]?.paginatedResults || [];
     const totalRecords = result[0]?.totalCount[0]?.count || 0;
@@ -309,8 +311,110 @@ async FetchInboundRecordService(payload: any) {
       }
     };
   }
-}
+} */
 
+async FetchInboundRecordService(payload: any) {
+  try {
+    const { year_month, page = 1, limit = 50 } = payload;
+    const db = this.db;
+
+    if (!year_month || !/^\d{4}-\d{2}$/.test(year_month)) {
+      throw new Error('Invalid year_month. Expected format: YYYY-MM');
+    }
+
+    const pageNumber = Number(page);
+    const pageSize = Math.min(Number(limit), 50);
+
+    if (isNaN(pageNumber) || pageNumber < 1) throw new Error('Invalid page number');
+    if (isNaN(pageSize) || pageSize < 1) throw new Error('Invalid limit (max 50)');
+
+    const [year, month] = year_month.split("-").map(Number);
+    if (month < 1 || month > 12) throw new Error('Invalid month in year_month');
+
+    // Build date range strings
+    const fromDateStr = `${year}-${month.toString().padStart(2, '0')}-01 00:00:00`;
+    const toDateObj = new Date(year, month, 0);
+    const toDateStr = `${year}-${month.toString().padStart(2, '0')}-${toDateObj.getDate().toString().padStart(2, '0')} 23:59:59`;
+
+    const collection = db.collection('SLA_Inbound_Calls');
+    if (!collection) throw new Error('Database collection not found');
+
+    // ---------------------------------------
+    // 1) FAST DATA PIPELINE (Pagination Only)
+    // ---------------------------------------
+    const dataPipeline = [
+      {
+        $match: {
+          Call_Start_Time: { $gte: fromDateStr, $lte: toDateStr }
+        }
+      },
+      { $sort: { Call_Start_Time: 1 } },
+      { $skip: (pageNumber - 1) * pageSize },
+      { $limit: pageSize },
+      {
+        $project: {
+          _id: 1,
+          Farmer_Number: 1,
+          Campaign_Name: 1,
+          Status: 1,
+          Agent_ID: 1,
+          Agent_Name: 1,
+          Call_Start_Time: 1,
+          Call_End_Time: 1,
+          Customer_Call_Sec: 1,
+          Agent_TalkTime: 1,
+          Recording_Path: 1
+        }
+      }
+    ];
+
+    // ---------------------------------------
+    // 2) FAST COUNT PIPELINE (No facet)
+    // ---------------------------------------
+    const countPipeline = [
+      {
+        $match: {
+          Call_Start_Time: { $gte: fromDateStr, $lte: toDateStr }
+        }
+      },
+      { $count: "count" }
+    ];
+
+    // Run both queries
+    const [records, countResult] = await Promise.all([
+      collection.aggregate(dataPipeline).toArray(),
+      collection.aggregate(countPipeline).toArray()
+    ]);
+
+    const totalRecords = countResult[0]?.count || 0;
+
+    const responsePayload = {
+      records,
+      pagination: {
+        page: pageNumber,
+        limit: pageSize,
+        totalRecords,
+        totalPages: Math.ceil(totalRecords / pageSize)
+      }
+    };
+
+    return {
+      data: responsePayload,
+      message: {
+        msg: 'Records fetched successfully',
+        code: 1
+      }
+    };
+  } catch (err: any) {
+    return {
+      data: {},
+      message: {
+        msg: err.message || 'Something went wrong',
+        code: 0
+      }
+    };
+  }
+}
 
 
 
