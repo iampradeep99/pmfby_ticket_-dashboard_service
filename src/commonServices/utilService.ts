@@ -4,11 +4,19 @@ import { Injectable } from "@nestjs/common";
 import axios from 'axios'
 import * as moment from "moment";
 import { fixedHolidays, floatingHolidays } from './holidays'; 
+const Logger = require("../commonServices/logger");
 
 
 @Injectable()
 export class UtilService {
-    constructor() {}
+  private logger: InstanceType<typeof Logger>;
+
+    constructor(
+
+    ) {
+      this.logger = new Logger("Utility.log");
+
+    }
 
     /**
      * Generate JWT Token
@@ -222,6 +230,47 @@ getNationalHolidays(year: number, month: number) {
     const variation = Math.random() * 0.2 - 0.1;
     return totalMinutes * (1 + variation);
 }
+
+ cleanupCollection = async (db, collectionName, filter) => {
+  if (!db) {
+    throw new Error('Database connection is required');
+  }
+  if (!collectionName || typeof collectionName !== 'string') {
+    throw new Error('Collection name must be a non-empty string');
+  }
+  if (!filter || typeof filter !== 'object' || Object.keys(filter).length === 0) {
+    this.logger.info(`No valid filter provided for deleting records in '${collectionName}'. Skipping operation.`);
+    return {
+      success: true,
+      skipped: true,
+      deletedCount: 0,
+      message: 'Operation skipped due to empty or invalid filter'
+    };
+  }
+
+  try {
+    const collection = db.collection(collectionName);
+    if (!collection) {
+      throw new Error(`Collection '${collectionName}' not found`);
+    }
+
+    const result = await collection.deleteMany(filter);
+    const deletedCount = result?.deletedCount || 0;
+    
+    this.logger.info(`Deleted ${deletedCount} records from '${collectionName}'.`);
+    
+    return {
+      success: true,
+      skipped: false,
+      deletedCount,
+      message: `Successfully deleted ${deletedCount} records`
+    };
+  } catch (err) {
+    const errorMsg = `Error deleting from collection '${collectionName}': ${err.message}`;
+    this.logger.info(errorMsg, err);
+    throw new Error(errorMsg);
+  }
+};
 
 
 }
