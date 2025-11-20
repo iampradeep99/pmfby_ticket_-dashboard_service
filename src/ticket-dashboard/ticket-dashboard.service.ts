@@ -7824,7 +7824,7 @@ async fetchTicketListingDownload(payload: any) {
         for (const itemData of collectedDistrictInfo.masterdatabinding) {
           districtId.push(itemData.DistrictCodeAlpha);
         }
-        locationFilter = { FilterDistrictRequestorID: { $in: districtId } };
+        locationFilter = { DistrictMasterID: { $in: districtId } };
       } else {
         console.warn("Invalid district info format:", collectedDistrictInfo);
         locationFilter = {};
@@ -7853,9 +7853,9 @@ async fetchTicketListingDownload(payload: any) {
       if (validStateIDs.length === 0) {
         return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
       }
-      match.StateMasterID = { $in: validStateIDs };
+      match.FilterStateID = { $in: validStateIDs };
     } else if (StateMasterID?.length && LocationTypeID !== 2) {
-      match.StateMasterID = { $in: StateMasterID.map(Number) };
+      match.FilterStateID = { $in: StateMasterID.map(Number) };
     }
 
     if (viewTYP === "FILTER") {
