@@ -313,7 +313,7 @@ async uploadInboundCallsFileService(file: Express.Multer.File, yearMonth: string
   }
 } */
 
-async FetchInboundRecordService(payload: any) {
+/* async FetchInboundRecordService(payload: any) {
   try {
     const { year_month, page = 1, limit = 50 } = payload;
     const db = this.db;
@@ -339,9 +339,7 @@ async FetchInboundRecordService(payload: any) {
     const collection = db.collection('SLA_Inbound_Calls');
     if (!collection) throw new Error('Database collection not found');
 
-    // ---------------------------------------
-    // 1) FAST DATA PIPELINE (Pagination Only)
-    // ---------------------------------------
+ 
     const dataPipeline = [
       {
         $match: {
@@ -374,9 +372,7 @@ async FetchInboundRecordService(payload: any) {
 
     ];
 
-    // ---------------------------------------
-    // 2) FAST COUNT PIPELINE (No facet)
-    // ---------------------------------------
+    
     const countPipeline = [
       {
         $match: {
@@ -420,8 +416,106 @@ async FetchInboundRecordService(payload: any) {
       }
     };
   }
-}
+} */
 
+
+  async  FetchInboundRecordService(payload: any) {
+  try {
+    const { year_month, page = 1, limit = 50, from_date, to_date, farmer_number, unique_id, status } = payload
+
+    const db = this.db
+
+    if (!year_month || !/^\d{4}-\d{2}$/.test(year_month)) {
+      throw new Error("Invalid year_month. Expected format: YYYY-MM")
+    }
+
+    const pageNumber = Number(page)
+    const pageSize = Math.min(Number(limit), 50)
+
+    if (isNaN(pageNumber) || pageNumber < 1) throw new Error("Invalid page number")
+    if (isNaN(pageSize) || pageSize < 1) throw new Error("Invalid limit (max 50)")
+
+    const [year, month] = year_month.split("-").map(Number)
+    if (month < 1 || month > 12) throw new Error("Invalid month in year_month")
+
+    let fromDateStr: string
+    let toDateStr: string
+
+    if (from_date && to_date) {
+      const [fromMonth, fromDay, fromYear] = from_date.split("/").map(Number)
+      const [toMonth, toDay, toYear] = to_date.split("/").map(Number)
+
+      fromDateStr = `${fromYear}-${String(fromMonth).padStart(2, "0")}-${String(fromDay).padStart(2, "0")} 00:00:00`
+      toDateStr = `${toYear}-${String(toMonth).padStart(2, "0")}-${String(toDay).padStart(2, "0")} 23:59:59`
+    } else {
+      const toDateObj = new Date(year, month, 0)
+      fromDateStr = `${year}-${month.toString().padStart(2, "0")}-01 00:00:00`
+      toDateStr = `${year}-${month.toString().padStart(2, "0")}-${toDateObj.getDate().toString().padStart(2, "0")} 23:59:59`
+    }
+
+    const collection = db.collection("SLA_Inbound_Calls")
+    if (!collection) throw new Error("Database collection not found")
+
+    const matchStage: any = {
+      Call_Start_Time: { $gte: fromDateStr, $lte: toDateStr },
+    }
+
+    if (farmer_number && farmer_number.trim()) {
+      matchStage.Farmer_Number = { $regex: farmer_number.trim(), $options: "i" }
+    }
+
+    if (unique_id && unique_id.trim()) {
+      matchStage.Unique_ID = { $regex: unique_id.trim(), $options: "i" }
+    }
+
+    if (status && status.trim()) {
+      matchStage.Status = status.trim()
+    }
+
+    const dataPipeline = [
+      { $match: matchStage },
+      { $sort: { Call_Start_Time: 1 } },
+      { $skip: (pageNumber - 1) * pageSize },
+      { $limit: pageSize },
+      { $project: { _id: 0 } },
+    ]
+
+    const countPipeline = [{ $match: matchStage }, { $count: "count" }]
+
+    const [records, countResult] = await Promise.all([
+      collection.aggregate(dataPipeline).toArray(),
+      collection.aggregate(countPipeline).toArray(),
+    ])
+
+    const totalRecords = countResult[0]?.count || 0
+
+    const responsePayload = {
+      records,
+      pagination: {
+        page: pageNumber,
+        limit: pageSize,
+        totalRecords,
+        totalPages: Math.ceil(totalRecords / pageSize),
+      },
+    }
+
+    return {
+      data: responsePayload,
+      message: {
+        msg: "Records fetched successfully",
+        code: 1,
+      },
+    }
+  } catch (err: any) {
+    return {
+      data: {},
+      message: {
+        msg: err.message || "Something went wrong",
+        code: 0,
+      },
+    }
+  }
+}
 
 
 }
