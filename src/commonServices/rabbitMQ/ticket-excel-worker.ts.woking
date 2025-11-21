@@ -161,7 +161,7 @@ function buildDynamicColumns(maxIndices: number = MAX_JOURNEY_INDICES): any[] {
   return dynamicColumns
 }
 
-function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: number = CHUNK_SIZE): any[] {
+function buildAggregationPipeline(baseMatch: any, skip: number): any[] {
   return [
     { $match: baseMatch },
     { $sort: { InsertDateTime: -1 } },
@@ -232,7 +232,7 @@ function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: numb
       },
     },
     { $skip: skip },
-    { $limit: fetchLimit },
+    { $limit: CHUNK_SIZE },
   ]
 }
 
@@ -374,15 +374,11 @@ async function processChunk(
   skip: number,
   worksheet: any,
 ): Promise<{ hasMore: boolean; processedCount: number }> {
-  const FETCH_LIMIT = CHUNK_SIZE + 1
-  const pipeline = buildAggregationPipeline(baseMatch, skip, FETCH_LIMIT)
+  const pipeline = buildAggregationPipeline(baseMatch, skip)
   const cursor = db.collection(TICKET_COLLECTION).aggregate(pipeline, { allowDiskUse: true })
   const docs = await cursor.toArray()
 
-  const docsToProcess = docs.slice(0, CHUNK_SIZE)
-  const hasMoreRecords = docs.length > CHUNK_SIZE
-
-  for (const doc of docsToProcess) {
+  for (const doc of docs) {
     const journey = extractJourneyFromDoc(doc)
     const dynamicColumnsBatch = buildDynamicColumnsBatch(journey)
     const row = mapDocumentToRow(doc, dynamicColumnsBatch)
@@ -390,8 +386,8 @@ async function processChunk(
   }
 
   return {
-    hasMore: hasMoreRecords,
-    processedCount: docsToProcess.length,
+    hasMore: docs.length === CHUNK_SIZE,
+    processedCount: docs.length,
   }
 }
 

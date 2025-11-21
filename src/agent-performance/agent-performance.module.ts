@@ -5,9 +5,18 @@ import { UtilModule } from 'src/commonServices/util.module';
 import { MailModule } from 'src/mail/mail.module';
 import { RabbitMQModule } from 'src/commonServices/rabbitMQ/rabbitmq.module';
 import { MysqlModule } from 'src/database/mysql.module';
+
 import { AgentPerformanceController } from './agent-performance.controller';
 import { AgentPerformanceService } from './agent-performance.service';
-import { AgentPerformanceRwaFileService } from '../agent-performance/AgentPerformanceRwaFileService';  // Correct the name here
+
+import { AgentPerformanceRwaFileService } from './AgentPerformanceRwaFileService';
+import { ProductiveCallingServices } from './ProductiveCallingServices';
+import { HangByAgentService } from './HangByAgentService';
+import { FeedbackTransferStatusService } from './FeedbackTransferStatusService';
+import { CustomerRatingService } from './CustomerRatingService';
+import { CRMTaggingCalcullationService } from './CRMTaggingCalcullationService';
+import { CallQualityAssuranceService } from './CallQualityAssuranceService';
+import { AverageHandlingTimeService } from './AverageHandlingTimeService';
 
 @Module({
   imports: [
@@ -18,16 +27,35 @@ import { AgentPerformanceRwaFileService } from '../agent-performance/AgentPerfor
     forwardRef(() => RabbitMQModule),
     MysqlModule,
   ],
+
   controllers: [AgentPerformanceController],
+
   providers: [
     AgentPerformanceService,
-    AgentPerformanceRwaFileService,  // Correct the name here
+    AgentPerformanceRwaFileService,
+    ProductiveCallingServices,
+    HangByAgentService,
+    FeedbackTransferStatusService,
+    CustomerRatingService,
+    CRMTaggingCalcullationService,
+    CallQualityAssuranceService,
+    AverageHandlingTimeService,
   ],
-  exports: [AgentPerformanceService, AgentPerformanceRwaFileService], 
+
+  exports: [
+    AgentPerformanceService,
+    AgentPerformanceRwaFileService,
+    ProductiveCallingServices,
+    HangByAgentService,
+    FeedbackTransferStatusService,
+    CustomerRatingService,
+    CRMTaggingCalcullationService,
+    CallQualityAssuranceService,
+    AverageHandlingTimeService,
+  ],
 })
 export class AgentPerformanceModule {
   constructor() {
     console.log("AgentPerformanceModule loaded");
   }
 }
-
