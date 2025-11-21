@@ -1145,7 +1145,7 @@ async processTicketHistoryViewWorkingCode(ticketPayload: any) {
 }
 
 
- async processTicketHistoryView(ticketPayload: any) {
+ async processTicketHistoryViewRecentWorking(ticketPayload: any) {
     let {
       SPFROMDATE,
       SPTODATE,
@@ -1471,6 +1471,331 @@ async processTicketHistoryViewWorkingCode(ticketPayload: any) {
     }
   }
 
+    async processTicketHistoryView(ticketPayload: any) {
+    let {
+      SPFROMDATE,
+      SPTODATE,
+      SPInsuranceCompanyID,
+      SPStateID,
+      SPTicketHeaderID,
+      SPUserID,
+      page = 1,
+      limit = 20,
+    } = ticketPayload
+
+    SPTicketHeaderID = Number(SPTicketHeaderID)
+
+    const db = this.db
+
+    if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: "InsuranceCompanyID Missing!" }
+    if (!SPStateID) return { rcode: 0, rmessage: "StateID Missing!" }
+
+    const Delta = await this.getSupportTicketUserDetail(SPUserID)
+    const responseInfo = await new UtilService().unGZip(Delta.responseDynamic)
+
+    const item = (responseInfo.data as any)?.user?.[0]
+    if (!item) return { rcode: 0, rmessage: "User details not found." }
+
+    const userDetail = {
+      InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+      StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
+      BRHeadTypeID: item.BRHeadTypeID,
+      LocationTypeID: item.LocationTypeID,
+    }
+
+    const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail
+
+    let locationFilter: any = {}
+
+    if (LocationTypeID === 1 && StateMasterID?.length) {
+      locationFilter = { FilterStateID: { $in: StateMasterID } }
+    } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
+      locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } }
+    }
+
+    const match: any = { ...locationFilter }
+
+    if (SPTicketHeaderID && SPTicketHeaderID !== 0) {
+      match.TicketHeaderID = SPTicketHeaderID
+    }
+
+    if (SPInsuranceCompanyID && SPInsuranceCompanyID !== "#ALL") {
+      const requestedInsuranceIDs = SPInsuranceCompanyID.split(",").map((id) => Number(id.trim()))
+      const allowedInsuranceIDs = InsuranceCompanyID.map(Number)
+      const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id))
+
+      if (validInsuranceIDs.length === 0) {
+        return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." }
+      }
+
+      match.InsuranceCompanyID = { $in: validInsuranceIDs }
+    } else {
+      if (InsuranceCompanyID?.length) {
+        match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }
+      }
+    }
+
+    if (SPStateID && SPStateID !== "#ALL") {
+      const requestedStateIDs = SPStateID.split(",").map((id) => Number(id.trim()))
+      const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.map(Number).includes(id))
+
+      if (validStateIDs.length === 0) {
+        return { rcode: 0, rmessage: "Unauthorized StateID(s)." }
+      }
+
+      match.FilterStateID = { $in: validStateIDs }
+    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+      match.FilterStateID = { $in: StateMasterID.map(Number) }
+    }
+
+    if (SPFROMDATE || SPTODATE) {
+      match.InsertDateTime = {}
+      if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
+      if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
+    }
+
+    const countPipeline: any[] = [
+      { $match: match },
+      {
+        $group: {
+          _id: "$SupportTicketNo",
+        },
+      },
+      { $count: "total" },
+    ]
+
+    const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
+    const totalCount = countResult?.[0]?.total || 0
+    const totalPages = Math.ceil(totalCount / limit)
+
+    const pipeline: any[] = [
+      { $match: match },
+      { $sort: { InsertDateTime: -1 } },
+      {
+        $group: {
+          _id: "$SupportTicketNo",
+          doc: { $first: "$$ROOT" },
+        },
+      },
+      { $replaceRoot: { newRoot: "$doc" } },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+
+      {
+        $lookup: {
+          from: "support_ticket_claim_intimation_report_history",
+          let: { ticketNo: "$SupportTicketNo" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$SupportTicketNo", "$$ticketNo"] } } },
+            { $sort: { InsertDateTime: -1 } },
+            { $limit: 1 },
+          ],
+          as: "claimInfo",
+        },
+      },
+      { $unwind: { path: "$claimInfo", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "csc_agent_master",
+          let: { userLoginId: "$InsertUserID" },
+          pipeline: [{ $match: { $expr: { $eq: ["$UserLoginID", "$$userLoginId"] } } }, { $limit: 1 }],
+          as: "agentInfo",
+        },
+      },
+      { $unwind: { path: "$agentInfo", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "ticket_comment_journey",
+          localField: "SupportTicketNo",
+          foreignField: "SupportTicketNo",
+          as: "ticket_comment_journey",
+          pipeline: [
+            { $sort: { CreatedDate: -1 } },
+            {
+              $group: {
+                _id: "$ResolvedComment",
+                unique_comments: { $first: "$$ROOT" },
+              },
+            },
+            { $replaceRoot: { newRoot: "$unique_comments" } },
+          ],
+        },
+      },
+
+      {
+        $project: {
+          SupportTicketID: 1,
+          SupportTicketNo: 1,
+          InsertUserID: 1,
+          Created: 1,
+          StatusUpdateTime: 1,
+          TicketStatusID: 1,
+          TicketStatus: 1,
+          ApplicationNo: 1,
+          InsurancePolicyNo: 1,
+          CallerContactNumber: 1,
+          RequestorName: 1,
+          RequestorMobileNo: 1,
+          StateMasterName: 1,
+          DistrictMasterName: 1,
+          SubDistrictName: 1,
+          TicketHeadName: 1,
+          TicketCategoryName: 1,
+          RequestSeason: 1,
+          RequestYear: 1,
+          ApplicationCropName: 1,
+          Relation: 1,
+          RelativeName: 1,
+          PolicyPremium: 1,
+          PolicyArea: 1,
+          PolicyType: 1,
+          LandSurveyNumber: 1,
+          LandDivisionNumber: 1,
+          IsSos: 1,
+          PlotStateName: 1,
+          PlotDistrictName: 1,
+          PlotVillageName: 1,
+          ApplicationSource: 1,
+          CropShare: 1,
+          IFSCCode: 1,
+          FarmerShare: 1,
+          SowingDate: 1,
+          LossDate: 1,
+          CreatedBY: 1,
+          InsertDateTime: 1,
+          Sos: 1,
+          TicketNCIPDocketNo: 1,
+          TicketDescription: 1,
+          CallingUniqueID: 1,
+          TicketTypeName: 1,
+          TicketReOpenDate: 1,
+          InsuranceCompany: 1,
+          SchemeName: 1,
+          ticketHistory: 1,
+          claimInfo: 1,
+          agentInfo: 1,
+          ticket_comment_journey: 1,
+        },
+      },
+
+      {
+        $project: {
+          _id: 0,
+          "Agent ID": "$agentInfo.UserID",
+          "Calling ID": "$CallingUniqueID",
+          "NCIP Docket No": "$TicketNCIPDocketNo",
+          "Ticket No": "$SupportTicketNo",
+          "Creation Date": "$InsertDateTime",
+          "Re-Open Date": "$TicketReOpenDate",
+          "Ticket Status": "$TicketStatus",
+          "Status Date": "$StatusUpdateTime",
+          State: "$StateMasterName",
+          District: "$DistrictMasterName",
+          Type: "$TicketHeadName",
+          Category: "$TicketTypeName",
+          "Sub Category": "$TicketCategoryName",
+          Season: "$RequestSeason",
+          Year: "$RequestYear",
+          "Insurance Company": "$InsuranceCompany",
+          "Application No": "$ApplicationNo",
+          "Policy No": "$InsurancePolicyNo",
+          "Caller Mobile No": "$CallerContactNumber",
+          "Farmer Name": "$RequestorName",
+          "Mobile No": "$RequestorMobileNo",
+          "Created By": "$CreatedBY",
+          Description: "$TicketDescription",
+          ticket_comment_journey: "$ticket_comment_journey",
+        },
+      },
+    ]
+
+    let results = await db
+      .collection("SLA_KRPH_SupportTickets_Records")
+      .aggregate(pipeline, { allowDiskUse: true })
+      .toArray()
+
+    if (results.length === 0) {
+      return {
+        data: results,
+        rmessage: { msg: "No Record Found", code: 0 },
+        pagination: null,
+        code: 0,
+      }
+    }
+
+    results = Array.isArray(results) ? results : [results]
+
+    results.forEach((doc) => {
+      if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
+        const journey = doc.ticket_comment_journey
+        journey.forEach((commentObj) => {
+          const fields = [
+            ["InprogressDate", "InprogressComment", "In-Progress Date", "In-Progress Comment"],
+            ["ResolvedDate", "ResolvedComment", "Resolved-Date", "Resolved Comment"],
+            ["ReOpenDate", "ReOpenComment", "Re-Open-Date", "Re-Open Comment"],
+            ["Inprogress1Date", "Inprogress1Comment", "In-Progress Date 1", "In-Progress Comment 1"],
+            ["Resolved1Date", "Resolved1Comment", "Resolved-Date 1", "Resolved Comment 1"],
+            ["ReOpen1Date", "ReOpen1Comment", "Re-Open-Date 1", "Re-Open Comment 1"],
+            ["Inprogress2Date", "Inprogress2Comment", "In-Progress Date 2", "In-Progress Comment 2"],
+            ["Resolved2Date", "Resolved2Comment", "Resolved-Date 2", "Resolved Comment 2"],
+            ["ReOpen2Date", "ReOpen2Comment", "Re-Open-Date 2", "Re-Open Comment 2"],
+          ]
+
+          fields.forEach(([dateField, commentField, outDate, outComment]) => {
+            if (commentObj[dateField] && commentObj[commentField]) {
+              const formattedDate = this.formatToDDMMYYYY(commentObj[dateField])
+              const cleanComment = (commentObj[commentField] || "").replace(/<\/?[^>]+(>|$)/g, "").trim() || "NA"
+              doc[outDate] = formattedDate
+              doc[outComment] = cleanComment === "" ? "NA" : cleanComment
+            } else {
+              doc[outDate] = "NA"
+              doc[outComment] = "NA"
+            }
+          })
+        })
+        delete doc.ticket_comment_journey
+      } else {
+        const keys = [
+          "In-Progress Date",
+          "In-Progress Comment",
+          "Resolved-Date",
+          "Resolved Comment",
+          "Re-Open-Date",
+          "Re-Open Comment",
+          "In-Progress Date 1",
+          "In-Progress Comment 1",
+          "Resolved-Date 1",
+          "Resolved Comment 1",
+          "Re-Open-Date 1",
+          "Re-Open Comment 1",
+          "In-Progress Date 2",
+          "In-Progress Comment 2",
+          "Resolved-Date 2",
+          "Resolved Comment 2",
+          "Re-Open-Date 2",
+          "Re-Open Comment 2",
+        ]
+        keys.forEach((key) => (doc[key] = "NA"))
+      }
+    })
+
+    const message = { msg: "Success", code: 1 }
+    return {
+      data: results,
+      rmessage: message,
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      code: 1,
+    }
+  }
  
 
 
