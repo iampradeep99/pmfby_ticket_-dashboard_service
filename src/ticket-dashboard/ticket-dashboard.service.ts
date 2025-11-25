@@ -7039,25 +7039,60 @@ pipeline.push({
     };
 
     const { InsuranceCompanyID, StateMasterID, LocationTypeID, EscalationFlag, AppAccessID } = userDetail;
-    let locationFilter: any = {};
-    if (LocationTypeID === 1 && StateMasterID?.length) {
-      locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
-    } else if (LocationTypeID === 2) {
-      // fetch district info only if needed
-      const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
-      const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
+    // let locationFilter: any = {};
+    // if (LocationTypeID === 1 && StateMasterID?.length) {
+    //   locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
+    // } else if (LocationTypeID === 2) {
+    //   // fetch district info only if needed
+    //   const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
+    //   const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
 
-      const districtId: number[] = [];
-      if (collectedDistrictInfo?.masterdatabinding && Array.isArray(collectedDistrictInfo.masterdatabinding)) {
-        for (const itemData of collectedDistrictInfo.masterdatabinding) {
-          districtId.push(itemData.DistrictCodeAlpha);
-        }
-        locationFilter = { DistrictMasterID: { $in: districtId } };
-      } else {
-        console.warn("Invalid district info format:", collectedDistrictInfo);
-        locationFilter = {};
-      }
+    //   const districtId: number[] = [];
+    //   if (collectedDistrictInfo?.masterdatabinding && Array.isArray(collectedDistrictInfo.masterdatabinding)) {
+    //     for (const itemData of collectedDistrictInfo.masterdatabinding) {
+    //       districtId.push(itemData.DistrictCodeAlpha);
+    //     }
+    //     locationFilter = { DistrictMasterID: { $in: districtId } };
+    //   } else {
+    //     console.warn("Invalid district info format:", collectedDistrictInfo);
+    //     locationFilter = {};
+    //   }
+    // }
+
+    let locationFilter = {};
+
+if (LocationTypeID === 1) {
+  // STATE USER
+  if (Array.isArray(StateMasterID) && StateMasterID.length > 0) {
+    locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
+  } else {
+    // State user but no states assigned → return empty filter
+    locationFilter = { FilterStateID: { $in: [] } };
+  }
+
+} else if (LocationTypeID === 2) {
+  // DISTRICT USER
+  const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
+  const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
+
+  const districtId: number[] = [];
+
+  if (
+    collectedDistrictInfo?.masterdatabinding &&
+    Array.isArray(collectedDistrictInfo.masterdatabinding)
+  ) {
+    for (const itemData of collectedDistrictInfo.masterdatabinding) {
+      districtId.push(itemData.DistrictCodeAlpha);
     }
+
+    locationFilter = { FilterDistrictRequestorID: { $in: districtId } };
+
+  } else {
+    console.warn("Invalid district info format:", collectedDistrictInfo);
+    locationFilter = {};
+  }
+}
+
 
     const match: any = { ...locationFilter };
 
@@ -7075,14 +7110,14 @@ pipeline.push({
       match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
     }
 
-    if(StateMasterID){
+    if(StateMasterID && StateMasterID.length > 0 ){
   if (stateID && stateID !== "" && LocationTypeID !== 2) {
       const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
       const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
       if (validStateIDs.length === 0) {
         return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
       }
-      match.StateMasterID = { $in: validStateIDs };
+      match.FilterStateID = { $in: validStateIDs };
     } else if (StateMasterID?.length && LocationTypeID !== 2) {
       match.FilterStateID = { $in: StateMasterID.map(Number) };
     }
