@@ -52,65 +52,6 @@ export class TicketEscalationService {
 
 
   
-/* async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; code: number } }> {
-  try {
-    const cacheKey = await this.utilServices.generateCacheKey('roles', payload);
-    console.log("Generated cache key:", cacheKey);
-
-    const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
-
-    if (cachedData) {
-      console.log("Data fetched from Redis cache");
-      return {
-        data: cachedData,
-        message: { msg: "Data fetched from cache", code: 1 },
-      };
-    }
-
-    console.log("No cache found, fetching data from API");
-
-    const response: AxiosResponse<any> = await axios.get(this.PMFBY_ROLE_URL, {
-      params: payload || {},
-      timeout: 10000,
-      headers: { "Content-Type": "application/json" },
-    });
-
-    if (!response || !response.data) {
-      console.log("No data received from API");
-      return {
-        data: null,
-        message: { msg: "No data received from API", code: 0 },
-      };
-    }
-
-    const responseData = response.data.data;
-    console.log("Data fetched from API, caching it now");
-    await this.redisWrapper.setRedisCache(cacheKey, responseData, 86400);
-
-    return {
-      data: responseData,
-      message: { msg: "Data fetched successfully", code: 1 },
-    };
-  } catch (error: any) {
-    console.log("Error fetching roles:", error);
-
-    let errorMsg = "Failed to fetch roles";
-    if (error.response) {
-      errorMsg = `API responded with status ${error.response.status}`;
-    } else if (error.request) {
-      errorMsg = "No response received from API";
-    } else if (error.message) {
-      errorMsg = `Error: ${error.message}`;
-    }
-
-    return {
-      data: null,
-      message: { msg: errorMsg, code: 0 },
-    };
-  }
-}
- */
-
 
 async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; code: number } }> {
   try {
@@ -165,6 +106,57 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
     };
   }
 }
+
+
+async getRole(payload: any) {
+  try {
+    const { StateID } = payload;
+    if (!StateID)
+      return { data: {}, message: { msg: "StateID required", code: 0 } };
+
+    const db = this.db;
+    const collectionName = "escalation_matrix_master";
+
+    const results = await db
+      .collection(collectionName)
+      .aggregate([
+        {
+          $match: { state_id: StateID }
+        },
+        {
+          $project: {
+            _id: 0,
+            Bank_id: "$bank_id",
+            Bank_name: "$bank_name",
+            Bank_type: "$bank_type",
+            Pfms_bank_code: "$pfms_bank_code",
+            Pfms_bank_name: "$pfms_bank_name",
+            Bank_code: "$bank_code",
+            Administering_agency: "$administering_agency",
+            Ownership_type: "$ownership_type",
+            Apex_bank_id: "$apex_bank_id",
+            State_id: "$state_id",
+            State_code: "$state_code"
+          }
+        }
+      ])
+      .toArray();
+
+    if (!results.length) {
+      return { data: {}, message: { msg: "No data found", code: 0 } };
+    }
+let obj = {
+BankInfo: results
+}
+    return {
+      data: obj,
+      message: { msg: "Fetched", code: 1 }
+    };
+  } catch (err) {
+    return { data: {}, message: { msg: "Error", code: 0 } };
+  }
+}
+
 
 
 
@@ -691,76 +683,59 @@ async AssignTicketServie(payload: any) {
 }
 
 
-async UserWiseState(payload: any) {
+/* async UserWiseState(payload: any) {
   try {
     const db = this.db;
     const utilService = new UtilService();
 
     if (!payload || typeof payload !== "object") {
-      console.log("Invalid payload");
       return { data: [], msg: "Invalid payload", code: "0" };
     }
 
-    const { userID } = payload;
-
-    if (!userID || (typeof userID !== "string" && typeof userID !== "number")) {
-      console.log("User ID is required and must be valid");
-      return { data: [], msg: "User ID is required and must be valid", code: "0" };
+    const userID = payload.userID;
+    if (!userID) {
+      return { data: [], msg: "User ID required", code: "0" };
     }
 
     const cacheKey = await this.utilServices.generateCacheKey("UserWiseState", payload);
-    console.log("Generated cache key:", cacheKey);
-
     const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
     if (cachedData) {
-      console.log("Data fetched from Redis cache");
       return { data: cachedData, msg: "Data fetched from cache", code: "1" };
     }
 
-    console.log("No cache found, fetching data from DB");
-
-    let Delta;
+    let userDetail;
     try {
-      [Delta] = await Promise.all([utilService.getSupportTicketUserDetail(userID)]);
-    } catch (dbFetchError) {
-      console.log("Error fetching user details:", dbFetchError);
+      userDetail = await utilService.getSupportTicketUserDetail(userID);
+    } catch {
       return { data: [], msg: "Failed to fetch user details", code: "0" };
     }
 
-    if (!Delta || !Delta.responseDynamic) {
-      console.log("User does not exist");
-      return { data: [], msg: "User does not exist", code: "0" };
+    if (!userDetail?.responseDynamic) {
+      return { data: [], msg: "User not found", code: "0" };
     }
 
     let responseInfo;
     try {
-      responseInfo = await utilService.unGZip(Delta.responseDynamic);
-    } catch (gzipError) {
-      console.log("Error unGZip user data:", gzipError);
+      responseInfo = await utilService.unGZip(userDetail.responseDynamic);
+    } catch {
       return { data: [], msg: "Failed to process user data", code: "0" };
     }
 
-    const item = (responseInfo?.data?.user?.[0]) || null;
-
+    const item = responseInfo?.data?.user?.[0];
     if (!item) {
-      console.log("User does not exist after unGZip");
-      return { data: [], msg: "User does not exist", code: "0" };
+      return { data: [], msg: "User not found", code: "0" };
     }
 
     let StateMasterID: number[] = [];
     try {
-      if (item.StateMasterID) {
-        const arr = await utilService.convertStringToArray(item.StateMasterID);
-        StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
-      }
-    } catch (convertError) {
-      console.log("Error converting StateMasterID:", convertError);
-      return { data: [], msg: "Invalid StateMasterID format", code: "0" };
+      const arr = await utilService.convertStringToArray(item.StateMasterID);
+      StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
+    } catch {
+      return { data: [], msg: "Invalid StateMasterID", code: "0" };
     }
 
     if (!StateMasterID.length) {
-      console.log("No states assigned to user");
-      return { data: [], msg: "No states assigned to user", code: "0" };
+      return { data: [], msg: "No states assigned", code: "0" };
     }
 
     const pipeline = [
@@ -782,26 +757,58 @@ async UserWiseState(payload: any) {
       },
     ];
 
-    let extractedData = [];
+    let extractedData;
     try {
       extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
-      console.log("Data fetched from DB");
-    } catch (dbError) {
-      console.log("Error fetching state data:", dbError);
+    } catch {
       return { data: [], msg: "Failed to fetch state data", code: "0" };
     }
 
     await this.redisWrapper.setRedisCache(cacheKey, extractedData, 86400);
-    console.log("Cached DB result in Redis");
 
     return { data: extractedData, msg: "Fetched successfully", code: "1" };
+  } catch {
+    return { data: [], msg: "Unexpected error", code: "0" };
+  }
+} */
 
-  } catch (err) {
-    console.log("Top-level error:", err);
-    return { data: [], msg: "Unexpected error occurred", code: "0" };
+
+  async UserWiseState(payload: any) {
+  try {
+    if (!payload?.userID) return { data: [], msg: "User ID required", code: "0" };
+
+    const cacheKey = await this.utilServices.generateCacheKey("UserWiseState", payload);
+    const cached = await this.redisWrapper.getRedisCache<any>(cacheKey);
+    if (cached) return { data: cached, msg: "Data fetched from cache", code: "1" };
+
+    const util = new UtilService();
+    const userDetail = await util.getSupportTicketUserDetail(payload.userID).catch(() => null);
+    if (!userDetail?.responseDynamic) return { data: [], msg: "User not found", code: "0" };
+
+    const info = await util.unGZip(userDetail.responseDynamic).catch(() => null);
+    const item = info?.data?.user?.[0];
+    if (!item) return { data: [], msg: "User not found", code: "0" };
+
+    const arr = await util.convertStringToArray(item.StateMasterID).catch(() => []);
+    const StateMasterID = arr.map(Number).filter(n => !isNaN(n));
+    if (!StateMasterID.length) return { data: [], msg: "No states assigned", code: "0" };
+
+    const pipeline = [
+      { $match: { StateMasterID: { $in: StateMasterID } } },
+      { $group: { _id: "$StateMasterID", StateMasterName: { $first: "$StateMasterName" } } },
+      { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
+      { $sort: { order: 1 } },
+      { $project: { _id: 0, StateMasterID: "$_id", StateName: "$StateMasterName" } },
+    ];
+
+    const data = await this.db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
+    await this.redisWrapper.setRedisCache(cacheKey, data, 86400);
+
+    return { data, msg: "Fetched successfully", code: "1" };
+  } catch {
+    return { data: [], msg: "Unexpected error", code: "0" };
   }
 }
-
 
 
 

@@ -24,7 +24,9 @@ interface Config {
   rabbitmq: string;
   mail: MailConfig;
   gcpUpload: string;
-  pmfbyRoleURL:string
+  pmfbyRoleURL:string;
+  krphPDFTicketInfoURL:string;
+  krphPDFTicketToken:string
 }
 
 const env = process.env.NODE_ENV || "uat";
@@ -46,7 +48,11 @@ const config: { [key: string]: Config } = {
       password: process.env.LOCAL_MAIL_PASS!
     },
     gcpUpload: process.env.LOCAL_GCP_UPLOAD!,
-    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!,
+    krphPDFTicketInfoURL:process.env.KPRH_PDF_TICKET_INFO_URL!,
+    krphPDFTicketToken:process.env.KPRH_PDF_TICKET_TOKEN!
+
+
   },
   uat: {
     mongodb: process.env.UAT_MONGO!,
@@ -64,7 +70,11 @@ const config: { [key: string]: Config } = {
       password: process.env.UAT_MAIL_PASS!
     },
     gcpUpload: process.env.UAT_GCP_UPLOAD!,
-    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!,
+    krphPDFTicketInfoURL:process.env.KPRH_PDF_TICKET_INFO_URL!,
+    krphPDFTicketToken:process.env.KPRH_PDF_TICKET_TOKEN!
+
+
 
   },
   prod: {
@@ -83,7 +93,10 @@ const config: { [key: string]: Config } = {
       password: process.env.PROD_MAIL_PASS!
     },
     gcpUpload: process.env.PROD_GCP_UPLOAD!,
-    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!,
+    krphPDFTicketInfoURL:process.env.KPRH_PDF_TICKET_INFO_URL!,
+    krphPDFTicketToken:process.env.KPRH_PDF_TICKET_TOKEN!
+
 
   }
 };

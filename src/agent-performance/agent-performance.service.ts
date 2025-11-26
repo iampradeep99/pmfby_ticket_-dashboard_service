@@ -355,11 +355,7 @@ async AgentPerformanceCalculateService(payload: any) {
 }
 
 
-/**
- * --------------------------------------------------
- * BACKGROUND PROCESSOR FUNCTION
- * --------------------------------------------------
- */
+
 private async _processAgentPerformance(db: any, year: number, month: number, year_month: string) {
   const log = this.logger;
 
