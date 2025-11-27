@@ -245,7 +245,7 @@ async supportTicketListing(
 
     const compressedData = obj ? await this.utilService.GZip(obj) : null;
     console.log("test")
-    return jsonResponseHandler(obj, message, req, res, () => {});
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
   } catch (err) {
     return jsonErrorHandler(err, req, res, () => {});
   }
