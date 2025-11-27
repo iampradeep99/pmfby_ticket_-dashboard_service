@@ -34,6 +34,8 @@ import * as https from 'https';
 export class TicketEscalationService {
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
+  private tokenCache = new NodeCache({ stdTTL: 30 * 60 });
+
   private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
   private readonly RoleURL = "http://10.128.60.9:3011/v1/user/user/roleWiseUserList"
   public gcp = new GCPServices();
@@ -160,7 +162,7 @@ BankInfo: results
 }
 
 
-async getToken() {
+/* async getToken() {
   let result:any;
   let token:string;
   const payload = {
@@ -181,9 +183,51 @@ async getToken() {
   token = result?.token
   return token;
 }
+ */
 
 
-async getRolesForGovt(payload: any) {
+async getToken() {
+  try {
+    const cachedToken = this.tokenCache.get("pmfby_token");
+
+    if (cachedToken) {
+      return cachedToken;
+    }
+
+    const payload = {
+      deviceType: config.pmfbyConfig.deviceType,
+      otp: Number(config.pmfbyConfig.otp),
+      password: config.pmfbyConfig.password,
+      mobile: config.pmfbyConfig.mobile,
+    };
+
+    const getData = await axios.post(
+      config.pmfbyConfig.login_api_url,
+      payload,
+      {
+        httpsAgent: new https.Agent({ rejectUnauthorized: false })
+      }
+    );
+
+    const result = getData?.data?.data;
+    const token = result?.token;
+
+    if (!token) {
+      throw new Error("Token not received from login API");
+    }
+
+    this.tokenCache.set("pmfby_token", token);
+
+    return token;
+
+  } catch (error) {
+    console.error("Error in getToken():", error);
+    throw error;
+  }
+}
+
+
+/* async getRolesForGovt(payload: any) {
   try {
     const gettoken = await this.getToken();
     const token =  gettoken;
@@ -220,9 +264,42 @@ console.log(token)
 
     return { data: null, message: { msg: errorMsg, code: 0 } };
   }
+} */
+
+
+async getRolesForGovt(payload: any) {
+  try {
+    const token = await this.getToken();
+
+    const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
+      params: payload || {},
+      timeout: 10000,
+      headers: {
+        token: token,
+      },
+    });
+
+    if (!response?.data?.data) {
+      return {
+        data: null,
+        message: { msg: "No data received from API", code: 0 },
+      };
+    }
+
+    return {
+      data: response.data.data,
+      message: { msg: "Success", code: 1 },
+    };
+
+  } catch (err: any) {
+    const errorMsg =
+      err?.response?.data?.message ||
+      err?.message ||
+      "Something went wrong";
+
+    return { data: null, message: { msg: errorMsg, code: 0 } };
+  }
 }
-
-
 
 
 
