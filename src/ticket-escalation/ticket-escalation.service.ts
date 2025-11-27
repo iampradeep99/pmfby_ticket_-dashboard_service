@@ -204,43 +204,6 @@ export class TicketEscalationService {
 
 
 
-
-/*   async getRolesForGovt(payload: any) {
-    try {
-      const token = await this.getToken();
-
-      const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
-        params: payload || {},
-        timeout: 10000,
-        headers: {
-          token: token,
-        },
-      });
-
-      if (!response?.data?.data) {
-        return {
-          data: null,
-          message: { msg: "No data received from API", code: 0 },
-        };
-      }
-
-      return {
-        data: response.data.data,
-        message: { msg: "Success", code: 1 },
-      };
-
-    } catch (err: any) {
-      const errorMsg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Something went wrong";
-
-      return { data: null, message: { msg: errorMsg, code: 0 } };
-    }
-  }
- */
-
-
 async getRolesForGovt(payload: any) {
   try {
     const token = await this.getToken();
@@ -717,141 +680,51 @@ async getRolesForGovt(payload: any) {
 
 
 
-  // async AssignTicketServie(payload: any) {
-  //   const db = this.db;
-  //   const ticketCollection = db.collection('SLA_Ticket_listing');
-  //   const assignHistoryCollection = db.collection('Ticket_Assignment_History');
-
-  //   // Validate payload
-  //   if (!payload || typeof payload !== 'object') {
-  //     return { success: false, summary: null, details: [], message: 'Invalid payload: payload must be an object.' };
-  //   }
-
-  //   const { ticketIds, assignedBy, assignedTo, roleRightsMasterID, stakeholderUserID } = payload;
-
-  //   if (!ticketIds || typeof ticketIds !== 'string' || ticketIds.trim() === '') {
-  //     return { success: false, summary: null, details: [], message: 'Invalid payload: ticketIds is required and must be a comma-separated string.' };
-  //   }
-
-  //   if (!assignedBy || !assignedTo || !roleRightsMasterID || !stakeholderUserID) {
-  //     return { success: false, summary: null, details: [], message: 'Missing required fields: assignedBy, assignedTo, roleRightsMasterID, and stakeholderUserID are all required.' };
-  //   }
-
-  //   const ticketIdArray = ticketIds
-  //     .split(',')
-  //     .map(id => id.trim())
-  //     .filter(id => id !== '');
-
-  //   if (ticketIdArray.length === 0) {
-  //     return { success: false, summary: null, details: [], message: 'No valid ticket IDs provided in ticketIds.' };
-  //   }
-
-  //   const results: { ticketId: string; ticketNo?: string; status: string; reason?: string }[] = [];
-  //   const now = new Date();
-
-  //   for (const ticketId of ticketIdArray) {
-  //     try {
-  //       const ticketIdNum = Number(ticketId);
-  //       if (isNaN(ticketIdNum)) {
-  //         results.push({ ticketId, status: 'Failed', reason: 'Invalid ticket ID format' });
-  //         continue;
-  //       }
-
-  //       const existingTicket = await ticketCollection.findOne({ SupportTicketID: ticketIdNum });
-  //       if (!existingTicket) {
-  //         results.push({ ticketId, status: 'Failed', reason: 'Ticket not found in the system' });
-  //         continue;
-  //       }
-
-  //       const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketIdNum });
-  //       if (alreadyAssigned) {
-  //         results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Failed', reason: 'Ticket is already assigned' });
-  //         continue;
-  //       }
-
-  //       const assignmentRecord = {
-  //         SupportTicketID: ticketIdNum,
-  //         SupportTicketNo: existingTicket.SupportTicketNo,
-  //         TicketStatusID: existingTicket.TicketStatusID || null,
-  //         TicketStatus: existingTicket.TicketStatus || null,
-  //         assignedBy,
-  //         assignedTo,
-  //         RoleRightMasterID: roleRightsMasterID,
-  //         StakeHolderUserID: stakeholderUserID,
-  //         AssignedDate: now,
-  //       };
-
-  //       const insertResult = await assignHistoryCollection.insertOne(assignmentRecord);
-
-  //       if (!insertResult.insertedId) {
-  //         results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Failed', reason: 'Failed to save assignment history' });
-  //         continue;
-  //       }
-
-  //       results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Success', reason: `Ticket ${existingTicket.SupportTicketNo} assigned successfully` });
-  //     } catch (err: any) {
-  //       results.push({ ticketId, status: 'Error', reason: err.message || 'Unexpected error occurred' });
-  //     }
-  //   }
-
-  //   const successCount = results.filter(r => r.status === 'Success').length;
-  //   const failedCount = results.filter(r => r.status === 'Failed' || r.status === 'Error').length;
-
-  //   const summaryMessage =
-  //     successCount === ticketIdArray.length
-  //       ? 'All tickets assigned successfully.'
-  //       : successCount === 0
-  //         ? 'No tickets were assigned. All failed.'
-  //         : `${successCount} ticket(s) assigned successfully, ${failedCount} ticket(s) failed.`;
-
-  //   const summary = {
-  //     totalTickets: ticketIdArray.length,
-  //     successCount,
-  //     failedCount,
-  //     message: summaryMessage,
-  //   };
-
-  //   return { success: true, summary, details: results };
-  // }
 
 
-  async AssignTicketServie(payload: any) {
-  const db = this.db;
-  const ticketCollection = db.collection("SLA_Ticket_listing");
-  const assignHistoryCollection = db.collection("Ticket_Assignment_History");
 
-  // Basic Required Fields
-  const { ticketIds, assignedBy, assignedTo, roleRightsMasterID, stakeholderUserID } = payload || {};
 
+
+
+
+  
+async AssignTicketService(payload: any) {
+  const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo } = payload || {};
   if (!ticketIds) {
-    return { success: false, summary: null, details: [], message: "ticketIds is required." };
+    return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
   }
 
-  const ticketIdArray = ticketIds
-    .split(",")
-    .map(id => id.trim())
-    .filter(Boolean);
+  const ticketIdArray = ticketIds.split(",").map(id => id.trim()).filter(Boolean);
+  if (!ticketIdArray.length) {
+    return { data: {}, message: { msg: "No valid ticket IDs provided.", code: 0 } };
+  }
 
-  const results: any[] = [];
+  const ticketCollection = this.db.collection("SLA_Ticket_listing");
+  const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
   const now = new Date();
+  const results: any[] = [];
 
-  for (const ticketId of ticketIdArray) {
+  const roleMapping: Record<string, number> = {
+    STATE_GOVT_ADMIN: 1,
+    STATE_GOVT_USER: 2
+  };
+  const assignedRoleId = roleMapping[roleName] || null;
+
+  for (const ticketIdStr of ticketIdArray) {
+    const ticketId = Number(ticketIdStr);
+    if (isNaN(ticketId)) {
+      results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
+      continue;
+    }
+
     try {
-      const ticketIdNum = Number(ticketId);
-      if (isNaN(ticketIdNum)) {
-        results.push({ ticketId, status: "Failed", reason: "Invalid ticket ID" });
-        continue;
-      }
-
-      // Get Ticket
-      const ticket = await ticketCollection.findOne({ SupportTicketID: ticketIdNum });
+      const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
       if (!ticket) {
         results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
         continue;
       }
 
-      // Prevent Re-Assignment
-      const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketIdNum });
+      const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketId });
       if (alreadyAssigned) {
         results.push({
           ticketId,
@@ -862,21 +735,21 @@ async getRolesForGovt(payload: any) {
         continue;
       }
 
-      // Save Assignment History
       const assignmentData = {
-        SupportTicketID: ticketIdNum,
+        SupportTicketID: ticketId,
         SupportTicketNo: ticket.SupportTicketNo,
         TicketStatusID: ticket.TicketStatusID || null,
         TicketStatus: ticket.TicketStatus || null,
         assignedBy,
         assignedTo,
-        RoleRightMasterID: roleRightsMasterID,
-        StakeHolderUserID: stakeholderUserID,
-        AssignedDate: now
+        AssignedDate: now,
+        AssigneeStateID: stateID,
+        AssigneeMobileNo: mobileNo,
+        AssigneRoleName: roleName,
+        AssigneeRoleID: assignedRoleId
       };
 
       const insertRes = await assignHistoryCollection.insertOne(assignmentData);
-
       if (!insertRes.insertedId) {
         results.push({
           ticketId,
@@ -899,11 +772,10 @@ async getRolesForGovt(payload: any) {
     }
   }
 
-  // Summary
   const successCount = results.filter(r => r.status === "Success").length;
-  const failedCount = results.length - successCount;
+   const failedCount = results.length - successCount;
 
-  const summary = {
+   const summary = {
     totalTickets: results.length,
     successCount,
     failedCount,
@@ -915,11 +787,18 @@ async getRolesForGovt(payload: any) {
           : `${successCount} assigned, ${failedCount} failed.`
   };
 
-  return { success: true, summary, details: results };
+  
+
+  
+  if (successCount === 0) {
+    return { data: summary, message: { msg: "All Failed", code: "0" } };
+  } else {
+    return { data: summary, message: { msg: "Success", code: "1" } };
+  }
 }
 
 
-  async UserWiseState(payload: any) {
+async UserWiseState(payload: any) {
   try {
     const db = this.db;
     const utilService = new UtilService();
@@ -1290,127 +1169,7 @@ async getRolesForGovt(payload: any) {
 
 
 
-  // async uploadTicketPDFService(payload: {
-  //   fileBuffer: Buffer;
-  //   fileName: string;
-  //   mimeType: string;
-  //   uploadedBy: string;
-  // }): Promise<{ data: any; message: { msg: string; code: number } }> {
-  //   try {
-  //     const { fileBuffer, fileName, mimeType, uploadedBy } = payload;
-
-  //     const uniqueHash = randomBytes(16).toString('hex');
-  //     const timestamp = new Date().getTime();
-  //     const sanitizedName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-  //     const safeFileName = `${timestamp}_${uniqueHash}_${sanitizedName}`;
-  //     const filePath = path.join('tickets', safeFileName);
-
-  //     const gcpService = new GCPServices();
-  //     const uploadResponse = await gcpService.uploadFileToGCP({
-  //       filePath,
-  //       uploadedBy,
-  //       file: {
-  //         buffer: fileBuffer,
-  //         originalname: safeFileName,
-  //       },
-  //     });
-
-  //     if (!uploadResponse.success) {
-  //       throw new Error(uploadResponse.message || 'GCP upload failed');
-  //     }
-
-  //     return {
-  //       data: {
-  //         fileName: safeFileName,
-  //         mimeType,
-  //         filePath: uploadResponse.url || filePath,
-  //         size: fileBuffer.length,
-  //         integrity: uniqueHash,
-  //       },
-  //       message: {
-  //         msg: 'PDF uploaded successfully to GCP',
-  //         code: 200,
-  //       },
-  //     };
-  //   } catch (err: any) {
-  //     const msg = err instanceof Error ? err.message : 'Unknown error occurred';
-  //     throw {
-  //       message: {
-  //         msg,
-  //         code: 500,
-  //       },
-  //     };
-  //   }
-  // }
-
-
-
-
-
-
-  /* async uploadTicketPDFService(payload: {
-    fileBuffer: Buffer;
-    fileName: string;
-    mimeType: string;
-  }): Promise<{ data: any; message: { msg: string; code: number } }> {
-    try {
-      const { fileBuffer, fileName, mimeType } = payload;
-  
-      const uniqueHash = randomBytes(16).toString('hex');
-      const timestamp = new Date().getTime();
-      const sanitizedName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-      const safeFileName = `${timestamp}_${uniqueHash}_${sanitizedName}`;
-  
-      const form = new FormData();
-      form.append('filePath', 'krph_reports/October2025/'); 
-      form.append('uploadedBy', 'KRPH'); 
-      form.append('documents', fileBuffer, safeFileName);
-  
-      // Call external API
-      const response = await axios.post(
-        'https://pmfby.gov.in/krphapi/FGMS/GCPFileUpload',
-        form,
-        {
-          headers: form.getHeaders(),
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-        }
-      );
-  
-      const responseData = response.data;
-  
-      if (responseData.responseCode !== '1') {
-        throw new Error(responseData.responseMessage || 'File upload failed');
-      }
-  
-      const compressedBuffer = Buffer.from(responseData.responseDynamic, 'base64');
-      const decompressedBuffer = gunzipSync(compressedBuffer);
-      const uploadedFiles = JSON.parse(decompressedBuffer.toString());
-      const gcpDownloadUrl = uploadedFiles?.[0]?.gcsUrl || '';
-      return {
-        data: {
-          fileName: safeFileName,
-          mimeType,
-          filePath: gcpDownloadUrl,
-          size: fileBuffer.length,
-          integrity: uniqueHash,
-        },
-        message: {
-          msg: 'PDF uploaded successfully to GCP',
-          code: 1,
-        },
-      };
-    } catch (err: any) {
-      const msg = err instanceof Error ? err.message : 'Unknown error occurred';
-      throw {
-        message: {
-          msg,
-          code: 500,
-        },
-      };
-    }
-  }
-   */
+ 
 
 
 
