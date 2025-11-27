@@ -6,7 +6,7 @@ async function run() {
     const payload = workerData.payload;
 
     const service = new PDFGenerationWorkerService(); // No argument
-    const result = await service.ProcessInformationForFarmer(payload);
+    const result = await service.processBatch(payload);
 
     parentPort.postMessage(result);
   } catch (err) {

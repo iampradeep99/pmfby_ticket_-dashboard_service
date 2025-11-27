@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 // import * as  puppeteer from 'puppeteer';
 import * as  FormData from "form-data";
-import PQueue from 'p-queue';
+import  PQueue from 'p-queue';
 import { chromium } from "playwright";
 
 
@@ -154,24 +154,24 @@ const logger = new Logger("worker-runner.log")
 
 
 export class PDFGenerationWorkerService {
-    private queue: PQueue;
+     private queue: PQueue;
     private client: AxiosInstance
     private readonly token = config.krphPDFTicketToken
-    private processedCount = 0;
+     private processedCount = 0;
 
-
+     
 
     constructor(private readonly browserPool: BrowserPoolService) {
-
+        
         this.client = this.initializeClient()
+        
 
+            this.queue = new PQueue({
+        concurrency: 100,
+        timeout: 120000
+    });
 
-        this.queue = new PQueue({
-            concurrency: 100,
-            timeout: 120000
-        });
-
-
+        
     }
     async connectDB() {
         const uri = config.mongodb
@@ -180,7 +180,7 @@ export class PDFGenerationWorkerService {
         return client.db("krph_db")
     }
 
-
+    
 
 
     private initializeClient(): AxiosInstance {
@@ -290,181 +290,519 @@ export class PDFGenerationWorkerService {
 
 
 
-    async ProcessInformationForFarmer(payload: any): Promise<any> {
+
+
+/*     async ProcessInformationForFarmer(payload: any) {
         try {
-            return this.queue.add(async () => {
-                const startTime = Date.now();
-                let browser: any = null;
-                let context: any = null;
-                let page: any = null;
+            selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
+            const ticketListDetails: any = await this.FetchTicketInformation(payload);
 
-                try {
-                    console.log(`Processing ticket: ${payload.SupportTicketNo}`);
+            const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
+            const htmlPath = path.join(process.cwd(), `ticket_${payload?.SupportTicketNo}.html`);
+            fs.writeFileSync(htmlPath, prinHTML, { encoding: "utf-8" });
 
-                    selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
-                    const ticketListDetails: any = await this.FetchTicketInformation(payload);
-                    const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
+            const browser = await puppeteer.launch();
+            const page = await browser.newPage();
 
-                    browser = await chromium.launch({ headless: true });
-                    context = await browser.newContext();
-                    page = await context.newPage();
+            await page.setContent(prinHTML, { waitUntil: "networkidle0" });
+            await page.emulateMediaType("screen");
 
-                    await page.setContent(prinHTML, {
-                        waitUntil: 'networkidle',
-                        timeout: 30000
-                    });
-
-                    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
-
-                    const tempDir = path.join(process.cwd(), "temp");
-                    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-
-                    const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
-
-                    await page.pdf({
-                        path: pdfPath,
-                        format: "A4",
-                        printBackground: true,
-                        margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" }
-                    });
-
-                    await page.close();
-                    page = null;
-
-                    const gcpResponse = await this.sendFileToGCP(pdfPath);
-                    const fetchedGCPInfo = gcpResponse?.responseDynamic?.[0];
-
-                    const finalPayloadToSave = {
-                        SupportTicketID: selectedData?.SupportTicketID,
-                        SupportTicketNo: selectedData?.SupportTicketNo,
-                        TicketFileURl: fetchedGCPInfo?.gcsUrl,
-                        TicketHistoryID: selectedData?.TicketHistoryID || "",
-                        TicketStatusID: selectedData?.TicketStatusID || "",
-                        TicketStatus: selectedData?.TicketStatus || "",
-                        RequestorMobileNo: selectedData?.RequestorMobileNo || "",
-                        GCSFileName: fetchedGCPInfo?.filename || "",
-                        GCSId: fetchedGCPInfo?._id || "",
-                        InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
-                        UpdateDateTime: Date.now(),
-                        InsertedDateTime: selectedData?.Created || ""
-                    };
-
-                    if (
-                        !finalPayloadToSave.SupportTicketID ||
-                        !finalPayloadToSave.SupportTicketNo ||
-                        !finalPayloadToSave.TicketFileURl
-                    ) {
-                        throw new Error("Missing required fields");
-                    }
-
-                    const savedInfo = await this.saveToDatabase(finalPayloadToSave);
-
-                    if (savedInfo?._id) {
-                        this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
-                            console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
-                        );
-                    }
-
-                    try {
-                        fs.unlinkSync(pdfPath);
-                    } catch (e) {
-                        console.log(`Failed to delete temp file: ${pdfPath}`);
-                    }
-
-                    const processingTime = Date.now() - startTime;
-                    console.log(`✓ Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
-
-                    return {
-                        success: true,
-                        ticketNo: payload.SupportTicketNo,
-                        processingTime,
-                        gcsUrl: fetchedGCPInfo?.gcsUrl
-                    };
-
-                } catch (err) {
-                    console.log(`✗ Error processing ticket ${payload.SupportTicketNo}:`, err);
-
-                    if (page) {
-                        await page.close().catch(() => { });
-                    }
-
-                    // Return error object
-                    const errorResult = {
-                        success: false,
-                        ticketNo: payload.SupportTicketNo,
-                        processingTime: Date.now() - startTime,
-                        error: err.message
-                    };
-
-                    return errorResult;
-
-                } finally {
-                    if (context) await context.close().catch(() => { });
-                    if (browser) await browser.close().catch(() => { });
-                }
+            const pdfPath = path.join(process.cwd(), `ticket_${payload?.SupportTicketNo}.pdf`);
+            await page.pdf({
+                path: pdfPath,
+                format: "A4",
+                printBackground: true
             });
-        } catch (err) {
-            console.error('Queue error:', err);
 
-            // If using this approach, you need to check result in runWorker
-            return {
-                success: false,
-                ticketNo: payload.SupportTicketNo,
-                error: err.message || 'Unknown error'
+            await browser.close();
+
+            const gcpResponse = await this.sendFileToGCP(pdfPath);
+            const fetchedGCPInfo = gcpResponse?.responseDynamic[0];
+
+            const finalPayloadToSave = {
+                SupportTicketID: selectedData?.SupportTicketID,
+                SupportTicketNo: selectedData?.SupportTicketNo,
+                TicketFileURl: fetchedGCPInfo?.gcsUrl,
+                TicketHistoryID: selectedData?.TicketHistoryID || "",
+                TicketStatusID: selectedData?.TicketStatusID || "",
+                TicketStatus: selectedData?.TicketStatus || "",
+                RequestorMobileNo: selectedData?.RequestorMobileNo || "",
+                GCSFileName: fetchedGCPInfo?.filename || "",
+                GCSId: fetchedGCPInfo?._id || "",
+                InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
+                UpdateDateTime: Date.now(),
+                InsertedDateTime: selectedData?.Created || ""
             };
+
+            if (!finalPayloadToSave.SupportTicketID ||
+                !finalPayloadToSave.SupportTicketNo ||
+                !finalPayloadToSave.TicketFileURl) {
+                throw new Error("Missing required fields: SupportTicketID, SupportTicketNo, or TicketFileURl");
+            }
+
+            let savedInfo = await this.saveToDatabase(finalPayloadToSave);
+            if (savedInfo?._id) {
+                this.gupshupCallForPDFSend(finalPayloadToSave)
+            }
+
+        } catch (err) {
+            console.error(err);
         }
-    }
+    } */
 
-
-  async processBatch(payloads: any[]): Promise<any[]> {
-    payloads = [payloads]
-    console.log(`Starting batch processing: ${payloads?.length} tickets`);
-
-    const startTime = Date.now();
-
+    
+     /*    async ProcessInformationForFarmerWorkingAlready(payload: any) {
     try {
-        const results = await Promise.allSettled(
-            payloads.map(payload => this.ProcessInformationForFarmer(payload))
-        );
+        selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
+        const ticketListDetails: any = await this.FetchTicketInformation(payload);
 
-        const processedResults = results.map((result, index) => {
-            const p = payloads[index] || {};
-            const ticketNo = p.SupportTicketNo || null;
-            const ticketId = p.SupportTicketID || null;
+        const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
 
-            if (result.status === 'fulfilled') {
+        const htmlPath = path.join(process.cwd(), `ticket_${payload?.SupportTicketNo}.html`);
+        fs.writeFileSync(htmlPath, prinHTML, { encoding: "utf-8" });
+
+        const browser = await puppeteer.launch({
+            headless: true,
+            args: ["--no-sandbox", "--disable-setuid-sandbox"]
+        });
+
+        const page = await browser.newPage();
+
+        // ---- THE FIX ----
+        await page.setContent(prinHTML, {
+            waitUntil: "load",
+            timeout: 0
+        });
+
+        // Let rendering complete
+      await page.waitForFunction(() => document.readyState === "complete");
+    await page.waitForFunction(() => new Promise(res => setTimeout(res, 500)));
+        // ------------------
+
+        await page.emulateMediaType("screen");
+
+        const pdfPath = path.join(process.cwd(), `ticket_${payload?.SupportTicketNo}.pdf`);
+        await page.pdf({
+            path: pdfPath,
+            format: "A4",
+            printBackground: true
+        });
+
+        await browser.close();
+
+        const gcpResponse = await this.sendFileToGCP(pdfPath);
+        const fetchedGCPInfo = gcpResponse?.responseDynamic[0];
+
+        const finalPayloadToSave = {
+            SupportTicketID: selectedData?.SupportTicketID,
+            SupportTicketNo: selectedData?.SupportTicketNo,
+            TicketFileURl: fetchedGCPInfo?.gcsUrl,
+            TicketHistoryID: selectedData?.TicketHistoryID || "",
+            TicketStatusID: selectedData?.TicketStatusID || "",
+            TicketStatus: selectedData?.TicketStatus || "",
+            RequestorMobileNo: selectedData?.RequestorMobileNo || "",
+            GCSFileName: fetchedGCPInfo?.filename || "",
+            GCSId: fetchedGCPInfo?._id || "",
+            InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
+            UpdateDateTime: Date.now(),
+            InsertedDateTime: selectedData?.Created || ""
+        };
+
+        if (!finalPayloadToSave.SupportTicketID ||
+            !finalPayloadToSave.SupportTicketNo ||
+            !finalPayloadToSave.TicketFileURl) {
+            throw new Error("Missing required fields: SupportTicketID, SupportTicketNo, or TicketFileURl");
+        }
+
+        let savedInfo = await this.saveToDatabase(finalPayloadToSave);
+        if (savedInfo?._id) {
+            this.gupshupCallForPDFSend(finalPayloadToSave)
+        }
+
+    } catch (err) {
+        console.error(err);
+    }
+} */
+
+
+
+
+
+
+
+
+
+
+
+        async ProcessInformationForFarmerddd(payload: any) : Promise<any> {
+    try {
+        return this.queue.add(async()=>{
+            const startTime = Date.now();
+            let page: any | null = null;
+            try{
+                console.log(`Processing ticket: ${payload.SupportTicketNo}`);
+                 selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
+        const ticketListDetails: any = await this.FetchTicketInformation(payload);
+
+        const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
+
+                const context = this.browserPool.getContext();
+                page = await context.newPage();
+
+                 await page.setContent(prinHTML, {
+                    waitUntil: 'networkidle',
+                    timeout: 30000
+                });
+
+                await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+
+                  const tempDir = path.join(process.cwd(), 'temp');
+                if (!fs.existsSync(tempDir)) {
+                    fs.mkdirSync(tempDir, { recursive: true });
+                }
+                const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
+                 await page.pdf({
+                    path: pdfPath,
+                    format: 'A4',
+                    printBackground: true,
+                    margin: {
+                        top: '10mm',
+                        right: '10mm',
+                        bottom: '10mm',
+                        left: '10mm'
+                    }
+                });
+
+                 await page.close();
+                page = null;
+
+                 const gcpResponse = await this.sendFileToGCP(pdfPath);
+                const fetchedGCPInfo = gcpResponse?.responseDynamic[0];
+
+                 const finalPayloadToSave = {
+                    SupportTicketID: selectedData?.SupportTicketID,
+                    SupportTicketNo: selectedData?.SupportTicketNo,
+                    TicketFileURl: fetchedGCPInfo?.gcsUrl,
+                    TicketHistoryID: selectedData?.TicketHistoryID || '',
+                    TicketStatusID: selectedData?.TicketStatusID || '',
+                    TicketStatus: selectedData?.TicketStatus || '',
+                    RequestorMobileNo: selectedData?.RequestorMobileNo || '',
+                    GCSFileName: fetchedGCPInfo?.filename || '',
+                    GCSId: fetchedGCPInfo?._id || '',
+                    InsertedAtGCS: fetchedGCPInfo?.uploadedAt || '',
+                    UpdateDateTime: Date.now(),
+                    InsertedDateTime: selectedData?.Created || ''
+                };
+
+                 if (
+                    !finalPayloadToSave.SupportTicketID ||
+                    !finalPayloadToSave.SupportTicketNo ||
+                    !finalPayloadToSave.TicketFileURl
+                ) {
+                    throw new Error('Missing required fields');
+                }
+
+                const savedInfo = await this.saveToDatabase(finalPayloadToSave);
+
+                if (savedInfo?._id) {
+                    // Fire and forget
+                    this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+                        console.log(
+                            `Gupshup call failed for ${payload.SupportTicketNo}:`,
+                            err
+                        )
+                    );
+                }
+
+                 try {
+                    fs.unlinkSync(pdfPath);
+                } catch (unlinkErr) {
+                    console.log(`Failed to delete temp file: ${pdfPath}`);
+                }
+
+                const processingTime = Date.now() - startTime;
+                console.log(
+                    `✓ Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`
+                );
+
                 return {
-                    ...result.value,
-                    ticketNo,
-                    ticketId
+                    success: true,
+                    ticketNo: payload.SupportTicketNo,
+                    processingTime,
+                    gcsUrl: fetchedGCPInfo?.gcsUrl
+                };
+
+
+
+            }catch(err){
+                 console.log(
+                    `✗ Error processing ticket ${payload.SupportTicketNo}:`,
+                    err
+                );
+
+                // Cleanup page if still open
+                if (page) {
+                    await page.close().catch(e => 
+                        console.log('Error closing page:', e)
+                    );
+                }
+
+                return {
+                    success: false,
+                    ticketNo: payload.SupportTicketNo,
+                    processingTime: Date.now() - startTime,
+                    error: err.message
                 };
             }
 
-            return {
-                success: false,
-                ticketNo,
-                ticketId,
-                processingTime: 0,
-                error: result.reason?.message || 'Unknown error'
-            };
+
+        })
+   
+ 
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+
+//     async ProcessInformationForFarmer(payload: any): Promise<any> {
+//   try {
+//     return this.queue.add(async () => {
+//       const startTime = Date.now();
+//       let browser: any = null;
+//       let context: any = null;
+//       let page: any = null;
+
+//       try {
+//         console.log(`Processing ticket: ${payload.SupportTicketNo}`);
+
+//         selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
+//         const ticketListDetails: any = await this.FetchTicketInformation(payload);
+//         const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
+
+//         browser = await chromium.launch({ headless: true });
+//         context = await browser.newContext();
+//         page = await context.newPage();
+
+//         await page.setContent(prinHTML, {
+//           waitUntil: 'networkidle',
+//           timeout: 30000
+//         });
+
+//         await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+
+//         const tempDir = path.join(process.cwd(), "temp");
+//         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+//         const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
+
+//         await page.pdf({
+//           path: pdfPath,
+//           format: "A4",
+//           printBackground: true,
+//           margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" }
+//         });
+
+//         await page.close();
+//         page = null;
+
+//         const gcpResponse = await this.sendFileToGCP(pdfPath);
+//         const fetchedGCPInfo = gcpResponse?.responseDynamic?.[0];
+
+//         const finalPayloadToSave = {
+//           SupportTicketID: selectedData?.SupportTicketID,
+//           SupportTicketNo: selectedData?.SupportTicketNo,
+//           TicketFileURl: fetchedGCPInfo?.gcsUrl,
+//           TicketHistoryID: selectedData?.TicketHistoryID || "",
+//           TicketStatusID: selectedData?.TicketStatusID || "",
+//           TicketStatus: selectedData?.TicketStatus || "",
+//           RequestorMobileNo: selectedData?.RequestorMobileNo || "",
+//           GCSFileName: fetchedGCPInfo?.filename || "",
+//           GCSId: fetchedGCPInfo?._id || "",
+//           InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
+//           UpdateDateTime: Date.now(),
+//           InsertedDateTime: selectedData?.Created || ""
+//         };
+
+//         if (
+//           !finalPayloadToSave.SupportTicketID ||
+//           !finalPayloadToSave.SupportTicketNo ||
+//           !finalPayloadToSave.TicketFileURl
+//         ) {
+//           throw new Error("Missing required fields");
+//         }
+
+//         const savedInfo = await this.saveToDatabase(finalPayloadToSave);
+
+//         if (savedInfo?._id) {
+//           this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+//             console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
+//           );
+//         }
+
+//         try {
+//           fs.unlinkSync(pdfPath);
+//         } catch (e) {
+//           console.log(`Failed to delete temp file: ${pdfPath}`);
+//         }
+
+//         const processingTime = Date.now() - startTime;
+//         console.log(`✓ Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
+
+//         return {
+//           success: true,
+//           ticketNo: payload.SupportTicketNo,
+//           processingTime,
+//           gcsUrl: fetchedGCPInfo?.gcsUrl
+//         };
+
+//       } catch (err) {
+//         console.log(`✗ Error processing ticket ${payload.SupportTicketNo}:`, err);
+
+//         if (page) {
+//           await page.close().catch(() => {});
+//         }
+
+//         return {
+//           success: false,
+//           ticketNo: payload.SupportTicketNo,
+//           processingTime: Date.now() - startTime,
+//           error: err.message
+//         };
+//       } finally {
+//         if (context) await context.close().catch(() => {});
+//         if (browser) await browser.close().catch(() => {});
+//       }
+//     });
+//   } catch (err) {
+//     console.error(err);
+//   }
+// }
+
+
+async ProcessInformationForFarmer(payload: any): Promise<any> {
+  try {
+    return this.queue.add(async () => {
+      const startTime = Date.now();
+      let browser: any = null;
+      let context: any = null;
+      let page: any = null;
+
+      try {
+        console.log(`Processing ticket: ${payload.SupportTicketNo}`);
+
+         selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
+        const ticketListDetails: any = await this.FetchTicketInformation(payload);
+        const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
+
+        browser = await chromium.launch({ headless: true });
+        context = await browser.newContext();
+        page = await context.newPage();
+
+        await page.setContent(prinHTML, {
+          waitUntil: 'networkidle',
+          timeout: 30000
         });
 
-        const successful = processedResults.filter(r => r.success).length;
-        const failed = processedResults.filter(r => !r.success).length;
-        const totalTime = Date.now() - startTime;
+        await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
 
-        console.log(`Batch processing completed:`);
-        console.log(`Successful: ${successful}`);
-        console.log(`Failed: ${failed}`);
-        console.log(`Total time: ${totalTime}ms`);
-        console.log(`Average time: ${(totalTime / payloads.length).toFixed(2)}ms per PDF`);
+        const tempDir = path.join(process.cwd(), "temp");
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-        return processedResults;
+        const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
 
-    } catch (err) {
-        console.log('Batch processing error:', err);
-        throw err;
-    }
+        await page.pdf({
+          path: pdfPath,
+          format: "A4",
+          printBackground: true,
+          margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" }
+        });
+
+        await page.close();
+        page = null;
+
+        const gcpResponse = await this.sendFileToGCP(pdfPath);
+        const fetchedGCPInfo = gcpResponse?.responseDynamic?.[0];
+
+        const finalPayloadToSave = {
+          SupportTicketID: selectedData?.SupportTicketID,
+          SupportTicketNo: selectedData?.SupportTicketNo,
+          TicketFileURl: fetchedGCPInfo?.gcsUrl,
+          TicketHistoryID: selectedData?.TicketHistoryID || "",
+          TicketStatusID: selectedData?.TicketStatusID || "",
+          TicketStatus: selectedData?.TicketStatus || "",
+          RequestorMobileNo: selectedData?.RequestorMobileNo || "",
+          GCSFileName: fetchedGCPInfo?.filename || "",
+          GCSId: fetchedGCPInfo?._id || "",
+          InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
+          UpdateDateTime: Date.now(),
+          InsertedDateTime: selectedData?.Created || ""
+        };
+
+        if (
+          !finalPayloadToSave.SupportTicketID ||
+          !finalPayloadToSave.SupportTicketNo ||
+          !finalPayloadToSave.TicketFileURl
+        ) {
+          throw new Error("Missing required fields");
+        }
+
+        const savedInfo = await this.saveToDatabase(finalPayloadToSave);
+
+        if (savedInfo?._id) {
+          this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+            console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
+          );
+        }
+
+        try {
+          fs.unlinkSync(pdfPath);
+        } catch (e) {
+          console.log(`Failed to delete temp file: ${pdfPath}`);
+        }
+
+        const processingTime = Date.now() - startTime;
+        console.log(`✓ Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
+
+        return {
+          success: true,
+          ticketNo: payload.SupportTicketNo,
+          processingTime,
+          gcsUrl: fetchedGCPInfo?.gcsUrl
+        };
+
+      } catch (err) {
+        console.log(`✗ Error processing ticket ${payload.SupportTicketNo}:`, err);
+
+        if (page) {
+          await page.close().catch(() => {});
+        }
+
+        // Return error object
+        const errorResult = {
+          success: false,
+          ticketNo: payload.SupportTicketNo,
+          processingTime: Date.now() - startTime,
+          error: err.message
+        };
+
+        return errorResult;
+
+      } finally {
+        if (context) await context.close().catch(() => {});
+        if (browser) await browser.close().catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.error('Queue error:', err);
+    
+    // If using this approach, you need to check result in runWorker
+    return {
+      success: false,
+      ticketNo: payload.SupportTicketNo,
+      error: err.message || 'Unknown error'
+    };
+  }
 }
 
 
@@ -472,7 +810,64 @@ export class PDFGenerationWorkerService {
 
 
 
-    async FetchTicketInformation(body: any): Promise<void> {
+
+  async processBatch(payloads: any[]): Promise<any[]> {
+        console.log(`Starting batch processing: ${payloads.length} tickets`);
+        const startTime = Date.now();
+
+        try {
+            const results = await Promise.allSettled(
+                payloads.map(payload => this.ProcessInformationForFarmer(payload))
+            );
+
+            const processedResults: any[] = results.map((result, index) => {
+                if (result.status === 'fulfilled') {
+                    return result.value;
+                } else {
+                    return {
+                        success: false,
+                        ticketNo: payloads[index].SupportTicketNo,
+                        processingTime: 0,
+                        error: result.reason?.message || 'Unknown error'
+                    };
+                }
+            });
+
+            const successful = processedResults.filter(r => r.success).length;
+            const failed = processedResults.filter(r => !r.success).length;
+            const totalTime = Date.now() - startTime;
+
+            console.log(`\nBatch processing completed:`);
+            console.log(`✓ Successful: ${successful}`);
+            console.log(`✗ Failed: ${failed}`);
+            console.log(`⏱ Total time: ${totalTime}ms`);
+            console.log(
+                `⏱ Average time: ${(totalTime / payloads.length).toFixed(2)}ms per PDF`
+            );
+
+            return processedResults;
+
+        } catch (err) {
+            console.log('Batch processing error:', err);
+            throw err;
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+        async FetchTicketInformation(body: any): Promise<void> {
         if (!body) {
             throw new Error("Request body is required")
         }
@@ -582,7 +977,347 @@ export class PDFGenerationWorkerService {
         return combinedTickets
     }
 
-    
+    private async getStatusWiseTemplatePrevious(
+        pStatusID?: any,
+        pData?: any,
+        pselectedData?: any,
+        pticketHistoryData?: any,
+        pticketStatus?: any,
+    ) {
+        try {
+            let rtnStatusWiseTemplate: any = []
+
+            switch (pStatusID) {
+                case 109301:
+                    rtnStatusWiseTemplate = [
+                        {
+                            tat: "",
+                            id: 1,
+                            color: "#f06d1a",
+                            text: `Farmer request received from  ( ${pData && pData.CreatedBY ? pData.CreatedBY : ""} )`,
+                            date:
+                                pData && pData.CreatedAt
+                                    ? await this.dateToSpecificFormat(
+                                        `${pData.CreatedAt.split("T")[0]} ${await this.Convert24FourHourAndMinute(
+                                            pData.CreatedAt.split("T")[1],
+                                        )}`,
+                                        "DD-MM-YYYY HH:mm",
+                                    )
+                                    : null,
+                            icon: `<img src="${"Ticket"}" width="24" height="24" />`,
+                            textId: "",
+                            agentName:
+                                pData && pData.CreatedBY === "Agent"
+                                    ? `Agent Name : ${pData && pData.AgentName ? pData.AgentName : null}`
+                                    : `User Name : ${pData.CreatedBY}`,
+                            ticket: "",
+                            status: "",
+                            ticketStatus:
+                                pStatusID === 109301
+                                    ? "Open"
+                                    : pStatusID === 109302
+                                        ? "In-Progress"
+                                        : pStatusID === 109303
+                                            ? "Resolved"
+                                            : pStatusID === 109304
+                                                ? "Re-Open"
+                                                : "",
+                            smsText: "",
+                            ageing: "",
+                        },
+                        {
+                            tat: "",
+                            id: 2,
+                            color: "#0f99ef",
+                            text: "Farmer ticket created",
+                            date:
+                                pData && pData.CreatedAt
+                                    ? await this.dateToSpecificFormat(
+                                        `${pData.CreatedAt.split("T")[0]} ${await this.Convert24FourHourAndMinute(
+                                            pData.CreatedAt.split("T")[1],
+                                        )}`,
+                                        "DD-MM-YYYY HH:mm",
+                                    )
+                                    : null,
+                            icon: `<img src="${"Ticket"}" width="24" height="24" />`,
+                            textId: "",
+                            agentName:
+                                pData && pData.CreatedBY === "Agent"
+                                    ? `Agent Name : ${pData && pData.AgentName ? pData.AgentName : null}`
+                                    : `User Name : ${pData.CreatedBY}`,
+                            ticket: "Ticket assigned to IC User",
+                            status: "",
+                            ticketStatus:
+                                pStatusID === 109301
+                                    ? "Open"
+                                    : pStatusID === 109302
+                                        ? "In-Progress"
+                                        : pStatusID === 109303
+                                            ? "Resolved"
+                                            : pStatusID === 109304
+                                                ? "Re-Open"
+                                                : "",
+                            smsText: "",
+                            ageing: "",
+                        },
+                        {
+                            tat: "",
+                            id: 3,
+                            color: "#6908b1",
+                            text: "SMS sent to farmer with ticket number",
+                            date: "",
+                            icon: `<span class="sms-icon">📩</span>`,
+                            textId: `${""}`,
+                            agentName: "",
+                            ticket: "",
+                            status: "SMS sent successfully",
+                            ticketStatus:
+                                pStatusID === 109301
+                                    ? "Open"
+                                    : pStatusID === 109302
+                                        ? "In-Progress"
+                                        : pStatusID === 109303
+                                            ? "Resolved"
+                                            : pStatusID === 109304
+                                                ? "Re-Open"
+                                                : "",
+                            smsText: `प्रिय किसान ... ${pData.SupportTicketNo} ...`,
+                            ageing: "",
+                        },
+                    ]
+                    break
+
+                case 109302:
+                    rtnStatusWiseTemplate = [
+                        {
+                            tat: "",
+                            id: 4,
+                            color: "#dd5c9cff",
+                            text: "Ticket responded by IC User",
+                            date:
+                                pData && pData.TicketHistoryDate
+                                    ? await this.dateToSpecificFormat(
+                                        `${pData.TicketHistoryDate.split("T")[0]} ${await this.Convert24FourHourAndMinute(
+                                            pData.TicketHistoryDate.split("T")[1],
+                                        )}`,
+                                        "DD-MM-YYYY HH:mm",
+                                    )
+                                    : null,
+                            icon: `<img src="${"Ticket"}" width="24" height="24" />`,
+                            textId: "",
+                            agentName:
+                                pData && pData.CreatedBY === "Agent"
+                                    ? `Agent Name : ${pData && pData.AgentName ? pData.AgentName : null}`
+                                    : `User Name : ${pData.CreatedBY}`,
+                            ticket: "",
+                            status: "",
+                            ticketStatus:
+                                pStatusID === 109301
+                                    ? "Open"
+                                    : pStatusID === 109302
+                                        ? "In-Progress"
+                                        : pStatusID === 109303
+                                            ? "Resolved"
+                                            : pStatusID === 109304
+                                                ? "Re-Open"
+                                                : "",
+                            smsText: "",
+                            ageing: "",
+                        },
+                    ]
+                    break
+
+                case 109303:
+                    let pAgeiing = ""
+                    const pReOpenStatus =
+                        pticketStatus === "Resolved"
+                            ? "Resolved"
+                            : pticketStatus === "Resolved1"
+                                ? "ReOpen"
+                                : pticketStatus === "Resolved2"
+                                    ? "ReOpen1"
+                                    : pticketStatus === "Resolved3"
+                                        ? "ReOpen2"
+                                        : ""
+
+                    if (pticketStatus === "Resolved") {
+                        pAgeiing = await this.getTicketAgeing(
+                            pselectedData.CreatedAt,
+                            pticketHistoryData,
+                            pselectedData.TicketHeaderID,
+                            pticketStatus,
+                        )
+                    } else if (pticketStatus === "Resolved1" || pticketStatus === "Resolved2" || pticketStatus === "Resolved3") {
+                        const filterDataReOpen: any = Object.values(pticketHistoryData).find(
+                            (entry: any) => entry.TicketStatus === pReOpenStatus,
+                        )
+
+                        if (filterDataReOpen) {
+                            if (Object.values(filterDataReOpen).length > 0) {
+                                pAgeiing = await this.getTicketAgeing(
+                                    filterDataReOpen.TicketHistoryDate,
+                                    pticketHistoryData,
+                                    selectedData.TicketHeaderID,
+                                    pticketStatus,
+                                )
+                            }
+                        }
+                    }
+
+                    if (pselectedData.TicketHeaderID === 1) {
+                        for (let i = 0; i < stepsTATJourneyGrv.length; i++) {
+                            if (stepsTATJourneyGrv[i].ageing.replace(" days", "") !== pAgeiing) {
+                                rtnStatusWiseTemplate.push(stepsTATJourneyGrv[i])
+                            } else break
+                        }
+                    } else if (pselectedData.TicketHeaderID === 4) {
+                        for (let i = 0; i < stepsTATJourneyCrpLs.length; i++) {
+                            if (stepsTATJourneyCrpLs[i].ageing.replace(" days", "") !== pAgeiing) {
+                                rtnStatusWiseTemplate.push(stepsTATJourneyCrpLs[i])
+                            } else break
+                        }
+                    }
+
+                    rtnStatusWiseTemplate.push(
+                        {
+                            tat: "",
+                            id: 5,
+                            color: "#eb0c7b",
+                            text: "Ticket responded by IC User",
+                            date:
+                                pData && pData.TicketHistoryDate
+                                    ? await this.dateToSpecificFormat(
+                                        `${pData.TicketHistoryDate.split("T")[0]} ${await this.Convert24FourHourAndMinute(
+                                            pData.TicketHistoryDate.split("T")[1],
+                                        )}`,
+                                        "DD-MM-YYYY HH:mm",
+                                    )
+                                    : null,
+                            icon: `<img src="${"Ticket"}" width="24" height="24" />`,
+                            textId: "",
+                            agentName:
+                                pData && pData.UserType === "CSC"
+                                    ? `Agent Name : ${pData && pData.AgentName ? pData.AgentName : null}`
+                                    : `User Name : ${pData.CreatedBY}`,
+                            ticket: "Ticket assigned to IC Admin for response verification",
+                            status: "",
+                            ticketStatus:
+                                pStatusID === 109301
+                                    ? "Open"
+                                    : pStatusID === 109302
+                                        ? "In-Progress"
+                                        : pStatusID === 109303
+                                            ? "Resolved"
+                                            : pStatusID === 109304
+                                                ? "Re-Open"
+                                                : "",
+                            smsText: "",
+                            ageing: `(${pAgeiing != null ? pAgeiing : 0} days)`,
+                        },
+                        {
+                            tat: "",
+                            id: 6,
+                            color: "#01b981",
+                            text: "Notification sent to farmer...",
+                            date: "",
+                            icon: `<span class="sms-icon">📩</span>`,
+                            textId: `${""}`,
+                            agentName: "",
+                            ticket: "",
+                            status: "SMS sent successfully",
+                            ticketStatus:
+                                pStatusID === 109301
+                                    ? "Open"
+                                    : pStatusID === 109302
+                                        ? "In-Progress"
+                                        : pStatusID === 109303
+                                            ? "Resolved"
+                                            : pStatusID === 109304
+                                                ? "Re-Open"
+                                                : "",
+                            smsText: `प्रिय किसान ...`,
+                            ageing: "",
+                        },
+                    )
+
+                    break
+
+                case 109304:
+                    rtnStatusWiseTemplate = [
+                        {
+                            tat: "",
+                            id: 7,
+                            color: "#b94e00",
+                            text: "Ticket reponed by farmer",
+                            date:
+                                pData && pData.TicketHistoryDate
+                                    ? await this.dateToSpecificFormat(
+                                        `${pData.TicketHistoryDate.split("T")[0]} ${await this.Convert24FourHourAndMinute(
+                                            pData.TicketHistoryDate.split("T")[1],
+                                        )}`,
+                                        "DD-MM-YYYY HH:mm",
+                                    )
+                                    : null,
+                            icon: `<img src="${"Ticket"}" width="24" height="24" />`,
+                            textId: "",
+                            agentName:
+                                pData && pData.UserType === "CSC"
+                                    ? `Agent Name : ${pData && pData.CreatedBY ? pData.CreatedBY : null}`
+                                    : `User Name : ${pData.CreatedBY}`,
+                            ticket: "Ticket assigned to IC User",
+                            status: "",
+                            ticketStatus:
+                                pStatusID === 109301
+                                    ? "Open"
+                                    : pStatusID === 109302
+                                        ? "In-Progress"
+                                        : pStatusID === 109303
+                                            ? "Resolved"
+                                            : pStatusID === 109304
+                                                ? "Re-Open"
+                                                : "",
+                            smsText: "",
+                            ageing: "",
+                        },
+                        {
+                            tat: "",
+                            id: 8,
+                            color: "#f06d1a",
+                            text: "SMS sent to farmer with ticket number...",
+                            date: "",
+                            icon: `<span class="sms-icon">📩</span>`,
+                            textId: `${""}`,
+                            agentName: "",
+                            ticket: "",
+                            status: "SMS sent successfully",
+                            ticketStatus:
+                                pStatusID === 109301
+                                    ? "Open"
+                                    : pStatusID === 109302
+                                        ? "In-Progress"
+                                        : pStatusID === 109303
+                                            ? "Resolved"
+                                            : pStatusID === 109304
+                                                ? "Re-Open"
+                                                : "",
+                            smsText: `प्रिय किसान ...`,
+                            ageing: "",
+                        },
+                    ]
+                    break
+
+                default:
+                    rtnStatusWiseTemplate = []
+            }
+
+            const finalResolved = await Promise.all(rtnStatusWiseTemplate.map(async (item) => ({ ...item })))
+
+            return finalResolved
+        } catch (err) {
+            console.log(err)
+            return []
+        }
+    }
 
     private isAgeingMatch(range: string, ageingValue: number): boolean {
         if (!range) return false
