@@ -205,7 +205,7 @@ export class TicketEscalationService {
 
 
 
-  async getRolesForGovt(payload: any) {
+/*   async getRolesForGovt(payload: any) {
     try {
       const token = await this.getToken();
 
@@ -238,8 +238,54 @@ export class TicketEscalationService {
       return { data: null, message: { msg: errorMsg, code: 0 } };
     }
   }
+ */
 
 
+async getRolesForGovt(payload: any) {
+  try {
+    const token = await this.getToken();
+
+    // Enum for role mappings
+    const EnumRole = {
+      "STATE_GOVT_ADMIN": 1,
+      "STATE_GOVT_USER": 2,
+    };
+
+    // Fetch data from the API
+    const { data } = await axios.get(this.RoleURL, {
+      params: payload || {},
+      timeout: 10000,
+      headers: { token },
+    });
+
+    // Early return if there's no data
+    if (!data?.data) {
+      return { data: null, message: { msg: "No data received from API", code: 0 } };
+    }
+
+    // Map through raw data and update roles
+    const updatedData = data.data
+      .map((item: any) => {
+        if (EnumRole[item.roleName]) {
+          item.roleName = EnumRole[item.roleName];
+        }
+        return item;
+      })
+      // Use a Set to ensure uniqueness based on userID
+      .filter((value, index, self) => 
+        index === self.findIndex((t: any) => t.userID === value.userID)
+      );
+
+    return {
+      data: updatedData,
+      message: { msg: "Success", code: 1 },
+    };
+
+  } catch (err: any) {
+    const errorMsg = err?.response?.data?.message || err?.message || "Something went wrong";
+    return { data: null, message: { msg: errorMsg, code: 0 } };
+  }
+}
 
 
 
@@ -669,102 +715,206 @@ export class TicketEscalationService {
 
 
 
+  // async AssignTicketServie(payload: any) {
+  //   const db = this.db;
+  //   const ticketCollection = db.collection('SLA_Ticket_listing');
+  //   const assignHistoryCollection = db.collection('Ticket_Assignment_History');
+
+  //   // Validate payload
+  //   if (!payload || typeof payload !== 'object') {
+  //     return { success: false, summary: null, details: [], message: 'Invalid payload: payload must be an object.' };
+  //   }
+
+  //   const { ticketIds, assignedBy, assignedTo, roleRightsMasterID, stakeholderUserID } = payload;
+
+  //   if (!ticketIds || typeof ticketIds !== 'string' || ticketIds.trim() === '') {
+  //     return { success: false, summary: null, details: [], message: 'Invalid payload: ticketIds is required and must be a comma-separated string.' };
+  //   }
+
+  //   if (!assignedBy || !assignedTo || !roleRightsMasterID || !stakeholderUserID) {
+  //     return { success: false, summary: null, details: [], message: 'Missing required fields: assignedBy, assignedTo, roleRightsMasterID, and stakeholderUserID are all required.' };
+  //   }
+
+  //   const ticketIdArray = ticketIds
+  //     .split(',')
+  //     .map(id => id.trim())
+  //     .filter(id => id !== '');
+
+  //   if (ticketIdArray.length === 0) {
+  //     return { success: false, summary: null, details: [], message: 'No valid ticket IDs provided in ticketIds.' };
+  //   }
+
+  //   const results: { ticketId: string; ticketNo?: string; status: string; reason?: string }[] = [];
+  //   const now = new Date();
+
+  //   for (const ticketId of ticketIdArray) {
+  //     try {
+  //       const ticketIdNum = Number(ticketId);
+  //       if (isNaN(ticketIdNum)) {
+  //         results.push({ ticketId, status: 'Failed', reason: 'Invalid ticket ID format' });
+  //         continue;
+  //       }
+
+  //       const existingTicket = await ticketCollection.findOne({ SupportTicketID: ticketIdNum });
+  //       if (!existingTicket) {
+  //         results.push({ ticketId, status: 'Failed', reason: 'Ticket not found in the system' });
+  //         continue;
+  //       }
+
+  //       const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketIdNum });
+  //       if (alreadyAssigned) {
+  //         results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Failed', reason: 'Ticket is already assigned' });
+  //         continue;
+  //       }
+
+  //       const assignmentRecord = {
+  //         SupportTicketID: ticketIdNum,
+  //         SupportTicketNo: existingTicket.SupportTicketNo,
+  //         TicketStatusID: existingTicket.TicketStatusID || null,
+  //         TicketStatus: existingTicket.TicketStatus || null,
+  //         assignedBy,
+  //         assignedTo,
+  //         RoleRightMasterID: roleRightsMasterID,
+  //         StakeHolderUserID: stakeholderUserID,
+  //         AssignedDate: now,
+  //       };
+
+  //       const insertResult = await assignHistoryCollection.insertOne(assignmentRecord);
+
+  //       if (!insertResult.insertedId) {
+  //         results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Failed', reason: 'Failed to save assignment history' });
+  //         continue;
+  //       }
+
+  //       results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Success', reason: `Ticket ${existingTicket.SupportTicketNo} assigned successfully` });
+  //     } catch (err: any) {
+  //       results.push({ ticketId, status: 'Error', reason: err.message || 'Unexpected error occurred' });
+  //     }
+  //   }
+
+  //   const successCount = results.filter(r => r.status === 'Success').length;
+  //   const failedCount = results.filter(r => r.status === 'Failed' || r.status === 'Error').length;
+
+  //   const summaryMessage =
+  //     successCount === ticketIdArray.length
+  //       ? 'All tickets assigned successfully.'
+  //       : successCount === 0
+  //         ? 'No tickets were assigned. All failed.'
+  //         : `${successCount} ticket(s) assigned successfully, ${failedCount} ticket(s) failed.`;
+
+  //   const summary = {
+  //     totalTickets: ticketIdArray.length,
+  //     successCount,
+  //     failedCount,
+  //     message: summaryMessage,
+  //   };
+
+  //   return { success: true, summary, details: results };
+  // }
+
+
   async AssignTicketServie(payload: any) {
-    const db = this.db;
-    const ticketCollection = db.collection('SLA_Ticket_listing');
-    const assignHistoryCollection = db.collection('Ticket_Assignment_History');
+  const db = this.db;
+  const ticketCollection = db.collection("SLA_Ticket_listing");
+  const assignHistoryCollection = db.collection("Ticket_Assignment_History");
 
-    // Validate payload
-    if (!payload || typeof payload !== 'object') {
-      return { success: false, summary: null, details: [], message: 'Invalid payload: payload must be an object.' };
-    }
+  // Basic Required Fields
+  const { ticketIds, assignedBy, assignedTo, roleRightsMasterID, stakeholderUserID } = payload || {};
 
-    const { ticketIds, assignedBy, assignedTo, roleRightsMasterID, stakeholderUserID } = payload;
-
-    if (!ticketIds || typeof ticketIds !== 'string' || ticketIds.trim() === '') {
-      return { success: false, summary: null, details: [], message: 'Invalid payload: ticketIds is required and must be a comma-separated string.' };
-    }
-
-    if (!assignedBy || !assignedTo || !roleRightsMasterID || !stakeholderUserID) {
-      return { success: false, summary: null, details: [], message: 'Missing required fields: assignedBy, assignedTo, roleRightsMasterID, and stakeholderUserID are all required.' };
-    }
-
-    const ticketIdArray = ticketIds
-      .split(',')
-      .map(id => id.trim())
-      .filter(id => id !== '');
-
-    if (ticketIdArray.length === 0) {
-      return { success: false, summary: null, details: [], message: 'No valid ticket IDs provided in ticketIds.' };
-    }
-
-    const results: { ticketId: string; ticketNo?: string; status: string; reason?: string }[] = [];
-    const now = new Date();
-
-    for (const ticketId of ticketIdArray) {
-      try {
-        const ticketIdNum = Number(ticketId);
-        if (isNaN(ticketIdNum)) {
-          results.push({ ticketId, status: 'Failed', reason: 'Invalid ticket ID format' });
-          continue;
-        }
-
-        const existingTicket = await ticketCollection.findOne({ SupportTicketID: ticketIdNum });
-        if (!existingTicket) {
-          results.push({ ticketId, status: 'Failed', reason: 'Ticket not found in the system' });
-          continue;
-        }
-
-        const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketIdNum });
-        if (alreadyAssigned) {
-          results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Failed', reason: 'Ticket is already assigned' });
-          continue;
-        }
-
-        const assignmentRecord = {
-          SupportTicketID: ticketIdNum,
-          SupportTicketNo: existingTicket.SupportTicketNo,
-          TicketStatusID: existingTicket.TicketStatusID || null,
-          TicketStatus: existingTicket.TicketStatus || null,
-          assignedBy,
-          assignedTo,
-          RoleRightMasterID: roleRightsMasterID,
-          StakeHolderUserID: stakeholderUserID,
-          AssignedDate: now,
-        };
-
-        const insertResult = await assignHistoryCollection.insertOne(assignmentRecord);
-
-        if (!insertResult.insertedId) {
-          results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Failed', reason: 'Failed to save assignment history' });
-          continue;
-        }
-
-        results.push({ ticketId, ticketNo: existingTicket.SupportTicketNo, status: 'Success', reason: `Ticket ${existingTicket.SupportTicketNo} assigned successfully` });
-      } catch (err: any) {
-        results.push({ ticketId, status: 'Error', reason: err.message || 'Unexpected error occurred' });
-      }
-    }
-
-    const successCount = results.filter(r => r.status === 'Success').length;
-    const failedCount = results.filter(r => r.status === 'Failed' || r.status === 'Error').length;
-
-    const summaryMessage =
-      successCount === ticketIdArray.length
-        ? 'All tickets assigned successfully.'
-        : successCount === 0
-          ? 'No tickets were assigned. All failed.'
-          : `${successCount} ticket(s) assigned successfully, ${failedCount} ticket(s) failed.`;
-
-    const summary = {
-      totalTickets: ticketIdArray.length,
-      successCount,
-      failedCount,
-      message: summaryMessage,
-    };
-
-    return { success: true, summary, details: results };
+  if (!ticketIds) {
+    return { success: false, summary: null, details: [], message: "ticketIds is required." };
   }
+
+  const ticketIdArray = ticketIds
+    .split(",")
+    .map(id => id.trim())
+    .filter(Boolean);
+
+  const results: any[] = [];
+  const now = new Date();
+
+  for (const ticketId of ticketIdArray) {
+    try {
+      const ticketIdNum = Number(ticketId);
+      if (isNaN(ticketIdNum)) {
+        results.push({ ticketId, status: "Failed", reason: "Invalid ticket ID" });
+        continue;
+      }
+
+      // Get Ticket
+      const ticket = await ticketCollection.findOne({ SupportTicketID: ticketIdNum });
+      if (!ticket) {
+        results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+        continue;
+      }
+
+      // Prevent Re-Assignment
+      const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketIdNum });
+      if (alreadyAssigned) {
+        results.push({
+          ticketId,
+          ticketNo: ticket.SupportTicketNo,
+          status: "Failed",
+          reason: "Ticket already assigned"
+        });
+        continue;
+      }
+
+      // Save Assignment History
+      const assignmentData = {
+        SupportTicketID: ticketIdNum,
+        SupportTicketNo: ticket.SupportTicketNo,
+        TicketStatusID: ticket.TicketStatusID || null,
+        TicketStatus: ticket.TicketStatus || null,
+        assignedBy,
+        assignedTo,
+        RoleRightMasterID: roleRightsMasterID,
+        StakeHolderUserID: stakeholderUserID,
+        AssignedDate: now
+      };
+
+      const insertRes = await assignHistoryCollection.insertOne(assignmentData);
+
+      if (!insertRes.insertedId) {
+        results.push({
+          ticketId,
+          ticketNo: ticket.SupportTicketNo,
+          status: "Failed",
+          reason: "Failed to save assignment history"
+        });
+        continue;
+      }
+
+      results.push({
+        ticketId,
+        ticketNo: ticket.SupportTicketNo,
+        status: "Success",
+        reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
+      });
+
+    } catch (err: any) {
+      results.push({ ticketId, status: "Error", reason: err.message || "Unexpected error" });
+    }
+  }
+
+  // Summary
+  const successCount = results.filter(r => r.status === "Success").length;
+  const failedCount = results.length - successCount;
+
+  const summary = {
+    totalTickets: results.length,
+    successCount,
+    failedCount,
+    message:
+      successCount === results.length
+        ? "All tickets assigned successfully."
+        : successCount === 0
+          ? "All tickets failed."
+          : `${successCount} assigned, ${failedCount} failed.`
+  };
+
+  return { success: true, summary, details: results };
+}
 
 
   async UserWiseState(payload: any) {
