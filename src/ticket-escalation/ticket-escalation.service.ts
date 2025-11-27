@@ -192,8 +192,7 @@ async getRolesForGovt(payload: any) {
       params: payload || {},
       timeout: 10000,
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
+        token: token
       },
     });
 
