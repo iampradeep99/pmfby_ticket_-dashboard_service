@@ -168,24 +168,28 @@ async getRolesForGovt(payload: any) {
     });
 
     if (!response?.data?.data) {
-      return {
-        data: null,
-        message: { msg: "No data received from API", code: 0 },
-      };
+      console.error("API responded but no data found:", response?.data);
+      return { data: null, message: { msg: "No data received from API", code: 0 } };
     }
 
-    const allRoles = response.data.data;
-
     return {
-      data: allRoles,
+      data: response.data.data,
       message: { msg: "Success", code: 1 },
     };
-  } catch (err) {
-    console.log(err)
-    return {
-      data: null,
-      message: { msg: "ddd", code: 0 },
-    };
+  } catch (err: any) {
+    console.error("Error in getRolesForGovt:", {
+      message: err?.message,
+      status: err?.response?.status,
+      responseData: err?.response?.data,
+      stack: err?.stack,
+    });
+
+    const errorMsg =
+      err?.response?.data?.message ||
+      err?.message ||
+      "Something went wrong";
+
+    return { data: null, message: { msg: errorMsg, code: 0 } };
   }
 }
 
