@@ -245,25 +245,25 @@ async getRolesForGovt(payload: any) {
   try {
     const token = await this.getToken();
 
-  
-    const EnumRole = {
-      "STATE_GOVT_ADMIN": 1,
-      "STATE_GOVT_USER": 2,
+    const EnumRole: Record<string, number> = {
+      STATE_GOVT_ADMIN: 1,
+      STATE_GOVT_USER: 2,
     };
-    
-   let axiosPayload = {};
-if (payload?.roleName == 1) {
-  axiosPayload['roleName'] = "STATE_GOVT_ADMIN";
-}
-if (payload?.roleName == 2) {
-  axiosPayload['roleName'] = "STATE_GOVT_USER";
-}
 
-axiosPayload['stateID'] = payload?.stateID
+    const roleMap: Record<number, string> = {
+      1: "STATE_GOVT_ADMIN",
+      2: "STATE_GOVT_USER",
+    };
 
-    console.log(axiosPayload, "ddd")
+    const axiosPayload = {
+      roleName: roleMap[payload?.roleName],
+      stateID: payload?.stateID,
+    };
+
+    console.log(axiosPayload)
+
     const { data } = await axios.get(this.RoleURL, {
-      params: axiosPayload || {},
+      params: axiosPayload,
       timeout: 10000,
       headers: { token },
     });
@@ -273,26 +273,21 @@ axiosPayload['stateID'] = payload?.stateID
     }
 
     const updatedData = data.data
-      .map((item: any) => {
-        if (EnumRole[item.roleName]) {
-          item.roleName = EnumRole[item.roleName];
-        }
-        return item;
-      })
-      .filter((value, index, self) => 
-        index === self.findIndex((t: any) => t.userID === value.userID)
+      .map((item: any) => ({
+        ...item,
+        roleName: EnumRole[item.roleName] || item.roleName,
+      }))
+      .filter((item: any, index: number, self: any[]) =>
+        index === self.findIndex((t) => t.userID === item.userID)
       );
 
-    return {
-      data: updatedData,
-      message: { msg: "Success", code: 1 },
-    };
-
+    return { data: updatedData, message: { msg: "Success", code: 1 } };
   } catch (err: any) {
     const errorMsg = err?.response?.data?.message || err?.message || "Something went wrong";
     return { data: null, message: { msg: errorMsg, code: 0 } };
   }
 }
+
 
 
 
