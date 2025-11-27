@@ -9,8 +9,8 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
   private readonly logger = new Logger('pdf-generation-rmq.log');
 
   private readonly RABBITMQ_URL = config.rabbitmq;
-  private readonly QUEUE_NAME = 'krph_support_ticket_pdf_generation_queue';
-  private readonly PREFETCH = 5;
+  private readonly QUEUE_NAME = 'krph_support_ticket_pdf_generation_queue_1';
+  private  PREFETCH = 5;
   private readonly RECONNECT_DELAY = 5000;
   private readonly MAX_RETRIES = 5;
 
@@ -146,18 +146,44 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
     );
   }
 
-  private monitorQueueAndAdjustConcurrency() {
-    setInterval(async () => {
-      if (!this.monitorChannel || this.shuttingDown) return;
+  // private monitorQueueAndAdjustConcurrency() {
+  //   setInterval(async () => {
+  //     if (!this.monitorChannel || this.shuttingDown) return;
 
-      try {
-        const q = await this.monitorChannel.checkQueue(this.QUEUE_NAME);
-        console.log(`[PDF-Generation][Queue-Monitor] Pending: ${q.messageCount} | Active: ${this.activeJobs}`);
-      } catch (err) {
-        console.log(`[PDF-Generation][Queue-Monitor] Queue check failed ${err}`);
+  //     try {
+  //       const q = await this.monitorChannel.checkQueue(this.QUEUE_NAME);
+  //       console.log(`[PDF-Generation][Queue-Monitor] Pending: ${q.messageCount} | Active: ${this.activeJobs}`);
+  //     } catch (err) {
+  //       console.log(`[PDF-Generation][Queue-Monitor] Queue check failed ${err}`);
+  //     }
+  //   }, 5000);
+  // }
+  private monitorQueueAndAdjustConcurrency() {
+  setInterval(async () => {
+    if (!this.monitorChannel || !this.consumerChannel || this.shuttingDown) return;
+
+    try {
+      const q = await this.monitorChannel.checkQueue(this.QUEUE_NAME);
+      const pending = q.messageCount;
+
+      console.log(`[PDF-Generation][Queue-Monitor] Pending: ${pending} | Active: ${this.activeJobs}`);
+
+      // Dynamic Prefetch Logic
+      let newPrefetch = pending >= 100 ? 10 : 5;
+
+      // Apply only if changed
+      if (newPrefetch !== this.PREFETCH) {
+        console.log(`[PDF-Generation][Queue-Monitor] Updating prefetch to ${newPrefetch}`);
+        this.consumerChannel.prefetch(newPrefetch);
+        this.PREFETCH = newPrefetch;
       }
-    }, 5000);
-  }
+
+    } catch (err) {
+      console.log(`[PDF-Generation][Queue-Monitor] Queue check failed ${err}`);
+    }
+  }, 5000);
+}
+
 
   async onApplicationShutdown() {
     console.log(`[PDF-Generation][Shutdown] Shutdown initiated`);

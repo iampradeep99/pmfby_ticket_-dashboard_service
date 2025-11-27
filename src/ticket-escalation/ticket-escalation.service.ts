@@ -34,6 +34,7 @@ export class TicketEscalationService {
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
   private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
+  private readonly RoleURL = "http://10.128.60.9:3011/v1/user/user/roleWiseUserList"
   public gcp = new GCPServices();
   logDir = path.join(__dirname, '..', 'logs');
 
@@ -158,6 +159,34 @@ BankInfo: results
 }
 
 
+async getRolesForGovt(payload: any) {
+  try {
+    const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
+      params: payload || {},
+      timeout: 10000,
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response?.data?.data) {
+      return {
+        data: null,
+        message: { msg: "No data received from API", code: 0 },
+      };
+    }
+
+    const allRoles = response.data.data;
+
+    return {
+      data: allRoles,
+      message: { msg: "Success", code: 1 },
+    };
+  } catch (err) {
+    return {
+      data: null,
+      message: { msg: "ddd", code: 0 },
+    };
+  }
+}
 
 
 
