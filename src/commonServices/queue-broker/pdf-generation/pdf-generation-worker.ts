@@ -192,26 +192,7 @@ export class PDFGenerationWorkerService {
 
 
 
-    async sendFileToGCPPrevious(documentsPath) {
-        try {
-            const url = "https://pmfby.gov.in/krphapi/FGMS/GCPFileUploadForCDR";
 
-            const formData = new FormData();
-            formData.append("filePath", "krph/farmer/tickets-pdf/");
-            formData.append("uploadedBy", "KRPH");
-            formData.append("documents", fs.createReadStream(documentsPath));
-
-            const response = await axios.post(url, formData, {
-                headers: { ...formData.getHeaders() },
-                maxBodyLength: Infinity,
-            });
-
-            return response.data;
-        } catch (err) {
-            console.error(err.response?.data || err.message);
-            throw err;
-        }
-    }
 
     async sendFileToGCP(documentsPath: any) {
         const formData = new FormData();
@@ -269,7 +250,9 @@ export class PDFGenerationWorkerService {
                 msg_type: config.gupshupConfig.msg_type,
                 method: config.gupshupConfig.method,
                 caption: config.gupshupConfig.caption,
-                media_url: `${payload?.TicketFileURl}`
+                media_url: `${payload?.TicketFileURl}`,
+                filename:`${payload?.fileName}`
+
             };
 
             const apiUrl = config.gupshupConfig.gupshupAPIUrl;
@@ -319,7 +302,13 @@ export class PDFGenerationWorkerService {
                     const tempDir = path.join(process.cwd(), "temp");
                     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-                    const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
+                    const timestamp = Date.now();
+                    const safeName = selectedData.RequestorName.replace(/\s+/g, "_");
+                    // const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
+                    let pdfName = `Ticket_${payload.SupportTicketNo}_${safeName}_${timestamp}.pdf`
+                    const pdfPath = path.join(tempDir, pdfName);
+
+
 
                     await page.pdf({
                         path: pdfPath,
@@ -346,7 +335,8 @@ export class PDFGenerationWorkerService {
                         GCSId: fetchedGCPInfo?._id || "",
                         InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
                         UpdateDateTime: Date.now(),
-                        InsertedDateTime: selectedData?.Created || ""
+                        InsertedDateTime: selectedData?.Created || "",
+                        fileName:pdfName || ""
                     };
 
                     if (
