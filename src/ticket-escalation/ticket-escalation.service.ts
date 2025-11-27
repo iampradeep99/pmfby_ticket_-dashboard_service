@@ -176,9 +176,8 @@ async getToken() {
       httpsAgent: new https.Agent({ rejectUnauthorized: false })
     }
   );
-  result = getData?.data
+  result = getData?.data?.data
   token = result?.token
-  
   return token;
 }
 
@@ -187,7 +186,7 @@ async getRolesForGovt(payload: any) {
   try {
     const gettoken = await this.getToken();
     const token =  gettoken;
-
+console.log(token)
     const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
       params: payload || {},
       timeout: 10000,
