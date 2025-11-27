@@ -36,6 +36,7 @@ export class TicketEscalationService {
   private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
   public gcp = new GCPServices();
   logDir = path.join(__dirname, '..', 'logs');
+  private readonly RoleURL = "http://10.128.60.9:3011/v1/user/user/roleWiseUserList"
 
   constructor(
     @Inject('MONGO_DB') private readonly db: Db,
