@@ -1,7 +1,4 @@
-
-
 import * as dotenv from "dotenv";
-
 dotenv.config();
 
 interface DBConfig {
@@ -17,6 +14,17 @@ interface MailConfig {
   password: string;
 }
 
+interface GupshupConfig {
+  userid: string;
+  password: string;
+  version: string;
+  format: string;
+  msg_type: string;
+  method: string;
+  caption: string;
+  gupshupAPIUrl : string;
+}
+
 interface Config {
   mongodb: string;
   redis: string;
@@ -24,7 +32,10 @@ interface Config {
   rabbitmq: string;
   mail: MailConfig;
   gcpUpload: string;
-  pmfbyRoleURL:string
+  pmfbyRoleURL: string;
+  krphPDFTicketInfoURL: string;
+  krphPDFTicketToken: string;
+  gupshupConfig: GupshupConfig;
 }
 
 const env = process.env.NODE_ENV || "uat";
@@ -46,7 +57,19 @@ const config: { [key: string]: Config } = {
       password: process.env.LOCAL_MAIL_PASS!
     },
     gcpUpload: process.env.LOCAL_GCP_UPLOAD!,
-    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+    pmfbyRoleURL: process.env.PMFBY_ROLE_URL!,
+    krphPDFTicketInfoURL: process.env.KPRH_PDF_TICKET_INFO_URL!,
+    krphPDFTicketToken: process.env.KPRH_PDF_TICKET_TOKEN!,
+    gupshupConfig: {
+      userid: process.env.GUPSHUP_USERID!,
+      password: process.env.GUPSHUP_PASSWORD!,
+      version: process.env.GUPSHUP_VERSION!,
+      format: process.env.GUPSHUP_FORMAT!,
+      msg_type: process.env.GUPSHUP_MSG_TYPE!,
+      method: process.env.GUPSHUP_METHOD!,
+      caption: process.env.GUPSHUP_CAPTION!,
+      gupshupAPIUrl:process.env.GUPSHUP_API_URL!
+    }
   },
   uat: {
     mongodb: process.env.UAT_MONGO!,
@@ -64,8 +87,20 @@ const config: { [key: string]: Config } = {
       password: process.env.UAT_MAIL_PASS!
     },
     gcpUpload: process.env.UAT_GCP_UPLOAD!,
-    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+    pmfbyRoleURL: process.env.PMFBY_ROLE_URL!,
+    krphPDFTicketInfoURL: process.env.KPRH_PDF_TICKET_INFO_URL!,
+    krphPDFTicketToken: process.env.KPRH_PDF_TICKET_TOKEN!,
+    gupshupConfig: {
+      userid: process.env.GUPSHUP_USERID!,
+      password: process.env.GUPSHUP_PASSWORD!,
+      version: process.env.GUPSHUP_VERSION!,
+      format: process.env.GUPSHUP_FORMAT!,
+      msg_type: process.env.GUPSHUP_MSG_TYPE!,
+      method: process.env.GUPSHUP_METHOD!,
+      caption: process.env.GUPSHUP_CAPTION!,
+      gupshupAPIUrl:process.env.GUPSHUP_API_URL!
 
+    }
   },
   prod: {
     mongodb: process.env.PROD_MONGO!,
@@ -83,10 +118,21 @@ const config: { [key: string]: Config } = {
       password: process.env.PROD_MAIL_PASS!
     },
     gcpUpload: process.env.PROD_GCP_UPLOAD!,
-    pmfbyRoleURL:process.env.PMFBY_ROLE_URL!
+    pmfbyRoleURL: process.env.PMFBY_ROLE_URL!,
+    krphPDFTicketInfoURL: process.env.KPRH_PDF_TICKET_INFO_URL!,
+    krphPDFTicketToken: process.env.KPRH_PDF_TICKET_TOKEN!,
+    gupshupConfig: {
+      userid: process.env.GUPSHUP_USERID!,
+      password: process.env.GUPSHUP_PASSWORD!,
+      version: process.env.GUPSHUP_VERSION!,
+      format: process.env.GUPSHUP_FORMAT!,
+      msg_type: process.env.GUPSHUP_MSG_TYPE!,
+      method: process.env.GUPSHUP_METHOD!,
+      caption: process.env.GUPSHUP_CAPTION!,
+      gupshupAPIUrl:process.env.GUPSHUP_API_URL!
 
+    }
   }
 };
 
 export default config[env];
-

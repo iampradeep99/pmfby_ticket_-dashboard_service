@@ -245,7 +245,7 @@ async supportTicketListing(
 
     const compressedData = obj ? await this.utilService.GZip(obj) : null;
     console.log("test")
-    return jsonResponseHandler(compressedData, message, req, res, () => {});
+    return jsonResponseHandler(obj, message, req, res, () => {});
   } catch (err) {
     return jsonErrorHandler(err, req, res, () => {});
   }
@@ -498,7 +498,7 @@ async GetNCIPUserRole(
 
 
  @Post('excelImport')
-@UseInterceptors(FileInterceptor('file')) // 'file' = form field name
+@UseInterceptors(FileInterceptor('file')) 
 async excelImport(
   @UploadedFile() file: Express.Multer.File,
   @Body() body: any,
@@ -508,14 +508,12 @@ async excelImport(
   try {
     if (!file) return jsonErrorHandler({ message: "No file uploaded" }, req, res, () => {});
 
-    // ✅ Build payload with file + metadata
     const payload = {
-      file: file.buffer,                 // file as Buffer
+      file: file.buffer,                 
       collectionName: body.collectionName,
       insertedBy: body.insertedBy || 'system',
     };
 
-    // ✅ Immediately respond to user
     jsonResponseHandler(
       { message: 'Excel import started' },
       'File received successfully',
@@ -524,7 +522,6 @@ async excelImport(
       () => {},
     );
 
-    // ✅ Run import in background
     this.dashboardService.csvImportService(payload)
       .then((result) => {
         console.log('✅ Excel import completed:', result.message);
