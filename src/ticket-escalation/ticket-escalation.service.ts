@@ -167,6 +167,35 @@ async fetchRoles(payload: any): Promise<{ data: any; message: { msg: string; cod
 }
 
 
+async getRolesForGovt(payload: any, token: string) {
+  try {
+    const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
+      params: payload || {},
+      timeout: 10000,
+      headers: {
+        token: token, 
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response?.data?.data) {
+      return { data: null, message: { msg: "No data received from API", code: 0 } };
+    }
+
+    return {
+      data: response.data.data,
+      message: { msg: "Success", code: 1 },
+    };
+  } catch (err: any) {
+    const errorMsg =
+      err?.response?.data?.message ||
+      err?.message ||
+      "Something went wrong";
+
+    return { data: null, message: { msg: errorMsg, code: 0 } };
+  }
+}
+
 
 
 

@@ -47,6 +47,30 @@ export class TicketEscalationController {
   }
 
 
+    @Post('getRoles')
+async getRolesForGovt(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    // Read token coming from frontend header
+    const token = req.headers['token'] as string;
+
+    let { data, message } = await this.dashboardService.getRolesForGovt(payload, token);
+
+    if (data) data = await this.utilService.GZip(data);
+
+    return jsonResponseHandler(data, message, req, res, () => {});
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
+
+
+
   @Post('InsuranceTicketList')
 async InsuranceTicketListing(
   @Body() payload: any,
