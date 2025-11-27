@@ -182,21 +182,58 @@ async getToken() {
 }
 
 
-async getRolesForGovt(payload: any) {
+// async getRolesForGovt(payload: any) {
+//   try {
+//     const gettoken = await this.getToken();
+//     const token =  gettoken;
+// console.log(token)
+//     const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
+//       params: payload || {},
+//       timeout: 10000,
+//       headers: {
+//         token: token
+//       },
+//     });
+
+//     if (!response?.data?.data) {
+//       console.error("API responded but no data found:", response?.data);
+//       return { data: null, message: { msg: "No data received from API", code: 0 } };
+//     }
+
+//     return {
+//       data: response.data.data,
+//       message: { msg: "Success", code: 1 },
+//     };
+//   } catch (err: any) {
+//     console.error("Error in getRolesForGovt:", {
+//       message: err?.message,
+//       status: err?.response?.status,
+//       responseData: err?.response?.data,
+//       stack: err?.stack,
+//     });
+
+//     const errorMsg =
+//       err?.response?.data?.message ||
+//       err?.message ||
+//       "Something went wrong";
+
+//     return { data: null, message: { msg: errorMsg, code: 0 } };
+//   }
+// }
+
+
+async getRolesForGovt(payload: any, token: string) {
   try {
-    const gettoken = await this.getToken();
-    const token =  gettoken;
-console.log(token)
     const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
       params: payload || {},
       timeout: 10000,
       headers: {
-        token: token
+        token: token, 
+        "Content-Type": "application/json",
       },
     });
 
     if (!response?.data?.data) {
-      console.error("API responded but no data found:", response?.data);
       return { data: null, message: { msg: "No data received from API", code: 0 } };
     }
 
@@ -205,13 +242,6 @@ console.log(token)
       message: { msg: "Success", code: 1 },
     };
   } catch (err: any) {
-    console.error("Error in getRolesForGovt:", {
-      message: err?.message,
-      status: err?.response?.status,
-      responseData: err?.response?.data,
-      stack: err?.stack,
-    });
-
     const errorMsg =
       err?.response?.data?.message ||
       err?.message ||
@@ -220,7 +250,6 @@ console.log(token)
     return { data: null, message: { msg: errorMsg, code: 0 } };
   }
 }
-
 
 
 
