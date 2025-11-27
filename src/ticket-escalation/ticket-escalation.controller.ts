@@ -108,16 +108,16 @@ async AssignTickets(
   @Res({ passthrough: false }) res: Response
 ) {
   try {
-    const result: any = await this.dashboardService.AssignTicketServie(payload);
-
+    const {data, message} :any = await this.dashboardService.AssignTicketService(payload);
+console.log(message)
     const responseData = {
-      summary: result.summary,
-      details: result.details, 
+      summary: data.summary,
+      details: data.details, 
     };
 
-    const compressedData = responseData ? await this.utilService.GZip(responseData) : null;
+    const compressedData = responseData ? await this.utilService.GZip(data) : null;
 
-    return jsonResponseHandler(compressedData, result.summary.message, req, res, () => {});
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
   } catch (err) {
     return jsonErrorHandler(err, req, res, () => {});
   }
@@ -135,7 +135,7 @@ async UserWiseState(
     
 
     const compressedData = data ? await this.utilService.GZip(data) : null;
-    return jsonResponseHandler(compressedData, message, req, res, () => {});
+    return jsonResponseHandler(data, message, req, res, () => {});
   } catch (err) {
     return jsonErrorHandler(err, req, res, () => {});
   }
