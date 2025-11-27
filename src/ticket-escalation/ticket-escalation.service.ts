@@ -24,7 +24,7 @@ import config from '../environment/config';
 import { randomBytes } from 'crypto';
 import * as FormData from 'form-data';
 import { gunzipSync } from 'zlib';
-import https from 'https'
+import * as https from 'https';
 
 
 
