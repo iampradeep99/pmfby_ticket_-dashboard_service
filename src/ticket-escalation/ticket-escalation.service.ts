@@ -767,174 +767,92 @@ export class TicketEscalationService {
   }
 
 
-  /* async UserWiseState(payload: any) {
-    try {
-      const db = this.db;
-      const utilService = new UtilService();
-  
-      if (!payload || typeof payload !== "object") {
-        return { data: [], msg: "Invalid payload", code: "0" };
-      }
-  
-      const userID = payload.userID;
-      if (!userID) {
-        return { data: [], msg: "User ID required", code: "0" };
-      }
-  
-      const cacheKey = await this.utilServices.generateCacheKey("UserWiseState", payload);
-      const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
-      if (cachedData) {
-        return { data: cachedData, msg: "Data fetched from cache", code: "1" };
-      }
-  
-      let userDetail;
-      try {
-        userDetail = await utilService.getSupportTicketUserDetail(userID);
-      } catch {
-        return { data: [], msg: "Failed to fetch user details", code: "0" };
-      }
-  
-      if (!userDetail?.responseDynamic) {
-        return { data: [], msg: "User not found", code: "0" };
-      }
-  
-      let responseInfo;
-      try {
-        responseInfo = await utilService.unGZip(userDetail.responseDynamic);
-      } catch {
-        return { data: [], msg: "Failed to process user data", code: "0" };
-      }
-  
-      const item = responseInfo?.data?.user?.[0];
-      if (!item) {
-        return { data: [], msg: "User not found", code: "0" };
-      }
-  
-      let StateMasterID: number[] = [];
-      try {
-        const arr = await utilService.convertStringToArray(item.StateMasterID);
-        StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
-      } catch {
-        return { data: [], msg: "Invalid StateMasterID", code: "0" };
-      }
-  
-      if (!StateMasterID.length) {
-        return { data: [], msg: "No states assigned", code: "0" };
-      }
-  
-      const pipeline = [
-        { $match: { StateMasterID: { $in: StateMasterID } } },
-        {
-          $group: {
-            _id: "$StateMasterID",
-            StateMasterName: { $first: "$StateMasterName" },
-          },
-        },
-        { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
-        { $sort: { order: 1 } },
-        {
-          $project: {
-            _id: 0,
-            StateMasterID: "$_id",
-            StateName: "$StateMasterName",
-          },
-        },
-      ];
-  
-      let extractedData;
-      try {
-        extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
-      } catch {
-        return { data: [], msg: "Failed to fetch state data", code: "0" };
-      }
-  
-      await this.redisWrapper.setRedisCache(cacheKey, extractedData, 86400);
-  
-      return { data: extractedData, msg: "Fetched successfully", code: "1" };
-    } catch {
-      return { data: [], msg: "Unexpected error", code: "0" };
-    }
-  } */
-
-
- async UserWiseState(payload: any) {
+  async UserWiseState(payload: any) {
   try {
-    if (!payload?.userID) {
+    const db = this.db;
+    const utilService = new UtilService();
+
+    if (!payload || typeof payload !== "object") {
+      return { data: [], msg: "Invalid payload", code: "0" };
+    }
+
+    const userID = payload.userID;
+    if (!userID) {
       return { data: [], msg: "User ID required", code: "0" };
     }
 
-    const util = new UtilService();
-    const userDetail = await util.getSupportTicketUserDetail(payload.userID).catch(() => null);
+    let userDetail;
+    try {
+      userDetail = await utilService.getSupportTicketUserDetail(userID);
+    } catch {
+      return { data: [], msg: "Failed to fetch user details", code: "0" };
+    }
+
     if (!userDetail?.responseDynamic) {
       return { data: [], msg: "User not found", code: "0" };
     }
 
-    const info = await util.unGZip(userDetail.responseDynamic).catch(() => null);
-    const item = info?.data?.user?.[0];
+    let responseInfo;
+    try {
+      responseInfo = await utilService.unGZip(userDetail.responseDynamic);
+    } catch {
+      return { data: [], msg: "Failed to process user data", code: "0" };
+    }
+
+    const item = responseInfo?.data?.user?.[0];
     if (!item) {
       return { data: [], msg: "User not found", code: "0" };
     }
 
-    const arr = await util.convertStringToArray(item.StateMasterID).catch(() => []);
-    const StateMasterID = arr.map(Number).filter(n => !isNaN(n));
+    let StateMasterID: number[] = [];
+    try {
+      const arr = await utilService.convertStringToArray(item.StateMasterID);
+      StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
+    } catch {
+      return { data: [], msg: "Invalid StateMasterID", code: "0" };
+    }
+
     if (!StateMasterID.length) {
       return { data: [], msg: "No states assigned", code: "0" };
     }
 
     const pipeline = [
-      {
-        $match: {
-          StateMasterID: { $in: StateMasterID }
-        }
-      },
-      {
-        $addFields: {
-          CleanStateCodeAlpha: {
-            $function: {
-              body: function (value) {
-                if (!value) return "";
-                const match = /UUID\('(.+)'\)/.exec(value);
-                return match ? match[1] : value;
-              },
-              args: ["$StateCodeAlpha"],
-              lang: "js"
-            }
-          }
-        }
-      },
+      { $match: { StateMasterID: { $in: StateMasterID } } },
       {
         $group: {
           _id: "$StateMasterID",
           StateMasterName: { $first: "$StateMasterName" },
-          StateCodeAlpha: { $first: "$CleanStateCodeAlpha" }
-        }
+          StateCodeAlpha: { $first: "$StateCodeAlpha" }, // Added this line for StateCodeAlpha
+        },
       },
-      {
-        $addFields: {
-          order: { $indexOfArray: [StateMasterID, "$_id"] }
-        }
-      },
+      { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
       { $sort: { order: 1 } },
       {
         $project: {
           _id: 0,
           StateMasterID: "$_id",
           StateName: "$StateMasterName",
-          StateAlphaCode: "$StateCodeAlpha"
-        }
-      }
+          StateCodeAlpha: 1, // Ensuring this is in the final output
+        },
+      },
     ];
 
-    const data = await this.db
-      .collection("STATEMASTERSQL")
-      .aggregate(pipeline)
-      .toArray();
+    let extractedData;
+    try {
+      extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
+    } catch {
+      return { data: [], msg: "Failed to fetch state data", code: "0" };
+    }
 
-    return { data, msg: "Fetched successfully", code: "1" };
+    return { data: extractedData, msg: "Fetched successfully", code: "1" };
   } catch {
     return { data: [], msg: "Unexpected error", code: "0" };
   }
 }
+
+
+
+
 
 
 
