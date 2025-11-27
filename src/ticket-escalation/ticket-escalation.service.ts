@@ -182,58 +182,21 @@ async getToken() {
 }
 
 
-// async getRolesForGovt(payload: any) {
-//   try {
-//     const gettoken = await this.getToken();
-//     const token =  gettoken;
-// console.log(token)
-//     const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
-//       params: payload || {},
-//       timeout: 10000,
-//       headers: {
-//         token: token
-//       },
-//     });
-
-//     if (!response?.data?.data) {
-//       console.error("API responded but no data found:", response?.data);
-//       return { data: null, message: { msg: "No data received from API", code: 0 } };
-//     }
-
-//     return {
-//       data: response.data.data,
-//       message: { msg: "Success", code: 1 },
-//     };
-//   } catch (err: any) {
-//     console.error("Error in getRolesForGovt:", {
-//       message: err?.message,
-//       status: err?.response?.status,
-//       responseData: err?.response?.data,
-//       stack: err?.stack,
-//     });
-
-//     const errorMsg =
-//       err?.response?.data?.message ||
-//       err?.message ||
-//       "Something went wrong";
-
-//     return { data: null, message: { msg: errorMsg, code: 0 } };
-//   }
-// }
-
-
-async getRolesForGovt(payload: any, token: string) {
+async getRolesForGovt(payload: any) {
   try {
+    const gettoken = await this.getToken();
+    const token =  gettoken;
+console.log(token)
     const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
       params: payload || {},
       timeout: 10000,
       headers: {
-        token: token, 
-        "Content-Type": "application/json",
+        token: token
       },
     });
 
     if (!response?.data?.data) {
+      console.error("API responded but no data found:", response?.data);
       return { data: null, message: { msg: "No data received from API", code: 0 } };
     }
 
@@ -242,6 +205,13 @@ async getRolesForGovt(payload: any, token: string) {
       message: { msg: "Success", code: 1 },
     };
   } catch (err: any) {
+    console.error("Error in getRolesForGovt:", {
+      message: err?.message,
+      status: err?.response?.status,
+      responseData: err?.response?.data,
+      stack: err?.stack,
+    });
+
     const errorMsg =
       err?.response?.data?.message ||
       err?.message ||
@@ -250,6 +220,8 @@ async getRolesForGovt(payload: any, token: string) {
     return { data: null, message: { msg: errorMsg, code: 0 } };
   }
 }
+
+
 
 
 
