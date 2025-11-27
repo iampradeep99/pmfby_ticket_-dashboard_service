@@ -469,9 +469,6 @@ export class PDFGenerationWorkerService {
 
 
 
-
-
-
     async FetchTicketInformation(body: any): Promise<void> {
         if (!body) {
             throw new Error("Request body is required")

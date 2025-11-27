@@ -24,6 +24,7 @@ import config from '../environment/config';
 import { randomBytes } from 'crypto';
 import * as FormData from 'form-data';
 import { gunzipSync } from 'zlib';
+import https from 'https'
 
 
 
@@ -159,12 +160,41 @@ BankInfo: results
 }
 
 
+async getToken() {
+  let result:any;
+  let token:string;
+  const payload = {
+    deviceType: config.pmfbyConfig.deviceType,
+    otp: Number(config.pmfbyConfig.otp),
+    password: config.pmfbyConfig.password,
+    mobile: config.pmfbyConfig.mobile
+  };
+  const getData = await axios.post(
+    config.pmfbyConfig.login_api_url,
+    payload,
+    {
+      httpsAgent: new https.Agent({ rejectUnauthorized: false })
+    }
+  );
+  result = getData?.data
+  token = result?.token
+  
+  return token;
+}
+
+
 async getRolesForGovt(payload: any) {
   try {
+    const gettoken = await this.getToken();
+    const token =  gettoken;
+
     const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
       params: payload || {},
       timeout: 10000,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
     });
 
     if (!response?.data?.data) {
@@ -192,6 +222,7 @@ async getRolesForGovt(payload: any) {
     return { data: null, message: { msg: errorMsg, code: 0 } };
   }
 }
+
 
 
 

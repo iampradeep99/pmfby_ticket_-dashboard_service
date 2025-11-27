@@ -22,7 +22,15 @@ interface GupshupConfig {
   msg_type: string;
   method: string;
   caption: string;
-  gupshupAPIUrl : string;
+  gupshupAPIUrl: string;
+}
+
+interface PmfbyLogin {
+  login_api_url: string,
+  deviceType: string,
+  otp: string,
+  password: string,
+  mobile: string
 }
 
 interface Config {
@@ -36,6 +44,7 @@ interface Config {
   krphPDFTicketInfoURL: string;
   krphPDFTicketToken: string;
   gupshupConfig: GupshupConfig;
+  pmfbyConfig: PmfbyLogin;
 }
 
 const env = process.env.NODE_ENV || "uat";
@@ -68,8 +77,16 @@ const config: { [key: string]: Config } = {
       msg_type: process.env.GUPSHUP_MSG_TYPE!,
       method: process.env.GUPSHUP_METHOD!,
       caption: process.env.GUPSHUP_CAPTION!,
-      gupshupAPIUrl:process.env.GUPSHUP_API_URL!
+      gupshupAPIUrl: process.env.GUPSHUP_API_URL!,
+    },
+    pmfbyConfig: {
+      login_api_url: process.env.PM_API_FOR_LOGIN!,
+      deviceType: process.env.PM_API_DEVICE_TYPE!,
+      otp: process.env.PM_API_DEVICE_OTP!,
+      password: process.env.PM_API_DEVICE_PASSWORD!,
+      mobile: process.env.PM_API_DEVICE_MOBILE
     }
+
   },
   uat: {
     mongodb: process.env.UAT_MONGO!,
@@ -98,9 +115,17 @@ const config: { [key: string]: Config } = {
       msg_type: process.env.GUPSHUP_MSG_TYPE!,
       method: process.env.GUPSHUP_METHOD!,
       caption: process.env.GUPSHUP_CAPTION!,
-      gupshupAPIUrl:process.env.GUPSHUP_API_URL!
+      gupshupAPIUrl: process.env.GUPSHUP_API_URL!
 
+    },
+    pmfbyConfig: {
+      login_api_url: process.env.PM_API_FOR_LOGIN!,
+      deviceType: process.env.PM_API_DEVICE_TYPE!,
+      otp: process.env.PM_API_DEVICE_OTP!,
+      password: process.env.PM_API_DEVICE_PASSWORD!,
+      mobile: process.env.PM_API_DEVICE_MOBILE
     }
+
   },
   prod: {
     mongodb: process.env.PROD_MONGO!,
@@ -129,9 +154,18 @@ const config: { [key: string]: Config } = {
       msg_type: process.env.GUPSHUP_MSG_TYPE!,
       method: process.env.GUPSHUP_METHOD!,
       caption: process.env.GUPSHUP_CAPTION!,
-      gupshupAPIUrl:process.env.GUPSHUP_API_URL!
+      gupshupAPIUrl: process.env.GUPSHUP_API_URL!
 
+    },
+    pmfbyConfig: {
+      login_api_url: process.env.PM_API_FOR_LOGIN!,
+      deviceType: process.env.PM_API_DEVICE_TYPE!,
+      otp: process.env.PM_API_DEVICE_OTP!,
+      password: process.env.PM_API_DEVICE_PASSWORD!,
+      mobile: process.env.PM_API_DEVICE_MOBILE
     }
+
+
   }
 };
 
