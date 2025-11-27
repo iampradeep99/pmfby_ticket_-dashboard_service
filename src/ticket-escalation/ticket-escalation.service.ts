@@ -161,37 +161,38 @@ BankInfo: results
 
 
 async getToken() {
-  let result:any;
-  let token:string;
+  let result: any;
+  let token: string;
+
   const payload = {
     deviceType: config.pmfbyConfig.deviceType,
     otp: Number(config.pmfbyConfig.otp),
     password: config.pmfbyConfig.password,
     mobile: config.pmfbyConfig.mobile
   };
+
   const getData = await axios.post(
     config.pmfbyConfig.login_api_url,
     payload,
-    {
-      httpsAgent: new https.Agent({ rejectUnauthorized: false })
-    }
+    { httpsAgent: new https.Agent({ rejectUnauthorized: false }) }
   );
-  result = getData?.data?.data
-  token = result?.token
+
+  result = getData?.data?.data;
+  token = result?.token;
   return token;
 }
 
 
 async getRolesForGovt(payload: any) {
   try {
-    const gettoken = await this.getToken();
-    const token =  gettoken;
-console.log(token)
+    const token = await this.getToken();
+    console.log("Token:", token);
+
     const response: AxiosResponse<any> = await axios.get(this.RoleURL, {
       params: payload || {},
       timeout: 10000,
       headers: {
-        token: token
+        Authorization: `Bearer ${token}`
       },
     });
 
@@ -212,10 +213,7 @@ console.log(token)
       stack: err?.stack,
     });
 
-    const errorMsg =
-      err?.response?.data?.message ||
-      err?.message ||
-      "Something went wrong";
+    const errorMsg = err?.response?.data?.message || err?.message || "Something went wrong";
 
     return { data: null, message: { msg: errorMsg, code: 0 } };
   }
