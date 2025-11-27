@@ -245,45 +245,40 @@ async getRolesForGovt(payload: any) {
   try {
     const token = await this.getToken();
 
-    // Role mapping
-    const EnumRole: Record<string, number> = {
-      STATE_GOVT_ADMIN: 1,
-      STATE_GOVT_USER: 2,
+  
+    const EnumRole = {
+      "STATE_GOVT_ADMIN": 1,
+      "STATE_GOVT_USER": 2,
     };
+    
+   let axiosPayload = {};
+if (payload?.roleName == 1) {
+  axiosPayload['roleName'] = "STATE_GOVT_ADMIN";
+}
+if (payload?.roleName == 2) {
+  axiosPayload['roleName'] = "STATE_GOVT_USER";
+}
 
-    const reverseRoleMap: Record<number, string> = {
-      1: "STATE_GOVT_ADMIN",
-      2: "STATE_GOVT_USER",
-    };
-
-    // Build axios query params
-    const axiosPayload =
-      payload?.roleName && reverseRoleMap[payload.roleName]
-        ? { roleName: reverseRoleMap[payload.roleName] }
-        : {};
-
+    
     const { data } = await axios.get(this.RoleURL, {
-      params: axiosPayload,
+      params: axiosPayload || {},
       timeout: 10000,
       headers: { token },
     });
 
     if (!data?.data) {
-      return {
-        data: null,
-        message: { msg: "No data received from API", code: 0 },
-      };
+      return { data: null, message: { msg: "No data received from API", code: 0 } };
     }
 
-    // Process data
     const updatedData = data.data
-      .map((item: any) => ({
-        ...item,
-        roleName: EnumRole[item.roleName] || item.roleName,
-      }))
-      .filter(
-        (item: any, index: number, arr: any[]) =>
-          index === arr.findIndex((t: any) => t.userID === item.userID)
+      .map((item: any) => {
+        if (EnumRole[item.roleName]) {
+          item.roleName = EnumRole[item.roleName];
+        }
+        return item;
+      })
+      .filter((value, index, self) => 
+        index === self.findIndex((t: any) => t.userID === value.userID)
       );
 
     return {
@@ -292,8 +287,7 @@ async getRolesForGovt(payload: any) {
     };
 
   } catch (err: any) {
-    const errorMsg =
-      err?.response?.data?.message || err?.message || "Something went wrong";
+    const errorMsg = err?.response?.data?.message || err?.message || "Something went wrong";
     return { data: null, message: { msg: errorMsg, code: 0 } };
   }
 }
