@@ -259,7 +259,7 @@ if (payload?.roleName == 2) {
   axiosPayload['roleName'] = "STATE_GOVT_USER";
 }
 
-    
+    console.log(axiosPayload, "ddd")
     const { data } = await axios.get(this.RoleURL, {
       params: axiosPayload || {},
       timeout: 10000,
