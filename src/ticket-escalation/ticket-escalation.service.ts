@@ -721,117 +721,205 @@ async AssignTicketServie(payload: any) {
 }
 
 
-async UserWiseState(payload: any) {
-  try {
-    const db = this.db;
-    const utilService = new UtilService();
+// async UserWiseState(payload: any) {
+//   try {
+//     const db = this.db;
+//     const utilService = new UtilService();
 
-    if (!payload || typeof payload !== "object") {
-      console.log("Invalid payload");
-      return { data: [], msg: "Invalid payload", code: "0" };
-    }
+//     if (!payload || typeof payload !== "object") {
+//       console.log("Invalid payload");
+//       return { data: [], msg: "Invalid payload", code: "0" };
+//     }
 
-    const { userID } = payload;
+//     const { userID } = payload;
 
-    if (!userID || (typeof userID !== "string" && typeof userID !== "number")) {
-      console.log("User ID is required and must be valid");
-      return { data: [], msg: "User ID is required and must be valid", code: "0" };
-    }
+//     if (!userID || (typeof userID !== "string" && typeof userID !== "number")) {
+//       console.log("User ID is required and must be valid");
+//       return { data: [], msg: "User ID is required and must be valid", code: "0" };
+//     }
 
-    const cacheKey = await this.utilServices.generateCacheKey("UserWiseState", payload);
-    console.log("Generated cache key:", cacheKey);
+//     const cacheKey = await this.utilServices.generateCacheKey("UserWiseState", payload);
+//     console.log("Generated cache key:", cacheKey);
 
-    const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
-    if (cachedData) {
-      console.log("Data fetched from Redis cache");
-      return { data: cachedData, msg: "Data fetched from cache", code: "1" };
-    }
+//     const cachedData = await this.redisWrapper.getRedisCache<any>(cacheKey);
+//     if (cachedData) {
+//       console.log("Data fetched from Redis cache");
+//       return { data: cachedData, msg: "Data fetched from cache", code: "1" };
+//     }
 
-    console.log("No cache found, fetching data from DB");
+//     console.log("No cache found, fetching data from DB");
 
-    let Delta;
+//     let Delta;
+//     try {
+//       [Delta] = await Promise.all([utilService.getSupportTicketUserDetail(userID)]);
+//     } catch (dbFetchError) {
+//       console.log("Error fetching user details:", dbFetchError);
+//       return { data: [], msg: "Failed to fetch user details", code: "0" };
+//     }
+
+//     if (!Delta || !Delta.responseDynamic) {
+//       console.log("User does not exist");
+//       return { data: [], msg: "User does not exist", code: "0" };
+//     }
+
+//     let responseInfo;
+//     try {
+//       responseInfo = await utilService.unGZip(Delta.responseDynamic);
+//     } catch (gzipError) {
+//       console.log("Error unGZip user data:", gzipError);
+//       return { data: [], msg: "Failed to process user data", code: "0" };
+//     }
+
+//     const item = (responseInfo?.data?.user?.[0]) || null;
+
+//     if (!item) {
+//       console.log("User does not exist after unGZip");
+//       return { data: [], msg: "User does not exist", code: "0" };
+//     }
+
+//     let StateMasterID: number[] = [];
+//     try {
+//       if (item.StateMasterID) {
+//         const arr = await utilService.convertStringToArray(item.StateMasterID);
+//         StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
+//       }
+//     } catch (convertError) {
+//       console.log("Error converting StateMasterID:", convertError);
+//       return { data: [], msg: "Invalid StateMasterID format", code: "0" };
+//     }
+
+//     if (!StateMasterID.length) {
+//       console.log("No states assigned to user");
+//       return { data: [], msg: "No states assigned to user", code: "0" };
+//     }
+
+//     const pipeline = [
+//       { $match: { StateMasterID: { $in: StateMasterID } } },
+//       {
+//         $group: {
+//           _id: "$StateMasterID",
+//           StateMasterName: { $first: "$StateMasterName" },
+//         },
+//       },
+//       { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
+//       { $sort: { order: 1 } },
+//       {
+//         $project: {
+//           _id: 0,
+//           StateMasterID: "$_id",
+//           StateName: "$StateMasterName",
+//         },
+//       },
+//     ];
+
+//     let extractedData = [];
+//     try {
+//       extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
+//       console.log("Data fetched from DB");
+//     } catch (dbError) {
+//       console.log("Error fetching state data:", dbError);
+//       return { data: [], msg: "Failed to fetch state data", code: "0" };
+//     }
+
+//     await this.redisWrapper.setRedisCache(cacheKey, extractedData, 86400);
+//     console.log("Cached DB result in Redis");
+
+//     return { data: extractedData, msg: "Fetched successfully", code: "1" };
+
+//   } catch (err) {
+//     console.log("Top-level error:", err);
+//     return { data: [], msg: "Unexpected error occurred", code: "0" };
+//   }
+// }
+
+
+ async UserWiseState(payload: any) {
     try {
-      [Delta] = await Promise.all([utilService.getSupportTicketUserDetail(userID)]);
-    } catch (dbFetchError) {
-      console.log("Error fetching user details:", dbFetchError);
-      return { data: [], msg: "Failed to fetch user details", code: "0" };
-    }
-
-    if (!Delta || !Delta.responseDynamic) {
-      console.log("User does not exist");
-      return { data: [], msg: "User does not exist", code: "0" };
-    }
-
-    let responseInfo;
-    try {
-      responseInfo = await utilService.unGZip(Delta.responseDynamic);
-    } catch (gzipError) {
-      console.log("Error unGZip user data:", gzipError);
-      return { data: [], msg: "Failed to process user data", code: "0" };
-    }
-
-    const item = (responseInfo?.data?.user?.[0]) || null;
-
-    if (!item) {
-      console.log("User does not exist after unGZip");
-      return { data: [], msg: "User does not exist", code: "0" };
-    }
-
-    let StateMasterID: number[] = [];
-    try {
-      if (item.StateMasterID) {
-        const arr = await utilService.convertStringToArray(item.StateMasterID);
-        StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
+      if (!payload?.userID) {
+        return { data: [], msg: "User ID required", code: "0" };
       }
-    } catch (convertError) {
-      console.log("Error converting StateMasterID:", convertError);
-      return { data: [], msg: "Invalid StateMasterID format", code: "0" };
+
+      const cacheKey = await this.utilServices.generateCacheKey("UserWiseState", payload);
+      const cached = await this.redisWrapper.getRedisCache<any>(cacheKey);
+      if (cached) {
+        return { data: cached, msg: "Data fetched from cache", code: "1" };
+      }
+
+      const util = new UtilService();
+      const userDetail = await util.getSupportTicketUserDetail(payload.userID).catch(() => null);
+      if (!userDetail?.responseDynamic) {
+        return { data: [], msg: "User not found", code: "0" };
+      }
+
+      const info = await util.unGZip(userDetail.responseDynamic).catch(() => null);
+      const item = info?.data?.user?.[0];
+      if (!item) {
+        return { data: [], msg: "User not found", code: "0" };
+      }
+
+      const arr = await util.convertStringToArray(item.StateMasterID).catch(() => []);
+      const StateMasterID = arr.map(Number).filter(n => !isNaN(n));
+      if (!StateMasterID.length) {
+        return { data: [], msg: "No states assigned", code: "0" };
+      }
+
+     const pipeline = [
+  {
+    $match: {
+      StateMasterID: { $in: StateMasterID }
     }
-
-    if (!StateMasterID.length) {
-      console.log("No states assigned to user");
-      return { data: [], msg: "No states assigned to user", code: "0" };
+  },
+  {
+    $addFields: {
+      CleanStateCodeAlpha: {
+        $function: {
+          body: function (value) {
+            if (!value) return "";
+            const match = /UUID\('(.+)'\)/.exec(value);
+            return match ? match[1] : value;
+          },
+          args: ["$StateCodeAlpha"],
+          lang: "js"
+        }
+      }
     }
-
-    const pipeline = [
-      { $match: { StateMasterID: { $in: StateMasterID } } },
-      {
-        $group: {
-          _id: "$StateMasterID",
-          StateMasterName: { $first: "$StateMasterName" },
-        },
-      },
-      { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
-      { $sort: { order: 1 } },
-      {
-        $project: {
-          _id: 0,
-          StateMasterID: "$_id",
-          StateName: "$StateMasterName",
-        },
-      },
-    ];
-
-    let extractedData = [];
-    try {
-      extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
-      console.log("Data fetched from DB");
-    } catch (dbError) {
-      console.log("Error fetching state data:", dbError);
-      return { data: [], msg: "Failed to fetch state data", code: "0" };
+  },
+  {
+    $group: {
+      _id: "$StateMasterID",
+      StateMasterName: { $first: "$StateMasterName" },
+      StateCodeAlpha: { $first: "$CleanStateCodeAlpha" }
     }
-
-    await this.redisWrapper.setRedisCache(cacheKey, extractedData, 86400);
-    console.log("Cached DB result in Redis");
-
-    return { data: extractedData, msg: "Fetched successfully", code: "1" };
-
-  } catch (err) {
-    console.log("Top-level error:", err);
-    return { data: [], msg: "Unexpected error occurred", code: "0" };
+  },
+  {
+    $addFields: {
+      order: { $indexOfArray: [StateMasterID, "$_id"] }
+    }
+  },
+  { $sort: { order: 1 } },
+  {
+    $project: {
+      _id: 0,
+      StateMasterID: "$_id",
+      StateName: "$StateMasterName",
+      StateAlphaCode: "$StateCodeAlpha"
+    }
   }
-}
+];
 
+
+      const data = await this.db
+        .collection("STATEMASTERSQL")
+        .aggregate(pipeline)
+        .toArray();
+
+      await this.redisWrapper.setRedisCache(cacheKey, data, 86400);
+
+      return { data, msg: "Fetched successfully", code: "1" };
+    } catch {
+      return { data: [], msg: "Unexpected error", code: "0" };
+    }
+  }
 
 
 
