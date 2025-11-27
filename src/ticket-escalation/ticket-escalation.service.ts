@@ -181,6 +181,7 @@ async getRolesForGovt(payload: any) {
       message: { msg: "Success", code: 1 },
     };
   } catch (err) {
+    console.log(err)
     return {
       data: null,
       message: { msg: "ddd", code: 0 },
