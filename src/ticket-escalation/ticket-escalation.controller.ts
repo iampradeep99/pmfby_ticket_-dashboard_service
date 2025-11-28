@@ -151,7 +151,6 @@ async RoleWiseAssignedTicketList(
   try {
     const { data, message }: any = await this.dashboardService.RoleWiseAssignedTickets(payload);
 
-    // Compress data if available
     const compressedData = data?.length ? await this.utilService.GZip(data) : null;
 
     return jsonResponseHandler(compressedData, message, req, res, () => {});
@@ -211,6 +210,28 @@ async RoleWiseAssignedTicketList(
       return jsonErrorHandler(err, req, res, () => {});
     }
   }
+
+
+
+ @Post('SyncAudio')
+  async syncAudio(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      let { data, message } = await this.dashboardService.syncAudioFiles(payload);
+
+      // if (data) data = await this.utilService.GZip(data);
+
+      return jsonResponseHandler(data, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
+
+
 }
 
  
