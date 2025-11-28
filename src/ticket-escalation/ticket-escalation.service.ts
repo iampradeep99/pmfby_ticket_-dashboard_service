@@ -693,6 +693,7 @@ async AssignTicketService(payload: any) {
   if (!ticketIds) {
     return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
   }
+  let roleId = roleName
 
   const ticketIdArray = ticketIds.split(",").map(id => id.trim()).filter(Boolean);
   if (!ticketIdArray.length) {
@@ -704,11 +705,16 @@ async AssignTicketService(payload: any) {
   const now = new Date();
   const results: any[] = [];
 
-  const roleMapping: Record<string, number> = {
-    STATE_GOVT_ADMIN: 1,
-    STATE_GOVT_USER: 2
-  };
-  const assignedRoleId = roleMapping[roleName] || null;
+  
+ 
+  let assignedRoleName:string;
+  if(roleId == 1){
+      assignedRoleName = "STATE_GOVT_ADMIN"
+  }
+if(roleId == 2){
+      assignedRoleName = "STATE_GOVT_USER"
+  }
+
 
   for (const ticketIdStr of ticketIdArray) {
     const ticketId = Number(ticketIdStr);
@@ -745,8 +751,8 @@ async AssignTicketService(payload: any) {
         AssignedDate: now,
         AssigneeStateID: stateID,
         AssigneeMobileNo: mobileNo,
-        AssigneRoleName: roleName,
-        AssigneeRoleID: assignedRoleId
+        AssigneRoleName: assignedRoleName,
+        AssigneeRoleID: roleId
       };
 
       const insertRes = await assignHistoryCollection.insertOne(assignmentData);
@@ -853,8 +859,8 @@ async UserWiseState(payload: any) {
         $group: {
           _id: "$StateMasterID",
           StateMasterName: { $first: "$StateMasterName" },
-          StateCodeAlpha: { $first: "$StateCodeAlpha" }, // Added this line for StateCodeAlpha
-        },
+          StateCodeAlpha: { $first: "$StateCodeAlpha" }
+        }
       },
       { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
       { $sort: { order: 1 } },
@@ -863,9 +869,9 @@ async UserWiseState(payload: any) {
           _id: 0,
           StateMasterID: "$_id",
           StateName: "$StateMasterName",
-          StateCodeAlpha: 1, // Ensuring this is in the final output
-        },
-      },
+          StateCodeAlpha: 1
+        }
+      }
     ];
 
     let extractedData;
@@ -887,7 +893,7 @@ async UserWiseState(payload: any) {
 
 
 
-  async RoleWiseAssignedTickets(payload: any) {
+   async RoleWiseAssignedTickets(payload: any) {
     try {
       if (!payload || !payload.loggedInUserId) {
         return { data: [], message: { msg: "Invalid payload", code: "0" } };
@@ -916,7 +922,7 @@ async UserWiseState(payload: any) {
       const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
 
       const pipeline: any[] = [
-        { $match: { RoleRightMasterID: loggedInUserId } },
+        { $match: { assignedTo: loggedInUserId } },
         {
           $lookup: {
             from: "SLA_Ticket_listing",
@@ -946,27 +952,15 @@ async UserWiseState(payload: any) {
         },
         {
           $group: {
-            _id: "$RoleRightMasterID",
+            _id: "$assignedTo",
             TicketRecords: { $push: "$TicketRecords" },
           },
         },
-        //   {
-        //     $project: {
-        //       _id: 0,
-        //       RoleRightMasterID: "$_id",
-        //       TicketRecords: {
-        //         $reduce: {
-        //           input: "$TicketRecords",
-        //           initialValue: [],
-        //           in: { $concatArrays: ["$$value", { $ifNull: ["$$this", []] }] },
-        //         },
-        //       },
-        //     },
-        //   },
+     
         {
           $project: {
             _id: 0,
-            RoleRightMasterID: "$_id",
+            userID: "$_id",
             TicketRecords: {
               $map: {
                 input: {
@@ -1166,13 +1160,7 @@ async UserWiseState(payload: any) {
       return { data: null, message: { msg: error?.message || "Failed", code: "0" } };
     }
   }
-
-
-
  
-
-
-
 
   async uploadTicketPDFService(payload: any) {
     try {
@@ -1296,75 +1284,6 @@ async UserWiseState(payload: any) {
   }
 
 
-
-  /* async InsertToDBService(payload: any, db: any) {
-    try {
-      if (!payload || typeof payload !== 'object') {
-        throw new Error('Invalid payload');
-      }
-  
-      if (!db) {
-        throw new Error('Database instance is required');
-      }
-  
-      const collectionName = 'KRPH_Ticket_PDF_History';
-  
-      try {
-        const collections = await db.listCollections({ name: collectionName }).toArray();
-        if (!Array.isArray(collections)) {
-          throw new Error('Failed to list collections from DB');
-        }
-        if (collections.length === 0) {
-          await db.createCollection(collectionName);
-        }
-      } catch (err) {
-        throw new Error('Failed to verify or create collection: ' + err);
-      }
-  
-      const toNumber = (value: any) => {
-        const num = Number(value);
-        return isNaN(num) ? null : num;
-      };
-  
-      const document = {
-        SupportTicketID: toNumber(payload.SupportTicketID),
-        SupportTicketNo: payload.SupportTicketNo || '',
-        TicketHistoryID: toNumber(payload.TicketHistoryID),
-        TicketStatusID: toNumber(payload.TicketStatusID),
-        TicketStatus: payload.TicketStatusID
-          ? await this.utilServices.getStatusName(toNumber(payload.TicketStatusID))
-          : 'Unknown',
-        LastTicketStatusID: toNumber(payload.LastTicketStatusID),
-        LastTicketStatus: payload.LastTicketStatusID
-          ? await this.utilServices.getStatusName(toNumber(payload.LastTicketStatusID))
-          : 'Unknown',
-          RequestorMobileNo:payload?.RequestorMobileNo,
-        TicketFileURl: payload.gcpDownloadUrl || '',
-        UpdatedByID: toNumber(payload.UpdatedByID),
-        UpdatedBy: payload.UpdatedBy || 'Unknown',
-        UpdateDateTime: payload.UpdateDateTime || new Date().toISOString(),
-        InsertedDateTime: new Date(),
-      };
-  
-      const result = await db.collection(collectionName).insertOne(document);
-      if (!result?.insertedId) {
-        throw new Error('Failed to insert document into database');
-      }
-  
-      return {
-        success: true,
-        insertedId: result?.insertedId,
-        message: 'Ticket PDF info inserted successfully',
-      };
-    } catch (err: any) {
-      const msg = err instanceof Error ? err.message : 'Unknown error occurred';
-      return {
-        success: false,
-        message: msg,
-      };
-    }
-  }
-   */
 
   async InsertToDBService(payload: any, db: any) {
     try {

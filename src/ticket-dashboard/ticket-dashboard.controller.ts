@@ -297,18 +297,15 @@ async UpdateNCIPDocket(
   try {
     const userEmail = ticketPayload?.userEmail?.trim();
 
-    // ✅ Send response immediately
     const rmessage =
       'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
 
-    // Send success response first
     res.status(200).json({
       success: true,
       message: rmessage,
       data: [],
     });
 
-    // ✅ Continue background task asynchronously (after response)
     setImmediate(async () => {
       try {
         await this.dashboardService.supportTicketSyncingUpdateForDocketNumberForTicketHistory();
@@ -319,7 +316,6 @@ async UpdateNCIPDocket(
     });
 
   } catch (err) {
-    // Handle any immediate (synchronous) errors
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
