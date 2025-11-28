@@ -895,8 +895,8 @@ async UserWiseState(payload: any) {
 
    async RoleWiseAssignedTickets(payload: any) {
     try {
-      if (!payload || !payload.loggedInUserId) {
-        return { data: [], message: { msg: "Invalid payload", code: "0" } };
+      if (!payload || !payload.loggedInUserId  || payload?.loggedInUserId == "") {
+        return { data: [], message: { msg: "loggedInUserId is required", code: "0" } };
       }
 
       const db = this.db;
@@ -1350,6 +1350,30 @@ async UserWiseState(payload: any) {
         success: false,
         message: msg,
       };
+    }
+  }
+
+
+
+
+    async syncAudioFiles(payload:any){
+    try{
+
+      const db = this.db;
+      let collectionName = 'KRPH_Calling_CDR_files_paths';
+
+      let Data = await db.collection(collectionName).find({}).limit(10).toArray()
+      console.log(Data)
+
+
+      return {
+        data:Data,
+        message:{msg:"", code:0}
+      }
+      
+
+    }catch(err){
+      console.log(err);
     }
   }
 
