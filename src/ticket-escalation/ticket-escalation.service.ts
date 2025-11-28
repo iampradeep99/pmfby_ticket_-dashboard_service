@@ -25,6 +25,7 @@ import { randomBytes } from 'crypto';
 import * as FormData from 'form-data';
 import { gunzipSync } from 'zlib';
 import * as https from 'https';
+const Logger = require("../commonServices/logger");
 
 
 
@@ -32,6 +33,8 @@ import * as https from 'https';
 
 @Injectable()
 export class TicketEscalationService {
+    private logger: InstanceType<typeof Logger>;
+
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
   private tokenCache = new NodeCache({ stdTTL: 30 * 60 });
@@ -50,6 +53,8 @@ export class TicketEscalationService {
   ) {
     this.ticketCollection = this.db.collection('tickets');
     this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
+         this.logger = new Logger("Call_Quality_Assurance_Service.log");
+    
   }
 
 
@@ -509,7 +514,7 @@ async getRolesForGovt(payload: any) {
       const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
       const item = (responseInfo.data as any)?.user?.[0];
 
-      if (!item) return { rcode: 0, rmessage: "User details not found." };
+      if (!item) return { data:{}, message:{msg:"Not Found", code:"0"} };
 
       const userDetail = {
         InsuranceCompanyID: item.InsuranceCompanyID ? await new UtilService().convertStringToArray(item.InsuranceCompanyID) : [],
@@ -674,7 +679,7 @@ async getRolesForGovt(payload: any) {
 
     } catch (err) {
       console.error("Top-level error:", err);
-      return { data: [], message: "Unexpected error" };
+      return { data: [], message: {msg:"Error", code:"0"} };
     }
   }
 
@@ -1356,26 +1361,153 @@ async UserWiseState(payload: any) {
 
 
 
-    async syncAudioFiles(payload:any){
-    try{
+ async syncAudioFiles(payload: any) {
+  const session = this.db.client?.startSession?.() ?? null;
 
-      const db = this.db;
-      let collectionName = 'KRPH_Calling_CDR_files_paths';
+  try {
+    const db = this.db;
+    const sourceCollection = db.collection("KRPH_Calling_CDR_files_paths");
+    const targetCollection = db.collection("SLA_Ticket_listing");
 
-      let Data = await db.collection(collectionName).find({}).limit(10).toArray()
-      console.log(Data)
+    const BATCH_SIZE = 500;
 
-
-      return {
-        data:Data,
-        message:{msg:"", code:0}
-      }
+    const cursor = sourceCollection.find(
       
+      { batchSize: BATCH_SIZE }
+    );
 
-    }catch(err){
-      console.log(err);
+    let batch: any[] = [];
+    let processedCount = 0;
+    let skippedCount = 0;
+
+    while (await cursor.hasNext()) {
+      const doc = await cursor.next();
+      if (!doc) continue;
+
+      batch.push(doc);
+
+      if (batch.length >= BATCH_SIZE) {
+        const skip = await this.processBatch(batch, targetCollection, session);
+        skippedCount += skip;
+        processedCount += batch.length - skip;
+
+        this.logger.info(`Processed batch: Synced=${processedCount}, Skipped=${skippedCount}`);
+
+        batch = [];
+      }
+    }
+
+    if (batch.length > 0) {
+      const skip = await this.processBatch(batch, targetCollection, session);
+      skippedCount += skip;
+      processedCount += batch.length - skip;
+    }
+
+    return {
+      data: { processed: processedCount, skipped: skippedCount },
+      message: { msg: "Mongo Sync Completed Successfully", code: 1 }
+    };
+
+  } catch (err) {
+    this.logger.error("Mongo Sync Failed", err);
+    return { data: {}, message: { msg: "Sync failed", code: 0 } };
+  } finally {
+    await session?.endSession?.();
+  }
+}
+
+
+
+private async processBatch(batch: any[], targetCollection: any, session: any) {
+  if (!batch.length) return 0;
+
+  const updateOps: any[] = [];
+  const markOps: any[] = [];
+  const skipped: string[] = [];
+
+  // 1️⃣ Build update operations
+  for (const item of batch) {
+    if (!item.uniqueId || !item.path) {
+      skipped.push(item._id);
+      continue;
+    }
+
+    updateOps.push({
+      updateOne: {
+        filter: { CallingUniqueID: item.uniqueId },
+        update: { $set: { CallingAudioFile: item.path } }
+      }
+    });
+  }
+
+  try {
+    await session.withTransaction(async () => {
+      let matchedCount = 0;
+
+      if (updateOps.length > 0) {
+        const result = await targetCollection.bulkWrite(updateOps, { ordered: false, session });
+
+        matchedCount = result?.matchedCount || 0;
+
+        // Find unmatched (= skipped)
+        batch.forEach((item) => {
+          if (!item.uniqueId || !item.path) return;
+          const exists = result.result?.nMatched > 0;
+          if (!exists) skipped.push(item._id);
+        });
+      }
+
+      // 2️⃣ Mark successfully synced
+      const successIds = batch
+        .filter((b) => !skipped.includes(b._id))
+        .map((b) => b._id);
+
+      if (successIds.length > 0) {
+        markOps.push({
+          updateMany: {
+            filter: { _id: { $in: successIds } },
+            update: { $set: { isSynced: true, syncedAt: new Date() } }
+          }
+        });
+      }
+
+      // 3️⃣ Mark skipped records
+      if (skipped.length > 0) {
+        markOps.push({
+          updateMany: {
+            filter: { _id: { $in: skipped } },
+            update: { $set: { isSynced: false, notFoundInTarget: true, checkedAt: new Date() } }
+          }
+        });
+      }
+
+      if (markOps.length > 0) {
+        await this.db.collection("KRPH_Calling_CDR_files_paths")
+          .bulkWrite(markOps, { ordered: false, session });
+      }
+    });
+
+    this.logger.log(`Batch synced successfully. Skipped: ${skipped.length}`);
+
+  } catch (err) {
+    this.logger.error("Batch Sync Failed. Retrying...", err);
+
+    try {
+      await targetCollection.bulkWrite(updateOps, { ordered: false });
+      await this.db.collection("KRPH_Calling_CDR_files_paths").bulkWrite(markOps, { ordered: false });
+      this.logger.warn(`Batch recovered after retry`);
+    } catch (retryErr) {
+      this.logger.error("Batch retry failed: Fatal error", retryErr);
+      throw retryErr;
     }
   }
+
+  return skipped.length;
+}
+
+
+
+  
 
 
 
