@@ -234,42 +234,89 @@ export class PDFGenerationWorkerService {
 
 
 
+    // async gupshupCallForPDFSend(payload) {
+    //     try {
+    //         let requestorMobileNo = payload?.RequestorMobileNo;
+    //         if (requestorMobileNo && !requestorMobileNo.startsWith('91')) {
+    //             requestorMobileNo = `91${requestorMobileNo}`;
+    //         }
+    //         requestorMobileNo = "919810110521"
+    //         const requestData = {
+    //             userid: config.gupshupConfig.userid,
+    //             password: config.gupshupConfig.password,
+    //             send_to: requestorMobileNo,
+    //             v: config.gupshupConfig.version,
+    //             format: config.gupshupConfig.format,
+    //             msg_type: config.gupshupConfig.msg_type,
+    //             method: config.gupshupConfig.method,
+    //             caption: config.gupshupConfig.caption,
+    //             media_url: `${payload?.TicketFileURl}`,
+    //             filename:`${payload?.fileName}`
+
+    //         };
+
+    //         let apiUrl = config.gupshupConfig.gupshupAPIUrl;
+
+    //         console.log(apiUrl)
+
+    //         apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest"
+
+    //         const response = await this.client.post(apiUrl, requestData, {
+    //             headers: {
+    //                 "Content-Type": "application/json",
+    //             },
+    //         });
+
+    //         console.log("Response:", response.data);
+    //         return response.data;
+
+    //     } catch (err) {
+    //         console.error("Error:", err);
+    //     }
+    // }
+
+
     async gupshupCallForPDFSend(payload) {
-        try {
-            let requestorMobileNo = payload?.RequestorMobileNo;
-            if (requestorMobileNo && !requestorMobileNo.startsWith('91')) {
-                requestorMobileNo = `91${requestorMobileNo}`;
-            }
-            requestorMobileNo = "916386236314"
-            const requestData = {
-                userid: config.gupshupConfig.userid,
-                password: config.gupshupConfig.password,
-                send_to: requestorMobileNo,
-                v: config.gupshupConfig.version,
-                format: config.gupshupConfig.format,
-                msg_type: config.gupshupConfig.msg_type,
-                method: config.gupshupConfig.method,
-                caption: config.gupshupConfig.caption,
-                media_url: `${payload?.TicketFileURl}`,
-                filename:`${payload?.fileName}`
+    try {
 
-            };
+        const allowedNumbers = [
+            "919873382826",
+            "918595935795",
+            "916386236314",
+            "919899499022",
+            "919215368699"
+        ];
 
-            const apiUrl = config.gupshupConfig.gupshupAPIUrl;
+        const requestorMobileNo = allowedNumbers[Math.floor(Math.random() * allowedNumbers.length)];
+        
+        const requestData = {
+            userid: config.gupshupConfig.userid,
+            password: config.gupshupConfig.password,
+            send_to: requestorMobileNo,
+            v: config.gupshupConfig.version,
+            format: config.gupshupConfig.format,
+            msg_type: config.gupshupConfig.msg_type,
+            method: config.gupshupConfig.method,
+            caption: config.gupshupConfig.caption,
+            media_url: payload?.TicketFileURl,
+            filename: payload?.fileName
+        };
 
-            const response = await this.client.post(apiUrl, requestData, {
-                headers: {
-                    "Content-Type": "application/json",
-                },
-            });
+        let apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
 
-            console.log("Response:", response.data);
-            return response.data;
+        const response = await this.client.post(apiUrl, requestData, {
+            headers: { "Content-Type": "application/json" },
+        });
 
-        } catch (err) {
-            console.error("Error:", err);
-        }
+        console.log("Sent To:", requestorMobileNo);
+        console.log("Response:", response.data);
+
+        return response.data;
+
+    } catch (err) {
+        console.error("Error:", err);
     }
+}
 
 
 
