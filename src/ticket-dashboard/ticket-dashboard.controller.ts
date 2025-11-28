@@ -18,12 +18,13 @@ import {
   jsonResponseHandler, jsonResponseHandlerCopy,jsonResponseHandlerReport
 } from '../commonServices/responseHandler';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { NewTestBroker } from 'src/commonServices/rabbitMQ/NewTestBroker';
 
 @Controller('ticket-dashboard')
 export class TicketDashboardController {
   constructor(
     private readonly dashboardService: TicketDashboardService,
-    private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService
+    private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService, private readonly testBroker:NewTestBroker
 
   ) { }
 
@@ -530,6 +531,35 @@ async excelImport(
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
+
+
+ @Post('testBroker')
+async testBrokerValue(
+  @Body() ticketPayload: any,
+  @Req() req: Request,
+  @Res({ passthrough: true }) res: Response,
+) {
+  console.log("🔥 Endpoint hit, payload:", ticketPayload);
+
+  const userEmail = ticketPayload?.userEmail?.trim();
+
+  if (!userEmail) {
+    return {
+      rcode: 0,
+      rmessage: 'User Email is required',
+    };
+  }
+
+  console.log("📨 Sending to RabbitMQ...");
+  await this.testBroker.sendToQueueInfo(ticketPayload);
+  console.log("✅ Message sent to RabbitMQ");
+
+  const rmessage =
+    'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
+
+  return jsonResponseHandler([], rmessage, req, res, () => {});
+}
+
 
 }
 
