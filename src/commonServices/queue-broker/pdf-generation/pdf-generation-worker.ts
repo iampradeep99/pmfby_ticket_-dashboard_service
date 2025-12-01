@@ -276,7 +276,7 @@ export class PDFGenerationWorkerService {
     // }
 
 
-    async gupshupCallForPDFSend(payload) {
+    async gupshupCallForPDFSendForSingleUser(payload) {
     try {
 
         const allowedNumbers = [
@@ -316,6 +316,74 @@ export class PDFGenerationWorkerService {
     } catch (err) {
         console.error("Error:", err);
     }
+}
+
+
+async gupshupCallForPDFSend(payload) {
+  try {
+    const allowedNumbers = [
+      "919873382826",
+      "919891651196",
+      "916386236314",
+      "919899499022",
+      "919215368699"
+    ];
+
+    let apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
+
+    const results = [];
+
+    for (const number of allowedNumbers) {
+      const requestData = {
+        userid: config.gupshupConfig.userid,
+        password: config.gupshupConfig.password,
+        send_to: number,
+        v: config.gupshupConfig.version,
+        format: config.gupshupConfig.format,
+        msg_type: config.gupshupConfig.msg_type,
+        method: config.gupshupConfig.method,
+        caption: config.gupshupConfig.caption,
+        media_url: payload?.TicketFileURl,
+        filename: payload?.fileName
+      };
+
+      try {
+        const response = await this.client.post(apiUrl, requestData, {
+          headers: { "Content-Type": "application/json" },
+        });
+
+        console.log(`📩 Sent To: ${number}`, response.data);
+
+        results.push({
+          number,
+          status: "SUCCESS",
+          response: response.data
+        });
+
+      } catch (error) {
+        console.error(`❌ Failed for: ${number}`, error);
+
+        results.push({
+          number,
+          status: "FAILED",
+          error: error.message
+        });
+      }
+
+      // Optional delay (Avoid rate limit)
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    return {
+      message: "Messages processed",
+      resultCount: results.length,
+      results
+    };
+
+  } catch (err) {
+    console.error("Error:", err);
+    return { error: err.message };
+  }
 }
 
 
