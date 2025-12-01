@@ -1,4 +1,4 @@
-import { IsString, IsInt } from 'class-validator';
+import { IsString, IsInt, IsObject } from 'class-validator';
 
 export class PdfGenerationPayload {
   @IsString()
@@ -6,4 +6,7 @@ export class PdfGenerationPayload {
 
   @IsInt()
   SupportTicketID: number;
+
+  @IsObject()
+  objCommon: any;
 }
