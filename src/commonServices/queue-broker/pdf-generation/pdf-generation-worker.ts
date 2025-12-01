@@ -334,6 +334,7 @@ export class PDFGenerationWorkerService {
                     console.log(`Processing ticket: ${payload.SupportTicketNo}`);
 
                     selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
+                    console.log(selectedData, "test")
                     const ticketListDetails: any = await this.FetchTicketInformation(payload);
                     const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
 
