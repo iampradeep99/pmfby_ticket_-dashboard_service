@@ -18,12 +18,13 @@ import {
   jsonResponseHandler, jsonResponseHandlerCopy,jsonResponseHandlerReport
 } from '../commonServices/responseHandler';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { NewTestBroker } from 'src/commonServices/rabbitMQ/NewTestBroker';
 
 @Controller('ticket-dashboard')
 export class TicketDashboardController {
   constructor(
     private readonly dashboardService: TicketDashboardService,
-    private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService
+    private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService, private readonly testBroker:NewTestBroker
 
   ) { }
 
@@ -297,18 +298,15 @@ async UpdateNCIPDocket(
   try {
     const userEmail = ticketPayload?.userEmail?.trim();
 
-    // ✅ Send response immediately
     const rmessage =
       'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
 
-    // Send success response first
     res.status(200).json({
       success: true,
       message: rmessage,
       data: [],
     });
 
-    // ✅ Continue background task asynchronously (after response)
     setImmediate(async () => {
       try {
         await this.dashboardService.supportTicketSyncingUpdateForDocketNumberForTicketHistory();
@@ -319,7 +317,6 @@ async UpdateNCIPDocket(
     });
 
   } catch (err) {
-    // Handle any immediate (synchronous) errors
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
@@ -498,7 +495,7 @@ async GetNCIPUserRole(
 
 
  @Post('excelImport')
-@UseInterceptors(FileInterceptor('file')) // 'file' = form field name
+@UseInterceptors(FileInterceptor('file')) 
 async excelImport(
   @UploadedFile() file: Express.Multer.File,
   @Body() body: any,
@@ -508,14 +505,12 @@ async excelImport(
   try {
     if (!file) return jsonErrorHandler({ message: "No file uploaded" }, req, res, () => {});
 
-    // ✅ Build payload with file + metadata
     const payload = {
-      file: file.buffer,                 // file as Buffer
+      file: file.buffer,                 
       collectionName: body.collectionName,
       insertedBy: body.insertedBy || 'system',
     };
 
-    // ✅ Immediately respond to user
     jsonResponseHandler(
       { message: 'Excel import started' },
       'File received successfully',
@@ -524,7 +519,6 @@ async excelImport(
       () => {},
     );
 
-    // ✅ Run import in background
     this.dashboardService.csvImportService(payload)
       .then((result) => {
         console.log('✅ Excel import completed:', result.message);
@@ -537,6 +531,35 @@ async excelImport(
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
+
+
+ @Post('testBroker')
+async testBrokerValue(
+  @Body() ticketPayload: any,
+  @Req() req: Request,
+  @Res({ passthrough: true }) res: Response,
+) {
+  console.log("🔥 Endpoint hit, payload:", ticketPayload);
+
+  const userEmail = ticketPayload?.userEmail?.trim();
+
+  if (!userEmail) {
+    return {
+      rcode: 0,
+      rmessage: 'User Email is required',
+    };
+  }
+
+  console.log("📨 Sending to RabbitMQ...");
+  await this.testBroker.sendToQueueInfo(ticketPayload);
+  console.log("✅ Message sent to RabbitMQ");
+
+  const rmessage =
+    'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
+
+  return jsonResponseHandler([], rmessage, req, res, () => {});
+}
+
 
 }
 

@@ -20,13 +20,18 @@ import {
 } from '../commonServices/responseHandler';
 import { FileInterceptor } from '@nestjs/platform-express';
 
+
 @Controller('ticket-escalation')
+
 export class TicketEscalationController {
+
   constructor(
     private readonly dashboardService: TicketEscalationService,
     private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService
 
-  ) { }
+  ) { 
+
+  }
 
   
   @Post('roles')
@@ -45,28 +50,41 @@ export class TicketEscalationController {
       return jsonErrorHandler(err, req, res, () => { });
     }
   }
+   @Post('getBank')
+  async getRoles(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      let { data, message } = await this.dashboardService.getRole(payload);
 
+      if (data) data = await this.utilService.GZip(data);
 
-    @Post('getRoles')
-async getRolesForGovt(
-  @Body() payload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    // Read token coming from frontend header
-    const token = req.headers['token'] as string;
-
-    let { data, message } = await this.dashboardService.getRolesForGovt(payload, token);
-
-    if (data) data = await this.utilService.GZip(data);
-
-    return jsonResponseHandler(data, message, req, res, () => {});
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
+      return jsonResponseHandler(data, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
   }
-}
 
+
+  @Post('getRoles')
+  async getRolesForGovt(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      let { data, message } = await this.dashboardService.getRolesForGovt(payload);
+
+      if (data) data = await this.utilService.GZip(data);
+
+      return jsonResponseHandler(data, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+  
 
 
 
@@ -95,16 +113,16 @@ async AssignTickets(
   @Res({ passthrough: false }) res: Response
 ) {
   try {
-    const result: any = await this.dashboardService.AssignTicketServie(payload);
-
+    const {data, message} :any = await this.dashboardService.AssignTicketService(payload);
+console.log(message)
     const responseData = {
-      summary: result.summary,
-      details: result.details, 
+      summary: data.summary,
+      details: data.details, 
     };
 
-    const compressedData = responseData ? await this.utilService.GZip(responseData) : null;
+    const compressedData = responseData ? await this.utilService.GZip(data) : null;
 
-    return jsonResponseHandler(compressedData, result.summary.message, req, res, () => {});
+    return jsonResponseHandler(compressedData, message, req, res, () => {});
   } catch (err) {
     return jsonErrorHandler(err, req, res, () => {});
   }
@@ -138,7 +156,6 @@ async RoleWiseAssignedTicketList(
   try {
     const { data, message }: any = await this.dashboardService.RoleWiseAssignedTickets(payload);
 
-    // Compress data if available
     const compressedData = data?.length ? await this.utilService.GZip(data) : null;
 
     return jsonResponseHandler(compressedData, message, req, res, () => {});
@@ -150,7 +167,7 @@ async RoleWiseAssignedTicketList(
 
 
  @Post('uploadTicketPDF')
-  @UseInterceptors(FileInterceptor('file')) // expecting "file" in form-data
+  @UseInterceptors(FileInterceptor('file')) 
   async uploadTicketPDF(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: any, 
@@ -198,6 +215,59 @@ async RoleWiseAssignedTicketList(
       return jsonErrorHandler(err, req, res, () => {});
     }
   }
+
+
+
+ @Post('SyncAudio')
+async syncAudio(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+
+    jsonResponseHandler(
+      { status: "processing", requestId: Date.now() },
+      { msg: "Sync started in background", code: 1 },
+      req,
+      res,
+      () => {}
+    );
+
+    setImmediate(async () => {
+      try {
+        console.log("🚀 Background sync started...");
+        await this.dashboardService.syncAudioFiles(payload);
+        console.log("🎉 Background sync completed!");
+      } catch (err) {
+        console.log("❌ Background sync failed:", err);
+      }
+    });
+
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
+
+ @Post('getPhoto')
+  async getphoto(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      let { data, message } = await this.dashboardService.getPhotoServie(payload);
+
+      // if (data) data = await this.utilService.GZip(data);
+
+      return jsonResponseHandler(data, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
 }
 
  
