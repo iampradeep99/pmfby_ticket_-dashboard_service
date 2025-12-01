@@ -167,7 +167,7 @@ async RoleWiseAssignedTicketList(
 
 
  @Post('uploadTicketPDF')
-  @UseInterceptors(FileInterceptor('file')) // expecting "file" in form-data
+  @UseInterceptors(FileInterceptor('file')) 
   async uploadTicketPDF(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: any, 
@@ -219,13 +219,46 @@ async RoleWiseAssignedTicketList(
 
 
  @Post('SyncAudio')
-  async syncAudio(
+async syncAudio(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+
+    jsonResponseHandler(
+      { status: "processing", requestId: Date.now() },
+      { msg: "Sync started in background", code: 1 },
+      req,
+      res,
+      () => {}
+    );
+
+    setImmediate(async () => {
+      try {
+        console.log("🚀 Background sync started...");
+        await this.dashboardService.syncAudioFiles(payload);
+        console.log("🎉 Background sync completed!");
+      } catch (err) {
+        console.log("❌ Background sync failed:", err);
+      }
+    });
+
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
+
+ @Post('getPhoto')
+  async getphoto(
     @Body() payload: any,
     @Req() req: Request,
     @Res({ passthrough: false }) res: Response
   ) {
     try {
-      let { data, message } = await this.dashboardService.syncAudioFiles(payload);
+      let { data, message } = await this.dashboardService.getPhotoServie(payload);
 
       // if (data) data = await this.utilService.GZip(data);
 
@@ -234,8 +267,6 @@ async RoleWiseAssignedTicketList(
       return jsonErrorHandler(err, req, res, () => { });
     }
   }
-
-
 
 }
 

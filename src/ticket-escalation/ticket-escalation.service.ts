@@ -685,14 +685,6 @@ async getRolesForGovt(payload: any) {
 
 
 
-
-
-
-
-
-
-
-  
 async AssignTicketService(payload: any) {
   const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo } = payload || {};
   if (!ticketIds) {
@@ -891,9 +883,6 @@ async UserWiseState(payload: any) {
     return { data: [], msg: "Unexpected error", code: "0" };
   }
 }
-
-
-
 
 
 
@@ -1361,153 +1350,187 @@ async UserWiseState(payload: any) {
 
 
 
- async syncAudioFiles(payload: any) {
-  const session = this.db.client?.startSession?.() ?? null;
-
+async syncAudioFiles(payload: any) {
   try {
+    console.log("🔍 Starting Audio Sync Process...");
+
     const db = this.db;
     const sourceCollection = db.collection("KRPH_Calling_CDR_files_paths");
     const targetCollection = db.collection("SLA_Ticket_listing");
+    const logCollection = db.collection("KRPH_Sync_Log");
 
-    const BATCH_SIZE = 500;
+    let syncedCount = 0;
+    let failedCount = 0;
 
-    const cursor = sourceCollection.find(
-      
-      { batchSize: BATCH_SIZE }
-    );
+    console.log("📡 Fetching records to sync...");
 
-    let batch: any[] = [];
-    let processedCount = 0;
-    let skippedCount = 0;
+    const sourceData = await sourceCollection.find({
+      $or: [{ isSynced: { $exists: false } }, { isSynced: false }]
+    }).project({ uniqueId: 1, path: 1 }).toArray();
 
-    while (await cursor.hasNext()) {
-      const doc = await cursor.next();
-      if (!doc) continue;
+    console.log(`📁 Total records found: ${sourceData.length}`);
 
-      batch.push(doc);
+    let processed = 0;
 
-      if (batch.length >= BATCH_SIZE) {
-        const skip = await this.processBatch(batch, targetCollection, session);
-        skippedCount += skip;
-        processedCount += batch.length - skip;
+    for (let item of sourceData) {
+      processed++;
 
-        this.logger.info(`Processed batch: Synced=${processedCount}, Skipped=${skippedCount}`);
+      console.log(`🔧 Processing ${processed}/${sourceData.length} | UniqueID: ${item.uniqueId}`);
 
-        batch = [];
+      const result = await targetCollection.findOneAndUpdate(
+        { CallingUniqueID: item.uniqueId },
+        { $set: { CallingAudioFile: item.path } },
+        { returnDocument: "after" }
+      );
+
+      if (result?.value) {
+        syncedCount++;
+        console.log(`   ✅ Synced: ${item.uniqueId}`);
+
+        await sourceCollection.updateOne(
+          { _id: item._id },
+          {
+            $set: {
+              isSynced: true,
+              syncedAt: new Date(),
+              syncStatus: "success"
+            }
+          }
+        );
+      } else {
+        failedCount++;
+        console.log(`   ❌ Failed: ${item.uniqueId} (No match found)`);
+
+        await sourceCollection.updateOne(
+          { _id: item._id },
+          {
+            $set: {
+              isSynced: false,
+              syncedAt: new Date(),
+              syncStatus: "failed",
+              error: "Matching entry not found in SLA_Ticket_listing"
+            }
+          }
+        );
       }
     }
 
-    if (batch.length > 0) {
-      const skip = await this.processBatch(batch, targetCollection, session);
-      skippedCount += skip;
-      processedCount += batch.length - skip;
-    }
+    console.log("📦 Saving Sync Summary Log...");
+
+    await logCollection.insertOne({
+      executedAt: new Date(),
+      totalProcessed: sourceData.length,
+      synced: syncedCount,
+      failed: failedCount,
+      status: syncedCount > 0 && failedCount > 0 ? "PARTIAL" :
+              failedCount === 0 ? "SUCCESS" : "FAILED"
+    });
+
+    console.log(`
+================ SUMMARY ================
+Total Records    : ${sourceData.length}
+Synced Successfully : ${syncedCount}
+Failed to Sync      : ${failedCount}
+Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedCount === 0 ? "SUCCESS" : "FAILED"}
+=========================================
+    `);
 
     return {
-      data: { processed: processedCount, skipped: skippedCount },
-      message: { msg: "Mongo Sync Completed Successfully", code: 1 }
+      data: { total: sourceData.length, synced: syncedCount, failed: failedCount },
+      message: { msg: "Mongo Sync Completed & Logged", code: 1 }
     };
 
   } catch (err) {
-    this.logger.error("Mongo Sync Failed", err);
-    return { data: {}, message: { msg: "Sync failed", code: 0 } };
-  } finally {
-    await session?.endSession?.();
+    console.error("❌ Error Occurred During Sync:", err);
+
+    return {
+      data: {},
+      message: { msg: "Sync failed", code: 0 }
+    };
   }
 }
 
 
 
-private async processBatch(batch: any[], targetCollection: any, session: any) {
-  if (!batch.length) return 0;
 
-  const updateOps: any[] = [];
-  const markOps: any[] = [];
-  const skipped: string[] = [];
 
-  // 1️⃣ Build update operations
-  for (const item of batch) {
-    if (!item.uniqueId || !item.path) {
-      skipped.push(item._id);
-      continue;
+
+async getPhotoServie(payload?: any) {
+  try {
+    const sourceFolder = "/home/pradeep/Desktop/DCIM/100D5600";
+    const destinationFolder = "/home/pradeep/Desktop/filteredPhoto";
+
+    const validNumbers = [
+      "0007","0011","0013","0018","0023","0041","0053","0073","0078","0105","0118","0129",
+      "0139","0148","0151","0205","0229","0236","0244","0260","0264","0269","0273","0276",
+      "0292","0302","0306","0313","0322","0323","0326","0332","0345","0354","0362","0365",
+      "0367","0380","0403","0407","0411","0416","0427","0443","0449","0463","0465","0469",
+      "0475","0478","0479","0482","0493","0496","0502","0506","0510","0513","0528","0537",
+      "0540","0542","0550","0552","0554","0560","0567","0570","0572","0575","0579","0583",
+      "0592","0597","0598","0601","0602","0608","0613","0615","0617","0618","0625","0627",
+      "0631","0637","0639","0642","0643","0650","0657","0665","0667","0680"
+    ];
+
+    if (!fs.existsSync(destinationFolder)) {
+      fs.mkdirSync(destinationFolder, { recursive: true });
     }
 
-    updateOps.push({
-      updateOne: {
-        filter: { CallingUniqueID: item.uniqueId },
-        update: { $set: { CallingAudioFile: item.path } }
-      }
-    });
-  }
+    const files = fs.readdirSync(sourceFolder);
 
-  try {
-    await session.withTransaction(async () => {
-      let matchedCount = 0;
+    let copiedFiles: string[] = [];
+    let failedFiles: Array<{ file: string; error: string }> = [];
+    let foundNumbers = new Set<string>(); 
 
-      if (updateOps.length > 0) {
-        const result = await targetCollection.bulkWrite(updateOps, { ordered: false, session });
+    for (const file of files) {
+      const match = file.match(/(\d{4})/);
+      if (!match) continue;
 
-        matchedCount = result?.matchedCount || 0;
+      const fileNumber = match[1];
 
-        // Find unmatched (= skipped)
-        batch.forEach((item) => {
-          if (!item.uniqueId || !item.path) return;
-          const exists = result.result?.nMatched > 0;
-          if (!exists) skipped.push(item._id);
-        });
-      }
+      if (validNumbers.includes(fileNumber)) {
+        foundNumbers.add(fileNumber);
 
-      // 2️⃣ Mark successfully synced
-      const successIds = batch
-        .filter((b) => !skipped.includes(b._id))
-        .map((b) => b._id);
+        const src = path.join(sourceFolder, file);
+        const dest = path.join(destinationFolder, file);
 
-      if (successIds.length > 0) {
-        markOps.push({
-          updateMany: {
-            filter: { _id: { $in: successIds } },
-            update: { $set: { isSynced: true, syncedAt: new Date() } }
+        try {
+          if (!fs.existsSync(dest)) {
+            fs.copyFileSync(src, dest);
           }
-        });
-      }
 
-      // 3️⃣ Mark skipped records
-      if (skipped.length > 0) {
-        markOps.push({
-          updateMany: {
-            filter: { _id: { $in: skipped } },
-            update: { $set: { isSynced: false, notFoundInTarget: true, checkedAt: new Date() } }
-          }
-        });
-      }
+          copiedFiles.push(file);
 
-      if (markOps.length > 0) {
-        await this.db.collection("KRPH_Calling_CDR_files_paths")
-          .bulkWrite(markOps, { ordered: false, session });
+        } catch (error: any) {
+          failedFiles.push({ file, error: error.message });
+        }
       }
-    });
+    }
 
-    this.logger.log(`Batch synced successfully. Skipped: ${skipped.length}`);
+    // Numbers not found in ANY file
+    const missingNumbers = validNumbers.filter(num => !foundNumbers.has(num));
+
+    return {
+      data: {
+        totalCopied: copiedFiles.length,
+        copiedFiles,
+        missingNumbersCount: missingNumbers.length,
+        missingNumbers,
+        failedFilesCount: failedFiles.length,
+        failedFiles,
+      },
+      message: { msg: "Photo Sync Completed Successfully", code: 1 }
+    };
 
   } catch (err) {
-    this.logger.error("Batch Sync Failed. Retrying...", err);
+    console.log(err);
 
-    try {
-      await targetCollection.bulkWrite(updateOps, { ordered: false });
-      await this.db.collection("KRPH_Calling_CDR_files_paths").bulkWrite(markOps, { ordered: false });
-      this.logger.warn(`Batch recovered after retry`);
-    } catch (retryErr) {
-      this.logger.error("Batch retry failed: Fatal error", retryErr);
-      throw retryErr;
-    }
+    return {
+      data: null,
+      message: { msg: "Error while syncing photos", code: 0 }
+    };
   }
-
-  return skipped.length;
 }
 
-
-
-  
 
 
 
