@@ -328,6 +328,7 @@ export class PDFGenerationWorkerService {
             // "919891651196",
             "919899499022",
             "919215368699"
+            
         ];
 
         // Select number in sequence and update index
@@ -502,7 +503,7 @@ export class PDFGenerationWorkerService {
 
 
     async ProcessInformationForFarmer(payload: any): Promise<any> {
-        try {
+        try {selectedData
             return this.queue.add(async () => {
                 const startTime = Date.now();
                 let browser: any = null;
@@ -538,7 +539,8 @@ export class PDFGenerationWorkerService {
                         };
                     }
 
-                    const ticketListDetails: any = await this.FetchTicketInformation(payload);
+                    const ticketListDetails: any = await this.FetchTicketInformation(payload, selectedData);
+
                     const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
 
                     browser = await chromium.launch({ headless: true });
@@ -692,7 +694,7 @@ export class PDFGenerationWorkerService {
 
 
 
-    async FetchTicketInformation(body: any): Promise<void> {
+    async FetchTicketInformation(body: any, selectedData:any): Promise<void> {
         if (!body) {
             throw new Error("Request body is required")
         }
@@ -716,7 +718,7 @@ export class PDFGenerationWorkerService {
 
             if (response?.data?.responseDynamic) {
                 const decodedResponse = await this.decompressResponse(response.data.responseDynamic)
-                TicketInfo = await this.TicketDetailsBuildUp(decodedResponse)
+                TicketInfo = await this.TicketDetailsBuildUp(decodedResponse, selectedData)
                 return TicketInfo
             } else {
                 logger.warn(`FetchTicketInformation: No responseDynamic found for ticket ${SupportTicketNo}`)
@@ -754,53 +756,129 @@ export class PDFGenerationWorkerService {
         }
     }
 
-    private async TicketDetailsBuildUp(data: any) {
-        if (!data || !data.masterdatabinding || !Array.isArray(data.masterdatabinding)) {
-            logger.warn("TicketDetailsBuildUp: No masterdatabinding found")
-            return []
-        }
+    // private async TicketDetailsBuildUp(data: any, selectedData:any) {
+    //     if (!data || !data.masterdatabinding || !Array.isArray(data.masterdatabinding)) {
+    //         logger.warn("TicketDetailsBuildUp: No masterdatabinding found")
+    //         return []
+    //     }
 
-        const [masterObj = {}, historyObj = {}, commentObj = {}] = data.masterdatabinding
+    //     const [masterObj = {}, historyObj = {}, commentObj = {}] = data.masterdatabinding
 
-        const masterTickets = Array.isArray(masterObj) ? masterObj : Object.values(masterObj || {})
-        const histories = Array.isArray(historyObj) ? historyObj : Object.values(historyObj || {})
-        const comments = Array.isArray(commentObj) ? commentObj : Object.values(commentObj || {})
+    //     const masterTickets = Array.isArray(masterObj) ? masterObj : Object.values(masterObj || {})
+    //     const histories = Array.isArray(historyObj) ? historyObj : Object.values(historyObj || {})
+    //     const comments = Array.isArray(commentObj) ? commentObj : Object.values(commentObj || {})
 
-        if (!masterTickets.length) {
-            logger.warn("TicketDetailsBuildUp: No master tickets found")
-            return []
-        }
+    //     if (!masterTickets.length) {
+    //         logger.warn("TicketDetailsBuildUp: No master tickets found")
+    //         return []
+    //     }
 
-        const historyMap = new Map<number, any[]>()
-        const commentMap = new Map<number, any[]>()
 
-        for (const h of histories) {
-            if (h && h.SupportTicketID != null) {
-                const arr = historyMap.get(h.SupportTicketID) || []
-                arr.push(h)
-                historyMap.set(h.SupportTicketID, arr)
-            }
-        }
 
-        for (const c of comments) {
-            if (c && c.SupportTicketID != null) {
-                const arr = commentMap.get(c.SupportTicketID) || []
-                arr.push(c)
-                commentMap.set(c.SupportTicketID, arr)
-            }
-        }
 
-        const combinedTickets = masterTickets.map((ticket) => {
-            if (!ticket || ticket.SupportTicketID == null) return ticket
-            return {
-                ...ticket,
-                Histories: historyMap.get(ticket.SupportTicketID) || [],
-                Comments: commentMap.get(ticket.SupportTicketID) || [],
-            }
-        })
+     
 
-        return combinedTickets
+
+    //     const historyMap = new Map<number, any[]>()
+    //     const commentMap = new Map<number, any[]>()
+
+    //     for (const h of histories) {
+    //         if (h && h.SupportTicketID != null) {
+    //             const arr = historyMap.get(h.SupportTicketID) || []
+    //             arr.push(h)
+    //             historyMap.set(h.SupportTicketID, arr)
+    //         }
+    //     }
+
+    //     for (const c of comments) {
+    //         if (c && c.SupportTicketID != null) {
+    //             const arr = commentMap.get(c.SupportTicketID) || []
+    //             arr.push(c)
+    //             commentMap.set(c.SupportTicketID, arr)
+    //         }
+    //     }
+
+    //     const combinedTickets = masterTickets.map((ticket) => {
+    //         if (!ticket || ticket.SupportTicketID == null) return ticket
+    //         return {
+    //             ...ticket,
+    //             Histories: historyMap.get(ticket.SupportTicketID) || [],
+    //             Comments: commentMap.get(ticket.SupportTicketID) || [],
+    //         }
+    //     })
+
+    //        logger.info(JSON.stringify(selectedData),"selecteddata")
+    //        in the selectedData i am getting SupportTicketID and that SupportTicketID should be come on top combinedTickets 
+
+    //        logger.info(JSON.stringify(masterTickets), "master ticket")
+    //     logger.info(JSON.stringify(combinedTickets), "combinedTickets")
+
+        
+
+    //     return combinedTickets
+    // }
+
+
+    private async TicketDetailsBuildUp(data: any, selectedData: any) {
+    if (!data || !data.masterdatabinding || !Array.isArray(data.masterdatabinding)) {
+        logger.warn("TicketDetailsBuildUp: No masterdatabinding found")
+        return []
     }
+
+    const [masterObj = {}, historyObj = {}, commentObj = {}] = data.masterdatabinding
+
+    const masterTickets = Array.isArray(masterObj) ? masterObj : Object.values(masterObj || {})
+    const histories = Array.isArray(historyObj) ? historyObj : Object.values(historyObj || {})
+    const comments = Array.isArray(commentObj) ? commentObj : Object.values(commentObj || {})
+
+    if (!masterTickets.length) {
+        logger.warn("TicketDetailsBuildUp: No master tickets found")
+        return []
+    }
+
+    const historyMap = new Map<number, any[]>()
+    const commentMap = new Map<number, any[]>()
+
+    for (const h of histories) {
+        if (h && h.SupportTicketID != null) {
+            const arr = historyMap.get(h.SupportTicketID) || []
+            arr.push(h)
+            historyMap.set(h.SupportTicketID, arr)
+        }
+    }
+
+    for (const c of comments) {
+        if (c && c.SupportTicketID != null) {
+            const arr = commentMap.get(c.SupportTicketID) || []
+            arr.push(c)
+            commentMap.set(c.SupportTicketID, arr)
+        }
+    }
+
+    const combinedTickets = masterTickets.map((ticket) => {
+        if (!ticket || ticket.SupportTicketID == null) return ticket
+        return {
+            ...ticket,
+            Histories: historyMap.get(ticket.SupportTicketID) || [],
+            Comments: commentMap.get(ticket.SupportTicketID) || [],
+        }
+    })
+
+    if (selectedData?.SupportTicketID) {
+        const ticketID = selectedData.SupportTicketID
+        const index = combinedTickets.findIndex(t => t.SupportTicketID === ticketID)
+
+        if (index !== -1) {
+            const selectedTicket = combinedTickets.splice(index, 1)[0]
+            combinedTickets.unshift(selectedTicket)
+            logger.info(`SupportTicketID ${ticketID} moved on top`)
+        } else {
+            logger.warn(`SupportTicketID ${ticketID} not found in combinedTickets`)
+        }
+    }
+
+    return combinedTickets
+}
 
 
 
