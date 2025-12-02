@@ -280,11 +280,11 @@ export class PDFGenerationWorkerService {
         try {
 
             const allowedNumbers = [
-                "919873382826",
-                "919891651196",
-                "916386236314",
-                "919899499022",
-                "919215368699"
+                // "919873382826",
+                // "919891651196",
+                 "916386236314",
+                // "919899499022",
+                // "919215368699"
             ];
 
             const requestorMobileNo = allowedNumbers[Math.floor(Math.random() * allowedNumbers.length)];
@@ -1522,7 +1522,9 @@ export class PDFGenerationWorkerService {
                 '    <div id="pdf-last-section" class="CustomerBox">' +
                 '      <div class="Heading">' +
                 '        <div class="ReqInfo">' +
-                '          <img src="/img/customer-avatar.png" alt="Customer" />' +
+                // '          <img src="/img/customer-avatar.png" alt="Customer" />' +
+                '<span style="font-size: 34px;">👤</span>' +
+
                 "          <h3>" +
                 (data && data.RequestorName ? data.RequestorName : "") +
                 "</h3>" +
@@ -1608,10 +1610,10 @@ export class PDFGenerationWorkerService {
                 "  </div>" +
                 "</div>" +
                 "<hr />" +
-                '<div id="case_history_ticket_details">' +
-                "  <h6>Case History</h6>" +
-                commentsHtml +
-                "</div>" +
+                // '<div id="case_history_ticket_details">' +
+                // "  <h6>Case History</h6>" +
+                // commentsHtml +
+                // "</div>" +
                 "<br />" +
                 "<br />" +
                 "<br />" +
