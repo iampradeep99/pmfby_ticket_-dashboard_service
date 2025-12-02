@@ -16,6 +16,7 @@ import { BrowserPoolService } from "./browser-pool.service"
 
 
 var selectedData
+var currentIndex = 0
 
 const stepsTATJourneyCrpLs = [
     {
@@ -276,7 +277,7 @@ export class PDFGenerationWorkerService {
     // }
 
 
-    async gupshupCallForPDFSend(payload) {
+    async gupshupCallForPDFSendWorking(payload) {
         try {
 
             const allowedNumbers = [
@@ -318,6 +319,50 @@ export class PDFGenerationWorkerService {
         }
     }
 
+
+    async  gupshupCallForPDFSend(payload) {
+    try {
+
+        const allowedNumbers = [
+            "919873382826",
+            // "919891651196",
+            "919899499022",
+            "919215368699"
+        ];
+
+        // Select number in sequence and update index
+        const requestorMobileNo = allowedNumbers[currentIndex];
+        currentIndex = (currentIndex + 1) % allowedNumbers.length; // Circular rotation
+
+        const requestData = {
+            userid: config.gupshupConfig.userid,
+            password: config.gupshupConfig.password,
+            send_to: requestorMobileNo,
+            v: config.gupshupConfig.version,
+            format: config.gupshupConfig.format,
+            msg_type: config.gupshupConfig.msg_type,
+            method: config.gupshupConfig.method,
+            caption: config.gupshupConfig.caption,
+            media_url: payload?.TicketFileURl,
+            filename: payload?.fileName
+        };
+
+        const apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
+
+        const response = await this.client.post(apiUrl, requestData, {
+            headers: { "Content-Type": "application/json" },
+        });
+
+        console.log("Sent To:", requestorMobileNo);
+        console.log("Response:", response.data);
+
+        return response.data;
+
+    } catch (err) {
+        console.error("Error sending WhatsApp message:", err.message);
+        return { success: false, error: err.message };
+    }
+}
 
 
 
@@ -553,7 +598,7 @@ export class PDFGenerationWorkerService {
                     const savedInfo = await this.saveToDatabase(finalPayloadToSave);
 
                     if (savedInfo?._id) {
-                        this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+                        await this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
                             console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
                         );
                     }
