@@ -277,49 +277,183 @@ export class PDFGenerationWorkerService {
 
 
     async gupshupCallForPDFSend(payload) {
-    try {
+        try {
 
-        const allowedNumbers = [
-            "919873382826",
-            "919891651196",
-            "916386236314",
-            "919899499022",
-            "919215368699"
-        ];
+            const allowedNumbers = [
+                "919873382826",
+                "919891651196",
+                "916386236314",
+                "919899499022",
+                "919215368699"
+            ];
 
-        const requestorMobileNo = allowedNumbers[Math.floor(Math.random() * allowedNumbers.length)];
-        
-        const requestData = {
-            userid: config.gupshupConfig.userid,
-            password: config.gupshupConfig.password,
-            send_to: requestorMobileNo,
-            v: config.gupshupConfig.version,
-            format: config.gupshupConfig.format,
-            msg_type: config.gupshupConfig.msg_type,
-            method: config.gupshupConfig.method,
-            caption: config.gupshupConfig.caption,
-            media_url: payload?.TicketFileURl,
-            filename: payload?.fileName
-        };
+            const requestorMobileNo = allowedNumbers[Math.floor(Math.random() * allowedNumbers.length)];
 
-        let apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
+            const requestData = {
+                userid: config.gupshupConfig.userid,
+                password: config.gupshupConfig.password,
+                send_to: requestorMobileNo,
+                v: config.gupshupConfig.version,
+                format: config.gupshupConfig.format,
+                msg_type: config.gupshupConfig.msg_type,
+                method: config.gupshupConfig.method,
+                caption: config.gupshupConfig.caption,
+                media_url: payload?.TicketFileURl,
+                filename: payload?.fileName
+            };
 
-        const response = await this.client.post(apiUrl, requestData, {
-            headers: { "Content-Type": "application/json" },
-        });
+            let apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
 
-        console.log("Sent To:", requestorMobileNo);
-        console.log("Response:", response.data);
+            const response = await this.client.post(apiUrl, requestData, {
+                headers: { "Content-Type": "application/json" },
+            });
 
-        return response.data;
+            console.log("Sent To:", requestorMobileNo);
+            console.log("Response:", response.data);
 
-    } catch (err) {
-        console.error("Error:", err);
+            return response.data;
+
+        } catch (err) {
+            console.error("Error:", err);
+        }
     }
-}
 
 
 
+
+
+    /*    async ProcessInformationForFarmer(payload: any): Promise<any> {
+           try {
+               return this.queue.add(async () => {
+                   const startTime = Date.now();
+                   let browser: any = null;
+                   let context: any = null;
+                   let page: any = null;
+   
+                   try {
+                       console.log(`Processing ticket: ${payload.SupportTicketNo}`);
+   
+                       selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
+                       console.log(selectedData, "test")
+                       const ticketListDetails: any = await this.FetchTicketInformation(payload);
+                       const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
+   
+                       browser = await chromium.launch({ headless: true });
+                       context = await browser.newContext();
+                       page = await context.newPage();
+   
+                       await page.setContent(prinHTML, {
+                           waitUntil: 'networkidle',
+                           timeout: 30000
+                       });
+   
+                       await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+   
+                       const tempDir = path.join(process.cwd(), "temp");
+                       if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+   
+                       const timestamp = Date.now();
+                       const safeName = selectedData.RequestorName.replace(/\s+/g, "_");
+                       // const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
+                       let pdfName = `Ticket_${payload.SupportTicketNo}_${safeName}_${timestamp}.pdf`
+                       const pdfPath = path.join(tempDir, pdfName);
+   
+   
+   
+                       await page.pdf({
+                           path: pdfPath,
+                           format: "A4",
+                           printBackground: true,
+                           margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" }
+                       });
+   
+                       await page.close();
+                       page = null;
+   
+                       const gcpResponse = await this.sendFileToGCP(pdfPath);
+                       const fetchedGCPInfo = gcpResponse?.responseDynamic?.[0];
+   
+                       const finalPayloadToSave = {
+                           SupportTicketID: selectedData?.SupportTicketID,
+                           SupportTicketNo: selectedData?.SupportTicketNo,
+                           TicketFileURl: fetchedGCPInfo?.gcsUrl,
+                           TicketHistoryID: selectedData?.TicketHistoryID || "",
+                           TicketStatusID: selectedData?.TicketStatusID || "",
+                           TicketStatus: selectedData?.TicketStatus || "",
+                           RequestorMobileNo: selectedData?.RequestorMobileNo || "",
+                           GCSFileName: fetchedGCPInfo?.filename || "",
+                           GCSId: fetchedGCPInfo?._id || "",
+                           InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
+                           UpdateDateTime: Date.now(),
+                           InsertedDateTime: selectedData?.Created || "",
+                           fileName:pdfName || ""
+                       };
+   
+                       if (
+                           !finalPayloadToSave.SupportTicketID ||
+                           !finalPayloadToSave.SupportTicketNo ||
+                           !finalPayloadToSave.TicketFileURl
+                       ) {
+                           throw new Error("Missing required fields");
+                       }
+   
+                       const savedInfo = await this.saveToDatabase(finalPayloadToSave);
+   
+                       if (savedInfo?._id) {
+                           this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+                               console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
+                           );
+                       }
+   
+                       try {
+                           fs.unlinkSync(pdfPath);
+                       } catch (e) {
+                           console.log(`Failed to delete temp file: ${pdfPath}`);
+                       }
+   
+                       const processingTime = Date.now() - startTime;
+                       console.log(`✓ Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
+   
+                       return {
+                           success: true,
+                           ticketNo: payload.SupportTicketNo,
+                           processingTime,
+                           gcsUrl: fetchedGCPInfo?.gcsUrl
+                       };
+   
+                   } catch (err) {
+                       console.log(`✗ Error processing ticket ${payload.SupportTicketNo}:`, err);
+   
+                       if (page) {
+                           await page.close().catch(() => { });
+                       }
+   
+                       // Return error object
+                       const errorResult = {
+                           success: false,
+                           ticketNo: payload.SupportTicketNo,
+                           processingTime: Date.now() - startTime,
+                           error: err.message
+                       };
+   
+                       return errorResult;
+   
+                   } finally {
+                       if (context) await context.close().catch(() => { });
+                       if (browser) await browser.close().catch(() => { });
+                   }
+               });
+           } catch (err) {
+               console.error('Queue error:', err);
+   
+               // If using this approach, you need to check result in runWorker
+               return {
+                   success: false,
+                   ticketNo: payload.SupportTicketNo,
+                   error: err.message || 'Unknown error'
+               };
+           }
+       } */
 
 
     async ProcessInformationForFarmer(payload: any): Promise<any> {
@@ -334,7 +468,31 @@ export class PDFGenerationWorkerService {
                     console.log(`Processing ticket: ${payload.SupportTicketNo}`);
 
                     selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
-                    console.log(selectedData, "test")
+                    const ticketHeaderId = Number(selectedData?.TicketHeaderID);
+                    // if (selectedData?.TicketHeaderID !== 1) {
+                    //     console.log(`Ticket ${payload.SupportTicketNo} skipped. TicketHeaderID (${selectedData?.TicketHeaderID}) != 1`);
+
+                    //     return {
+                    //         success: false,
+                    //         ticketNo: payload.SupportTicketNo,
+                    //         reason: "Processing skipped because TicketHeaderID is not 1.",
+                    //         processingTime: Date.now() - startTime
+                    //     };
+                    // }
+
+                    if (!ticketHeaderId || ticketHeaderId !== 1) {
+                        console.log(
+                            `Ticket ${payload.SupportTicketNo} skipped. Invalid or unsupported TicketHeaderID (${selectedData?.TicketHeaderID}).`
+                        );
+
+                        return {
+                            success: false,
+                            ticketNo: payload.SupportTicketNo,
+                            reason: "Processing skipped because TicketHeaderID is missing, invalid, or not equal to 1.",
+                            processingTime: Date.now() - startTime
+                        };
+                    }
+
                     const ticketListDetails: any = await this.FetchTicketInformation(payload);
                     const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
 
@@ -354,11 +512,8 @@ export class PDFGenerationWorkerService {
 
                     const timestamp = Date.now();
                     const safeName = selectedData.RequestorName.replace(/\s+/g, "_");
-                    // const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
-                    let pdfName = `Ticket_${payload.SupportTicketNo}_${safeName}_${timestamp}.pdf`
+                    const pdfName = `Ticket_${payload.SupportTicketNo}_${safeName}_${timestamp}.pdf`;
                     const pdfPath = path.join(tempDir, pdfName);
-
-
 
                     await page.pdf({
                         path: pdfPath,
@@ -386,14 +541,12 @@ export class PDFGenerationWorkerService {
                         InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
                         UpdateDateTime: Date.now(),
                         InsertedDateTime: selectedData?.Created || "",
-                        fileName:pdfName || ""
+                        fileName: pdfName || ""
                     };
 
-                    if (
-                        !finalPayloadToSave.SupportTicketID ||
+                    if (!finalPayloadToSave.SupportTicketID ||
                         !finalPayloadToSave.SupportTicketNo ||
-                        !finalPayloadToSave.TicketFileURl
-                    ) {
+                        !finalPayloadToSave.TicketFileURl) {
                         throw new Error("Missing required fields");
                     }
 
@@ -407,12 +560,10 @@ export class PDFGenerationWorkerService {
 
                     try {
                         fs.unlinkSync(pdfPath);
-                    } catch (e) {
-                        console.log(`Failed to delete temp file: ${pdfPath}`);
-                    }
+                    } catch { }
 
                     const processingTime = Date.now() - startTime;
-                    console.log(`✓ Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
+                    console.log(`Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
 
                     return {
                         success: true,
@@ -421,32 +572,20 @@ export class PDFGenerationWorkerService {
                         gcsUrl: fetchedGCPInfo?.gcsUrl
                     };
 
-                } catch (err) {
-                    console.log(`✗ Error processing ticket ${payload.SupportTicketNo}:`, err);
-
-                    if (page) {
-                        await page.close().catch(() => { });
-                    }
-
-                    // Return error object
-                    const errorResult = {
+                } catch (err: any) {
+                    if (page) await page.close().catch(() => { });
+                    return {
                         success: false,
                         ticketNo: payload.SupportTicketNo,
                         processingTime: Date.now() - startTime,
                         error: err.message
                     };
-
-                    return errorResult;
-
                 } finally {
                     if (context) await context.close().catch(() => { });
                     if (browser) await browser.close().catch(() => { });
                 }
             });
-        } catch (err) {
-            console.error('Queue error:', err);
-
-            // If using this approach, you need to check result in runWorker
+        } catch (err: any) {
             return {
                 success: false,
                 ticketNo: payload.SupportTicketNo,
@@ -455,57 +594,56 @@ export class PDFGenerationWorkerService {
         }
     }
 
+    async processBatch(payloads: any[]): Promise<any[]> {
+        payloads = [payloads]
+        console.log(`Starting batch processing: ${payloads?.length} tickets`);
 
-  async processBatch(payloads: any[]): Promise<any[]> {
-    payloads = [payloads]
-    console.log(`Starting batch processing: ${payloads?.length} tickets`);
+        const startTime = Date.now();
 
-    const startTime = Date.now();
+        try {
+            const results = await Promise.allSettled(
+                payloads.map(payload => this.ProcessInformationForFarmer(payload))
+            );
 
-    try {
-        const results = await Promise.allSettled(
-            payloads.map(payload => this.ProcessInformationForFarmer(payload))
-        );
+            const processedResults = results.map((result, index) => {
+                const p = payloads[index] || {};
+                const ticketNo = p.SupportTicketNo || null;
+                const ticketId = p.SupportTicketID || null;
 
-        const processedResults = results.map((result, index) => {
-            const p = payloads[index] || {};
-            const ticketNo = p.SupportTicketNo || null;
-            const ticketId = p.SupportTicketID || null;
+                if (result.status === 'fulfilled') {
+                    return {
+                        ...result.value,
+                        ticketNo,
+                        ticketId
+                    };
+                }
 
-            if (result.status === 'fulfilled') {
                 return {
-                    ...result.value,
+                    success: false,
                     ticketNo,
-                    ticketId
+                    ticketId,
+                    processingTime: 0,
+                    error: result.reason?.message || 'Unknown error'
                 };
-            }
+            });
 
-            return {
-                success: false,
-                ticketNo,
-                ticketId,
-                processingTime: 0,
-                error: result.reason?.message || 'Unknown error'
-            };
-        });
+            const successful = processedResults.filter(r => r.success).length;
+            const failed = processedResults.filter(r => !r.success).length;
+            const totalTime = Date.now() - startTime;
 
-        const successful = processedResults.filter(r => r.success).length;
-        const failed = processedResults.filter(r => !r.success).length;
-        const totalTime = Date.now() - startTime;
+            console.log(`Batch processing completed:`);
+            console.log(`Successful: ${successful}`);
+            console.log(`Failed: ${failed}`);
+            console.log(`Total time: ${totalTime}ms`);
+            console.log(`Average time: ${(totalTime / payloads.length).toFixed(2)}ms per PDF`);
 
-        console.log(`Batch processing completed:`);
-        console.log(`Successful: ${successful}`);
-        console.log(`Failed: ${failed}`);
-        console.log(`Total time: ${totalTime}ms`);
-        console.log(`Average time: ${(totalTime / payloads.length).toFixed(2)}ms per PDF`);
+            return processedResults;
 
-        return processedResults;
-
-    } catch (err) {
-        console.log('Batch processing error:', err);
-        throw err;
+        } catch (err) {
+            console.log('Batch processing error:', err);
+            throw err;
+        }
     }
-}
 
 
 
@@ -619,7 +757,7 @@ export class PDFGenerationWorkerService {
         return combinedTickets
     }
 
-    
+
 
     private isAgeingMatch(range: string, ageingValue: number): boolean {
         if (!range) return false
