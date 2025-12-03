@@ -235,46 +235,46 @@ export class PDFGenerationWorkerService {
 
 
 
-    async gupshupCallForPDFSend(payload) {
-        try {
-            let requestorMobileNo = payload?.RequestorMobileNo;
-            if (requestorMobileNo && !requestorMobileNo.startsWith('91')) {
-                requestorMobileNo = `91${requestorMobileNo}`;
-            }
-            // requestorMobileNo = "919810110521"
-            const requestData = {
-                userid: config.gupshupConfig.userid,
-                password: config.gupshupConfig.password,
-                send_to: requestorMobileNo,
-                v: config.gupshupConfig.version,
-                format: config.gupshupConfig.format,
-                msg_type: config.gupshupConfig.msg_type,
-                method: config.gupshupConfig.method,
-                caption: config.gupshupConfig.caption,
-                media_url: `${payload?.TicketFileURl}`,
-                filename:`${payload?.fileName}`
+    // async gupshupCallForPDFSend(payload) {
+    //     try {
+    //         let requestorMobileNo = payload?.RequestorMobileNo;
+    //         if (requestorMobileNo && !requestorMobileNo.startsWith('91')) {
+    //             requestorMobileNo = `91${requestorMobileNo}`;
+    //         }
+    //         // requestorMobileNo = "919810110521"
+    //         const requestData = {
+    //             userid: config.gupshupConfig.userid,
+    //             password: config.gupshupConfig.password,
+    //             send_to: requestorMobileNo,
+    //             v: config.gupshupConfig.version,
+    //             format: config.gupshupConfig.format,
+    //             msg_type: config.gupshupConfig.msg_type,
+    //             method: config.gupshupConfig.method,
+    //             caption: config.gupshupConfig.caption,
+    //             media_url: `${payload?.TicketFileURl}`,
+    //             filename:`${payload?.fileName}`
 
-            };
+    //         };
 
-            let apiUrl = config.gupshupConfig.gupshupAPIUrl;
+    //         let apiUrl = config.gupshupConfig.gupshupAPIUrl;
 
-            console.log(apiUrl)
+    //         console.log(apiUrl)
 
-            apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest"
+    //         apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest"
 
-            const response = await this.client.post(apiUrl, requestData, {
-                headers: {
-                    "Content-Type": "application/json",
-                },
-            });
+    //         const response = await this.client.post(apiUrl, requestData, {
+    //             headers: {
+    //                 "Content-Type": "application/json",
+    //             },
+    //         });
 
-            console.log("Response:", response.data);
-            return response.data;
+    //         console.log("Response:", response.data);
+    //         return response.data;
 
-        } catch (err) {
-            console.error("Error:", err);
-        }
-    }
+    //     } catch (err) {
+    //         console.error("Error:", err);
+    //     }
+    // }
 
 
     async gupshupCallForPDFSendWorking(payload) {
@@ -320,25 +320,19 @@ export class PDFGenerationWorkerService {
     }
 
 
-    async  gupshupCallForPDFSendOld(payload) {
+    async  gupshupCallForPDFSend(payload) {
     try {
 
-        const allowedNumbers = [
-            "919873382826",
-            // "919891651196",
-            "919899499022",
-            "919215368699"
-            
-        ];
+        const allowedNumbers = payload?.RequestorMobileNo
 
         // Select number in sequence and update index
-        const requestorMobileNo = allowedNumbers[currentIndex];
+        const requestorMobileNoInfo = allowedNumbers[currentIndex];
         currentIndex = (currentIndex + 1) % allowedNumbers.length; // Circular rotation
 
         const requestData = {
             userid: config.gupshupConfig.userid,
             password: config.gupshupConfig.password,
-            send_to: requestorMobileNo,
+            send_to: requestorMobileNoInfo,
             v: config.gupshupConfig.version,
             format: config.gupshupConfig.format,
             msg_type: config.gupshupConfig.msg_type,
@@ -354,7 +348,7 @@ export class PDFGenerationWorkerService {
             headers: { "Content-Type": "application/json" },
         });
 
-        console.log("Sent To:", requestorMobileNo);
+        console.log("Sent To:", requestorMobileNoInfo);
         console.log("Response:", response.data);
 
         return response.data;
