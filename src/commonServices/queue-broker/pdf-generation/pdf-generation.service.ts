@@ -421,8 +421,8 @@ interface MessageWithRetry {
 export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger('pdf-generation-rmq.log');
   private readonly RABBITMQ_URL = config.rabbitmq;
-  private readonly QUEUE_NAME = 'krph_support_ticket_pdf_generation_queue_1';
-  private readonly DLQ_NAME = 'krph_support_ticket_pdf_generation_dlq';
+  private readonly QUEUE_NAME = 'krph_support_ticket_pdf_generation_queue_1_UAT';
+  private readonly DLQ_NAME = 'krph_support_ticket_pdf_generation_dlq_UAT';
   private PREFETCH = 5;
   private readonly RECONNECT_DELAY = 5000;
   private readonly MAX_RETRIES = 5;
