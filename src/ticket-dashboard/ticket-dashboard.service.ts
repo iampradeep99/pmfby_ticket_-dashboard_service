@@ -19,9 +19,12 @@ import { Sequelize } from 'sequelize-typescript';
 import { QueryTypes } from 'sequelize'; 
 import { MongoClient } from 'mongodb';
 import * as moment from "moment";
-import { parse } from "csv-parse/sync";
+// import { parse } from "csv-parse/sync";
 import { pipeline } from 'stream';
+// import { Readable } from "stream";
 
+import { parse } from "csv-parse";
+import { Readable } from "stream";
 
 
 @Injectable()
@@ -9019,96 +9022,121 @@ async  GetNCIPUserRole(payload: any) {
 
 
 
+
+
 async csvImportService(payload: any) {
-  try {
-    if (!this.db) {
-      console.error("Database instance not found.");
-      return { data: [], message: "Database connection not initialized" };
-    }
+  console.log("📁 CSV Import Service Started...");
 
-    const { file, collectionName, insertedBy = "system", chunkSize = 100000 } = payload || {};
+  if (!this.db) {
+    console.error("❌ Database not initialized");
+    return { data: [], message: "Database not initialized" };
+  }
 
-    if (!file) return { data: [], message: "Missing CSV file in payload" };
-    if (!collectionName || typeof collectionName !== "string")
-      return { data: [], message: "Missing or invalid collection name" };
+  const { file, collectionName, insertedBy = "system", chunkSize = 10000 } = payload || {};
 
-    let csvString: string;
-    if (Buffer.isBuffer(file)) {
-      csvString = file.toString("utf-8");
-    } else if (file instanceof ArrayBuffer) {
-      csvString = Buffer.from(file).toString("utf-8");
-    } else if (ArrayBuffer.isView(file)) {
-      csvString = Buffer.from(file.buffer, file.byteOffset, file.byteLength).toString("utf-8");
-    } else if (typeof file === "string") {
-      csvString = Buffer.from(file, "base64").toString("utf-8");
-    } else {
-      return { data: [], message: "Invalid file format" };
-    }
+  console.log(`➡ Collection: ${collectionName}`);
+  console.log(`➡ Chunk Size: ${chunkSize}`);
+  console.log(`➡ Uploaded By: ${insertedBy}`);
 
-    const jsonData: any[] = parse(csvString, {
+  if (!file || !collectionName) {
+    console.error("❌ Missing file or collection name");
+    return { data: [], message: "Missing file or collection name" };
+  }
+
+  // Convert input file to string
+  let csvString: string;
+  if (Buffer.isBuffer(file)) {
+    console.log("📦 File type: Buffer");
+    csvString = file.toString("utf-8");
+  } else if (typeof file === "string") {
+    console.log("📦 File type: Base64 string");
+    csvString = Buffer.from(file, "base64").toString("utf-8");
+  } else {
+    console.error("❌ Invalid file format");
+    return { data: [], message: "Invalid file format" };
+  }
+
+  const targetCollection = this.db.collection(collectionName);
+  const logCollection = this.db.collection("ExcelImportLogs");
+
+  let buffer: any[] = [];
+  let insertedCount = 0;
+  let totalRecords = 0;
+
+  console.log("📝 Creating log entry...");
+
+  // Insert initial log entry
+  const logId = (await logCollection.insertOne({
+    collectionName,
+    totalRecords: 0,
+    insertedCount: 0,
+    status: "IN_PROGRESS",
+    insertedBy,
+    startedAt: new Date(),
+  })).insertedId;
+
+  console.log(`📌 Log created with ID: ${logId}`);
+
+  // Create async iterable CSV stream parser
+  const csvStream = Readable.from(csvString).pipe(
+    parse({
       columns: true,
       skip_empty_lines: true,
-      trim: true,
-    });
+      trim: true
+    })
+  ) as AsyncIterable<any>;
 
-    if (!jsonData.length) return { data: [], message: "CSV file contains no data rows" };
+  console.log("🚀 Parsing CSV and inserting records...");
 
-    const targetCollection = this.db.collection(collectionName);
-    const logCollection = this.db.collection("ExcelImportLogs");
+  const startTime = Date.now();
 
-    const totalRecords = jsonData.length;
-    let insertedCount = 0;
+  for await (const record of csvStream) {
+    totalRecords++;
+    buffer.push(record);
 
-    const chunks: any[][] = [];
-    for (let i = 0; i < totalRecords; i += chunkSize) {
-      chunks.push(jsonData.slice(i, i + chunkSize));
-    }
+    // Every chunk inserted
+    if (buffer.length >= chunkSize) {
+      console.log(`⚙️ Inserting chunk... Records processed: ${totalRecords}`);
 
-    const logId = (await logCollection.insertOne({
-      collectionName,
-      totalRecords,
-      insertedCount: 0,
-      status: "IN_PROGRESS",
-      insertedBy,
-      startedAt: new Date(),
-    })).insertedId;
-
-    for (const chunk of chunks) {
-      if (!chunk.length) continue;
-      const result = await targetCollection.insertMany(chunk);
-      insertedCount += result.insertedCount;
+      await targetCollection.insertMany(buffer);
+      insertedCount += buffer.length;
+      buffer = [];
 
       await logCollection.updateOne(
         { _id: logId },
-        { $set: { insertedCount, updatedAt: new Date() } }
+        { $set: { insertedCount, totalRecords, updatedAt: new Date() } }
       );
+
+      console.log(`📌 Progress: Inserted: ${insertedCount} / Read: ${totalRecords}`);
     }
 
-    await logCollection.updateOne(
-      { _id: logId },
-      { $set: { status: "COMPLETED", completedAt: new Date() } }
-    );
-
-    return {
-      data: { totalRecords, insertedCount },
-      message: `Successfully uploaded ${insertedCount} records into ${collectionName}`,
-    };
-  } catch (err: any) {
-    console.error("Error in csvImportService:", err?.message || err);
-    try {
-      const logCollection = this.db.collection("ExcelImportLogs");
-      await logCollection.insertOne({
-        error: err?.message || err,
-        status: "FAILED",
-        failedAt: new Date(),
-      });
-    } catch {}
-
-    if (err.name === "MongoNetworkError") return { data: [], message: "Database network error" };
-    if (err.name === "MongoServerError") return { data: [], message: "Database server error" };
-    return { data: [], message: "Unexpected error occurred" };
+    if (totalRecords % 50000 === 0) {
+      console.log(`📊 Still processing... Total processed so far: ${totalRecords}`);
+    }
   }
+
+  // Insert last batch
+  if (buffer.length > 0) {
+    console.log(`📦 Inserting final chunk: ${buffer.length} records`);
+    await targetCollection.insertMany(buffer);
+    insertedCount += buffer.length;
+  }
+
+  await logCollection.updateOne(
+    { _id: logId },
+    { $set: { totalRecords, insertedCount, status: "COMPLETED", completedAt: new Date() } }
+  );
+
+  const executionTime = ((Date.now() - startTime) / 1000).toFixed(2);
+  console.log(`🎉 Import completed: ${insertedCount} records inserted.`);
+  console.log(`⏱ Execution time: ${executionTime} seconds`);
+
+  return {
+    data: { totalRecords, insertedCount, executionTime },
+    message: `Successfully uploaded ${insertedCount} records in ${collectionName}`,
+  };
 }
+
 
 
 
