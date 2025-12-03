@@ -7129,43 +7129,16 @@ const ticketSummary = ticketStatusResults.map(item => ({
     console.log(userDetail, "testuserDetails");
 
     const { InsuranceCompanyID, StateMasterID, LocationTypeID, EscalationFlag, AppAccessID } = userDetail;
-
-
-
-    // let locationFilter: any = {};
-    // if (LocationTypeID === 1 && StateMasterID?.length) {
-    //   locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
-    // } else if (LocationTypeID === 2) {
-    //   // fetch district info only if needed
-    //   const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
-    //   const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
-
-    //   const districtId: number[] = [];
-    //   if (collectedDistrictInfo?.masterdatabinding && Array.isArray(collectedDistrictInfo.masterdatabinding)) {
-    //     for (const itemData of collectedDistrictInfo.masterdatabinding) {
-    //       districtId.push(itemData.DistrictCodeAlpha);
-    //     }
-    //     locationFilter = { DistrictMasterID: { $in: districtId } };
-    //   } else {
-    //     console.warn("Invalid district info format:", collectedDistrictInfo);
-    //     locationFilter = {};
-    //   }
-    // }
-
-    
     let locationFilter = {};
 
 if (LocationTypeID === 1) {
-  // STATE USER
   if (Array.isArray(StateMasterID) && StateMasterID.length > 0) {
     locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
   } else {
-    // State user but no states assigned → return empty filter
     locationFilter = { FilterStateID: { $in: [] } };
   }
 
 } else if (LocationTypeID === 2) {
-  // DISTRICT USER
   const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
   const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
 
@@ -7204,7 +7177,7 @@ if (LocationTypeID === 1) {
       match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
     }
 
-    if(StateMasterID && StateMasterID.lenth > 0){
+   /*  if(StateMasterID && StateMasterID.lenth > 0){
   if (stateID && stateID !== "" && LocationTypeID !== 2) {
       const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
       const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
@@ -7215,7 +7188,37 @@ if (LocationTypeID === 1) {
     } else if (StateMasterID?.length && LocationTypeID !== 2) {
       match.FilterStateID = { $in: StateMasterID.map(Number) };
     }
+    } */
+
+   // State Logic
+if (LocationTypeID !== 2) {
+
+  const hasPayloadState = stateID && String(stateID).trim() !== "";
+
+  if (hasPayloadState) {
+    // User provided states → validate against allowed list
+    const requestedStateIDs = String(stateID)
+      .split(",")
+      .map(id => Number(id.trim()));
+
+    const allowedStateIDs = StateMasterID?.map(Number) || [];
+
+    const validStateIDs = requestedStateIDs.filter(id =>
+      allowedStateIDs.includes(id)
+    );
+
+    if (validStateIDs.length === 0) {
+      return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
     }
+
+    match.FilterStateID = { $in: validStateIDs };
+
+  } else if (StateMasterID?.length > 0) {
+    // No user input → fall back to user detail permissions
+    match.FilterStateID = { $in: StateMasterID.map(Number) };
+  }
+}
+
 
   
 
