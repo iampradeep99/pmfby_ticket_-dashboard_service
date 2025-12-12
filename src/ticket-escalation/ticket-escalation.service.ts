@@ -321,6 +321,7 @@ export class TicketEscalationService {
         headers: { token },
       });
     } catch (axiosErr: any) {
+      console.log(axiosErr)
       const status = axiosErr?.response?.status;
       const apiMsg = axiosErr?.response?.data?.message || axiosErr?.message;
 
