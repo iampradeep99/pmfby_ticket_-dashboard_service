@@ -257,11 +257,8 @@ export class TicketEscalationService {
 } */
 
 
-  async getRolesForGovt(payload: any) {
+async getRolesForGovt(payload: any) {
   try {
-    // -------------------------
-    // 1. TOKEN GENERATION
-    // -------------------------
     let token: string;
     try {
       token = await this.getToken();
@@ -277,17 +274,16 @@ export class TicketEscalationService {
       };
     }
 
-    // -------------------------
-    // 2. PREPARE PAYLOAD
-    // -------------------------
     const EnumRole: Record<string, number> = {
       STATE_GOVT_ADMIN: 1,
       STATE_GOVT_USER: 2,
+      DEPUTY_DIRECTOR: 3
     };
 
     const roleMap: Record<number, string> = {
       1: "STATE_GOVT_ADMIN",
       2: "STATE_GOVT_USER",
+      3: "DEPUTY_DIRECTOR"
     };
 
     const axiosPayload = {
@@ -295,7 +291,6 @@ export class TicketEscalationService {
       stateID: payload?.stateID,
     };
 
-    // If the mapping fails
     if (!axiosPayload.roleName) {
       return {
         data: null,
@@ -310,9 +305,6 @@ export class TicketEscalationService {
 
     console.log("Calling External API With Payload:", axiosPayload);
 
-    // -------------------------
-    // 3. EXTERNAL API CALL
-    // -------------------------
     let apiResponse: any;
     try {
       apiResponse = await axios.get(this.RoleURL, {
@@ -321,7 +313,6 @@ export class TicketEscalationService {
         headers: { token },
       });
     } catch (axiosErr: any) {
-      console.log(axiosErr)
       const status = axiosErr?.response?.status;
       const apiMsg = axiosErr?.response?.data?.message || axiosErr?.message;
 
@@ -351,9 +342,6 @@ export class TicketEscalationService {
       };
     }
 
-    // -------------------------
-    // 4. PROCESSING + MAPPING
-    // -------------------------
     let updatedData: any[] = [];
     try {
       updatedData = data.data
@@ -382,9 +370,6 @@ export class TicketEscalationService {
       message: { msg: "Success", code: 1 },
     };
   } catch (unexpectedErr: any) {
-    // -------------------------
-    // 5. UNEXPECTED FAILURE
-    // -------------------------
     return {
       data: null,
       message: {
@@ -396,6 +381,7 @@ export class TicketEscalationService {
     };
   }
 }
+
 
 
 
