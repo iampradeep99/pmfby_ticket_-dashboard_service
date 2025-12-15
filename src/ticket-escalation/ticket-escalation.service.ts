@@ -937,7 +937,7 @@ export class TicketEscalationService {
 
 
   async AssignTicketService(payload: any) {
-    const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo } = payload || {};
+    const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo, districtID } = payload || {};
     if (!ticketIds) {
       return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
     }
@@ -961,6 +961,9 @@ export class TicketEscalationService {
     }
     if (roleId == 2) {
       assignedRoleName = "STATE_GOVT_USER"
+    }
+    if (roleId == 3) {
+      assignedRoleName = "DEPUTY_DIRECTOR"
     }
 
 
@@ -1000,7 +1003,9 @@ export class TicketEscalationService {
           AssigneeStateID: stateID,
           AssigneeMobileNo: mobileNo,
           AssigneRoleName: assignedRoleName,
-          AssigneeRoleID: roleId
+          AssigneeRoleID: roleId,
+          DistrictID:districtID
+          
         };
 
         const insertRes = await assignHistoryCollection.insertOne(assignmentData);
