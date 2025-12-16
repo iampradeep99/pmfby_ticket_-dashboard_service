@@ -388,7 +388,7 @@ export class TicketEscalationService {
 
       let apiResponse: any;
       try {
-        apiResponse = await axios.post(this.RoleURL, {
+        apiResponse = await axios.get(this.RoleURL, {
           params: axiosPayload,
           timeout: 10000,
           headers: { token },
