@@ -398,7 +398,7 @@ export class TicketEscalationService {
         return {
           data: null,
           message: {
-            msg: "External API call failed",
+            msg: axiosErr?.message,
             code: 0,
             errorType: "EXTERNAL_API_ERROR",
             detail: axiosErr?.message,
