@@ -40,7 +40,7 @@ export class TicketEscalationService {
   private tokenCache = new NodeCache({ stdTTL: 30 * 60 });
 
   private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
-  private readonly RoleURL = "http://10.128.60.9:3011/v1/user/user/roleWiseUserList"
+  private readonly RoleURL = "http://10.128.60.9:3011/krishirakshak/v1/user/user/roleWiseUserList"
   public gcp = new GCPServices();
   logDir = path.join(__dirname, '..', 'logs');
 
