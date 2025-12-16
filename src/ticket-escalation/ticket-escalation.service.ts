@@ -1353,7 +1353,7 @@ export class TicketEscalationService {
             assignedTo,
 
             AssignedDate: now,
-            AssigneeStateID: stateID,
+            AssigneeStateID: stateID || "",
             AssigneeMobileNo: mobileNo,
             AssigneRoleName: assignedRoleName,
             AssigneeRoleID: roleId,
@@ -1362,7 +1362,7 @@ export class TicketEscalationService {
             UpdatedDate: now
           }
         },
-        { upsert: true } // ⭐ insert first time, update later
+        { upsert: true } 
       );
 
       results.push({
@@ -1509,7 +1509,7 @@ export class TicketEscalationService {
 
       TicketHeaderID = TicketHeaderID ? Number(TicketHeaderID) : null;
 
-      const collection = db.collection("Ticket_Assignment_History");
+      const collection = db.collection("Ticket_Assignment");
       if (!collection) {
         return { data: [], message: { msg: "Collection not found", code: "0" } };
       }
