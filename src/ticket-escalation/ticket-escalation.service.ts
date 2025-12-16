@@ -869,6 +869,7 @@ export class TicketEscalationService {
                   TicketHeadName: 1,
                   StateMasterName: 1,
                   TicketDescription: 1,
+                  TicketStatusID:1,
                   Created: {
                     $dateToString: {
                       date: { $toDate: "$Created" },
