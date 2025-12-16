@@ -394,6 +394,7 @@ export class TicketEscalationService {
           headers: { token },
         });
       } catch (axiosErr: any) {
+        console.log(axiosErr)
         return {
           data: null,
           message: {
@@ -936,14 +937,149 @@ export class TicketEscalationService {
 
 
 
+  /*  async AssignTicketService(payload: any) {
+     const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo, districtID } = payload || {};
+     if (!ticketIds) {
+       return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
+     }
+     let roleId = roleName
+ 
+     const ticketIdArray = ticketIds.split(",").map(id => id.trim()).filter(Boolean);
+     if (!ticketIdArray.length) {
+       return { data: {}, message: { msg: "No valid ticket IDs provided.", code: 0 } };
+     }
+ 
+     const ticketCollection = this.db.collection("SLA_Ticket_listing");
+     const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
+     const now = new Date();
+     const results: any[] = [];
+ 
+ 
+ 
+     let assignedRoleName: string;
+     if (roleId == 1) {
+       assignedRoleName = "STATE_GOVT_ADMIN"
+     }
+     if (roleId == 2) {
+       assignedRoleName = "STATE_GOVT_USER"
+     }
+     if (roleId == 3) {
+       assignedRoleName = "DEPUTY_DIRECTOR"
+     }
+ 
+ 
+     for (const ticketIdStr of ticketIdArray) {
+       const ticketId = Number(ticketIdStr);
+       if (isNaN(ticketId)) {
+         results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
+         continue;
+       }
+ 
+       try {
+         const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
+         if (!ticket) {
+           results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+           continue;
+         }
+ 
+         const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketId });
+         if (alreadyAssigned) {
+           results.push({
+             ticketId,
+             ticketNo: ticket.SupportTicketNo,
+             status: "Failed",
+             reason: "Ticket already assigned"
+           });
+           continue;
+         }
+ 
+         const assignmentData = {
+           SupportTicketID: ticketId,
+           SupportTicketNo: ticket.SupportTicketNo,
+           TicketStatusID: ticket.TicketStatusID || null,
+           TicketStatus: ticket.TicketStatus || null,
+           assignedBy,
+           assignedTo,
+           AssignedDate: now,
+           AssigneeStateID: stateID,
+           AssigneeMobileNo: mobileNo,
+           AssigneRoleName: assignedRoleName,
+           AssigneeRoleID: roleId,
+           DistrictID:districtID
+           
+         };
+ 
+         const insertRes = await assignHistoryCollection.insertOne(assignmentData);
+         if (!insertRes.insertedId) {
+           results.push({
+             ticketId,
+             ticketNo: ticket.SupportTicketNo,
+             status: "Failed",
+             reason: "Failed to save assignment history"
+           });
+           continue;
+         }
+ 
+         results.push({
+           ticketId,
+           ticketNo: ticket.SupportTicketNo,
+           status: "Success",
+           reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
+         });
+ 
+       } catch (err: any) {
+         results.push({ ticketId, status: "Error", reason: err.message || "Unexpected error" });
+       }
+     }
+     console.log(results)
+     const successCount = results.filter(r => r.status === "Success").length;
+     const failedCount = results.length - successCount;
+ 
+     const summary = {
+       totalTickets: results.length,
+       successCount,
+       failedCount,
+       message:
+         successCount === results.length
+           ? "All tickets assigned successfully."
+           : successCount === 0
+             ? "All tickets failed."
+             : `${successCount} assigned, ${failedCount} failed.`
+     };
+ 
+ 
+ 
+ 
+     if (successCount === 0) {
+       return { data: summary, message: { msg: "All Failed", code: "0" } };
+     } else {
+       return { data: summary, message: { msg: "Success", code: "1" } };
+     }
+   } */
+
+
  /*  async AssignTicketService(payload: any) {
-    const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo, districtID } = payload || {};
+    const {
+      ticketIds,
+      assignedBy,
+      assignedTo,
+      roleName,
+      stateID,
+      mobileNo,
+      districtID
+    } = payload || {};
+
     if (!ticketIds) {
       return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
     }
-    let roleId = roleName
 
-    const ticketIdArray = ticketIds.split(",").map(id => id.trim()).filter(Boolean);
+    const roleId = roleName;
+
+    const ticketIdArray = ticketIds
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean);
+
     if (!ticketIdArray.length) {
       return { data: {}, message: { msg: "No valid ticket IDs provided.", code: 0 } };
     }
@@ -953,62 +1089,87 @@ export class TicketEscalationService {
     const now = new Date();
     const results: any[] = [];
 
-
-
-    let assignedRoleName: string;
-    if (roleId == 1) {
-      assignedRoleName = "STATE_GOVT_ADMIN"
-    }
-    if (roleId == 2) {
-      assignedRoleName = "STATE_GOVT_USER"
-    }
-    if (roleId == 3) {
-      assignedRoleName = "DEPUTY_DIRECTOR"
-    }
-
+    let assignedRoleName = "";
+    if (roleId == 1) assignedRoleName = "STATE_GOVT_ADMIN";
+    if (roleId == 2) assignedRoleName = "STATE_GOVT_USER";
+    if (roleId == 3) assignedRoleName = "DEPUTY_DIRECTOR";
 
     for (const ticketIdStr of ticketIdArray) {
       const ticketId = Number(ticketIdStr);
+
       if (isNaN(ticketId)) {
-        results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
+        results.push({
+          ticketId: ticketIdStr,
+          status: "Failed",
+          reason: "Invalid ticket ID"
+        });
         continue;
       }
 
       try {
-        const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
+        const ticket = await ticketCollection.findOne({
+          SupportTicketID: ticketId
+        });
+
         if (!ticket) {
-          results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+          results.push({
+            ticketId,
+            status: "Failed",
+            reason: "Ticket not found"
+          });
           continue;
         }
 
-        const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketId });
-        if (alreadyAssigned) {
+        const alreadyAssignedToUser = await assignHistoryCollection.findOne({
+          SupportTicketID: ticketId,
+          assignedTo: assignedTo,
+          IsActive: true
+        });
+
+        if (alreadyAssignedToUser) {
           results.push({
             ticketId,
             ticketNo: ticket.SupportTicketNo,
             status: "Failed",
-            reason: "Ticket already assigned"
+            reason: "Ticket already assigned to this user"
           });
           continue;
         }
+
+        await assignHistoryCollection.updateMany(
+          {
+            SupportTicketID: ticketId,
+            IsActive: true
+          },
+          {
+            $set: {
+              IsActive: false,
+              UpdatedDate: now
+            }
+          }
+        );
 
         const assignmentData = {
           SupportTicketID: ticketId,
           SupportTicketNo: ticket.SupportTicketNo,
           TicketStatusID: ticket.TicketStatusID || null,
           TicketStatus: ticket.TicketStatus || null,
+
           assignedBy,
           assignedTo,
+
           AssignedDate: now,
           AssigneeStateID: stateID,
           AssigneeMobileNo: mobileNo,
           AssigneRoleName: assignedRoleName,
           AssigneeRoleID: roleId,
-          DistrictID:districtID
-          
+          DistrictID: districtID,
+
+          IsActive: true
         };
 
         const insertRes = await assignHistoryCollection.insertOne(assignmentData);
+
         if (!insertRes.insertedId) {
           results.push({
             ticketId,
@@ -1027,10 +1188,14 @@ export class TicketEscalationService {
         });
 
       } catch (err: any) {
-        results.push({ ticketId, status: "Error", reason: err.message || "Unexpected error" });
+        results.push({
+          ticketId,
+          status: "Error",
+          reason: err.message || "Unexpected error"
+        });
       }
     }
-    console.log(results)
+
     const successCount = results.filter(r => r.status === "Success").length;
     const failedCount = results.length - successCount;
 
@@ -1046,19 +1211,17 @@ export class TicketEscalationService {
             : `${successCount} assigned, ${failedCount} failed.`
     };
 
-
-
-
     if (successCount === 0) {
       return { data: summary, message: { msg: "All Failed", code: "0" } };
-    } else {
-      return { data: summary, message: { msg: "Success", code: "1" } };
     }
+
+    return { data: summary, message: { msg: "Success", code: "1" } };
   } */
 
 
+
     async AssignTicketService(payload: any) {
-  const {
+    const {
     ticketIds,
     assignedBy,
     assignedTo,
@@ -1085,6 +1248,8 @@ export class TicketEscalationService {
 
   const ticketCollection = this.db.collection("SLA_Ticket_listing");
   const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
+  const currentAssignCollection = this.db.collection("Ticket_Assignment"); // ⭐ NEW
+
   const now = new Date();
   const results: any[] = [];
 
@@ -1119,10 +1284,9 @@ export class TicketEscalationService {
         continue;
       }
 
-      // 🔐 Check if SAME user already has ACTIVE assignment
       const alreadyAssignedToUser = await assignHistoryCollection.findOne({
         SupportTicketID: ticketId,
-        assignedTo: assignedTo,
+        assignedTo,
         IsActive: true
       });
 
@@ -1136,22 +1300,14 @@ export class TicketEscalationService {
         continue;
       }
 
-      // 🔄 Deactivate previous active assignments (if any)
+      // 🔹 Deactivate previous active assignments (History)
       await assignHistoryCollection.updateMany(
-        {
-          SupportTicketID: ticketId,
-          IsActive: true
-        },
-        {
-          $set: {
-            IsActive: false,
-            UpdatedDate: now
-          }
-        }
+        { SupportTicketID: ticketId, IsActive: true },
+        { $set: { IsActive: false, UpdatedDate: now } }
       );
 
-      // 🆕 New assignment entry
-      const assignmentData = {
+      // 🔹 History Insert (UNCHANGED)
+      const assignmentHistoryData = {
         SupportTicketID: ticketId,
         SupportTicketNo: ticket.SupportTicketNo,
         TicketStatusID: ticket.TicketStatusID || null,
@@ -1170,7 +1326,9 @@ export class TicketEscalationService {
         IsActive: true
       };
 
-      const insertRes = await assignHistoryCollection.insertOne(assignmentData);
+      const insertRes = await assignHistoryCollection.insertOne(
+        assignmentHistoryData
+      );
 
       if (!insertRes.insertedId) {
         results.push({
@@ -1181,6 +1339,31 @@ export class TicketEscalationService {
         });
         continue;
       }
+
+      // 🔹 CURRENT ASSIGNMENT (UPSERT)
+      await currentAssignCollection.updateOne(
+        { SupportTicketID: ticketId },
+        {
+          $set: {
+            SupportTicketNo: ticket.SupportTicketNo,
+            TicketStatusID: ticket.TicketStatusID || null,
+            TicketStatus: ticket.TicketStatus || null,
+
+            assignedBy,
+            assignedTo,
+
+            AssignedDate: now,
+            AssigneeStateID: stateID,
+            AssigneeMobileNo: mobileNo,
+            AssigneRoleName: assignedRoleName,
+            AssigneeRoleID: roleId,
+            DistrictID: districtID,
+
+            UpdatedDate: now
+          }
+        },
+        { upsert: true } // ⭐ insert first time, update later
+      );
 
       results.push({
         ticketId,
@@ -1306,7 +1489,7 @@ export class TicketEscalationService {
 
 
 
-   async RoleWiseAssignedTickets(payload: any) {
+  async RoleWiseAssignedTickets(payload: any) {
     try {
       if (!payload || !payload.loggedInUserId || payload?.loggedInUserId == "") {
         return { data: [], message: { msg: "loggedInUserId is required", code: "0" } };
@@ -1335,7 +1518,7 @@ export class TicketEscalationService {
       const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
 
       const pipeline: any[] = [
-        { $match: { assignedTo: loggedInUserId} },
+        { $match: { assignedTo: loggedInUserId } },
         {
           $lookup: {
             from: "SLA_Ticket_listing",
@@ -1572,7 +1755,7 @@ export class TicketEscalationService {
     } catch (error) {
       return { data: null, message: { msg: error?.message || "Failed", code: "0" } };
     }
-  } 
+  }
 
 
 
