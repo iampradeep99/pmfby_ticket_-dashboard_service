@@ -209,55 +209,8 @@ export class TicketEscalationService {
 
 
 
+
 /* async getRolesForGovt(payload: any) {
-  try {
-    const token = await this.getToken();
-
-    const EnumRole: Record<string, number> = {
-      STATE_GOVT_ADMIN: 1,
-      STATE_GOVT_USER: 2,
-    };
-
-    const roleMap: Record<number, string> = {
-      1: "STATE_GOVT_ADMIN",
-      2: "STATE_GOVT_USER",
-    };
-
-    const axiosPayload = {
-      roleName: roleMap[payload?.roleName],
-      stateID: payload?.stateID,
-    };
-
-    console.log(axiosPayload)
-
-    const { data } = await axios.get(this.RoleURL, {
-      params: axiosPayload,
-      timeout: 10000,
-      headers: { token },
-    });
-
-    if (!data?.data) {
-      return { data: null, message: { msg: "No data received from API", code: 0 } };
-    }
-
-    const updatedData = data.data
-      .map((item: any) => ({
-        ...item,
-        roleName: EnumRole[item.roleName] || item.roleName,
-      }))
-      .filter((item: any, index: number, self: any[]) =>
-        index === self.findIndex((t) => t.userID === item.userID)
-      );
-
-    return { data: updatedData, message: { msg: "Success", code: 1 } };
-  } catch (err: any) {
-    const errorMsg = err?.response?.data?.message || err?.message || "Something went wrong";
-    return { data: null, message: { msg: errorMsg, code: 0 } };
-  }
-} */
-
-
-async getRolesForGovt(payload: any) {
   try {
     let token: string;
     try {
@@ -380,8 +333,176 @@ async getRolesForGovt(payload: any) {
       },
     };
   }
-}
+} */
 
+
+
+  async getRolesForGovt(payload: any) {
+    try {
+      let token: string;
+      try {
+        token = await this.getToken();
+      } catch (tokenErr: any) {
+        return {
+          data: null,
+          message: {
+            msg: "Failed to generate token",
+            code: 0,
+            errorType: "TOKEN_ERROR",
+            detail: tokenErr?.message
+          },
+        };
+      }
+
+      const EnumRole: Record<string, number> = {
+        STATE_GOVT_ADMIN: 1,
+        STATE_GOVT_USER: 2,
+        DEPUTY_DIRECTOR: 3
+      };
+
+      const roleMap: Record<number, string> = {
+        1: "STATE_GOVT_ADMIN",
+        2: "STATE_GOVT_USER",
+        3: "DEPUTY_DIRECTOR"
+      };
+
+      const axiosPayload = {
+        roleName: roleMap[payload?.roleName],
+        stateID: payload?.stateID,
+      };
+
+      if (!axiosPayload.roleName) {
+        return {
+          data: null,
+          message: {
+            msg: "Invalid roleName provided in payload",
+            code: 0,
+            errorType: "INPUT_VALIDATION_ERROR",
+            detail: { received: payload?.roleName }
+          },
+        };
+      }
+
+      let apiResponse: any;
+      try {
+        apiResponse = await axios.get(this.RoleURL, {
+          params: axiosPayload,
+          timeout: 10000,
+          headers: { token },
+        });
+      } catch (axiosErr: any) {
+        return {
+          data: null,
+          message: {
+            msg: "External API call failed",
+            code: 0,
+            errorType: "EXTERNAL_API_ERROR",
+            detail: axiosErr?.message,
+          },
+        };
+      }
+
+      const data = apiResponse?.data;
+
+      if (!data?.data) {
+        return {
+          data: null,
+          message: {
+            msg: "No data received from external API",
+            code: 0,
+            errorType: "API_NO_DATA",
+          },
+        };
+      }
+
+      let updatedData: any[] = [];
+      try {
+        // 🔹 Existing logic (UNCHANGED)
+        updatedData = data.data
+          .map((item: any) => ({
+            ...item,
+            roleName: EnumRole[item.roleName] || item.roleName,
+          }))
+          .filter(
+            (item: any, index: number, self: any[]) =>
+              index === self.findIndex((t) => t.userID === item.userID)
+          );
+
+        // 🔹 NEW ADDITION (StateWiseDistrict)
+        if (payload?.viewMode === "StateWiseDistrict") {
+          const districtMap = new Map<string, any>();
+
+          updatedData.forEach((item: any) => {
+            if (!districtMap.has(item.districtID)) {
+              districtMap.set(item.districtID, {
+                districtID: item.districtID,
+                districtName: item.districtName,
+                stateID: item.stateID,
+                stateName: item.stateName,
+              });
+            }
+          });
+
+          return {
+            data: Array.from(districtMap.values()),
+            message: { msg: "Success", code: 1 },
+          };
+        }
+
+        // 🔹 NEW: DistrictWiseUser (filter users by district)
+        if (payload?.viewMode === "DistrictWiseUser") {
+          if (!payload?.districtID) {
+            return {
+              data: null,
+              message: {
+                msg: "districtID is required for DistrictWiseUser view",
+                code: 0,
+                errorType: "INPUT_VALIDATION_ERROR",
+              },
+            };
+          }
+
+          const districtUsers = updatedData.filter(
+            (item: any) => item.districtID === payload.districtID
+          );
+
+          return {
+            data: districtUsers,
+            message: { msg: "Success", code: 1 },
+          };
+        }
+
+
+      } catch (processingErr: any) {
+        return {
+          data: null,
+          message: {
+            msg: "Error occurred while processing API data",
+            code: 0,
+            errorType: "DATA_PROCESSING_ERROR",
+            detail: processingErr.message,
+          },
+        };
+      }
+
+      // 🔹 Default response (UNCHANGED)
+      return {
+        data: updatedData,
+        message: { msg: "Success", code: 1 },
+      };
+
+    } catch (unexpectedErr: any) {
+      return {
+        data: null,
+        message: {
+          msg: "Unexpected internal server error",
+          code: 0,
+          errorType: "UNHANDLED_ERROR",
+          detail: unexpectedErr?.message,
+        },
+      };
+    }
+  }
 
 
 
