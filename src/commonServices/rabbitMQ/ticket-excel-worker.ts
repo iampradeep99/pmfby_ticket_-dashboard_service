@@ -24,6 +24,7 @@ const API_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk"
 const API_URL = "https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail"
 const TICKET_COLLECTION = "SLA_KRPH_SupportTickets_Records"
+// const TICKET_COLLECTION = "SLA_Ticket_listing";
 const DOWNLOAD_LOG_COLLECTION = "support_ticket_download_logs"
 
 const TICKET_TYPE_MAP: Record<number, string> = {
@@ -162,6 +163,78 @@ function buildDynamicColumns(maxIndices: number = MAX_JOURNEY_INDICES): any[] {
 }
 
 function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: number = CHUNK_SIZE): any[] {
+  console.log(JSON.stringify([
+    { $match: baseMatch },
+    { $sort: { InsertDateTime: -1 } },
+    {
+      $group: {
+        _id: "$SupportTicketNo",
+        doc: { $first: "$$ROOT" },
+      },
+    },
+    { $replaceRoot: { newRoot: "$doc" } },
+    {
+      $lookup: {
+        from: "SLA_KRPH_SupportTicketsHistory_Records",
+        let: { ticketId: "$SupportTicketID" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [{ $eq: ["$SupportTicketID", "$$ticketId"] }, { $eq: ["$TicketStatusID", 109304] }],
+              },
+            },
+          },
+          { $sort: { TicketHistoryID: -1 } },
+          { $limit: 1 },
+        ],
+        as: "ticketHistory",
+      },
+    },
+    { $unwind: { path: "$ticketHistory", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "support_ticket_claim_intimation_report_history",
+        let: { ticketNo: "$SupportTicketNo" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$SupportTicketNo", "$$ticketNo"] } } },
+          { $sort: { InsertDateTime: -1 } },
+          { $limit: 1 },
+        ],
+        as: "claimInfo",
+      },
+    },
+    { $unwind: { path: "$claimInfo", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "csc_agent_master",
+        let: { userLoginId: "$InsertUserID" },
+        pipeline: [{ $match: { $expr: { $eq: ["$UserLoginID", "$$userLoginId"] } } }, { $limit: 1 }],
+        as: "agentInfo",
+      },
+    },
+    { $unwind: { path: "$agentInfo", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "ticket_comment_journey",
+        localField: "SupportTicketNo",
+        foreignField: "SupportTicketNo",
+        as: "ticket_comment_journey",
+        pipeline: [
+          { $sort: { CreatedDate: -1 } },
+          {
+            $group: {
+              _id: "$ResolvedComment",
+              unique_comments: { $first: "$$ROOT" },
+            },
+          },
+          { $replaceRoot: { newRoot: "$unique_comments" } },
+        ],
+      },
+    },
+    { $skip: skip },
+    { $limit: fetchLimit },
+  ]))
   return [
     { $match: baseMatch },
     { $sort: { InsertDateTime: -1 } },
@@ -596,7 +669,9 @@ async function processTicketHistory(ticketPayload: any) {
   const currentDateStr = new Date().toLocaleDateString("en-GB").split("/").join("_")
   const fromDateStr = new Date(SPFROMDATE).toLocaleDateString("en-GB").split("/").join("_")
   const toDateStr = new Date(SPTODATE).toLocaleDateString("en-GB").split("/").join("_")
-  const excelFileName = `${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}.xlsx`
+  // const excelFileName = `${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}.xlsx`
+const excelFileName =
+  `${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}_${Date.now()}.xlsx`;
 
   const allColumns = [...STATIC_COLUMNS, ...buildDynamicColumns()]
   const { workbook, filePath: excelFilePath, worksheet } = await createExcelFile(folderPath, excelFileName, allColumns)
