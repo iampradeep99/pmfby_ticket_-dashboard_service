@@ -9138,7 +9138,7 @@ async csvImportService(payload: any) {
 }
 
 
-async syncAudioCall(){
+/* async syncAudioCall(){
 
   try{
 
@@ -9238,6 +9238,117 @@ async syncAudioCall(){
     return { status: false, error: err.message };
   }
 
+} */
+
+
+  async syncAudioCall() {
+  try {
+    const sourceCollection = this.db.collection("KRPH_Calling_CDR_files_paths");
+    const ticketCollection = this.db.collection("SLA_Ticket_listing");
+
+    const batchSize = 100000;
+    let lastId = null;
+    let batchNo = 0;
+    let totalProcessed = 0;
+    let totalMatched = 0;
+    let totalUpdated = 0;
+
+    console.log("🚀 Audio file update job started");
+
+    while (true) {
+      batchNo++;
+      console.log(`\n📦 Fetching batch #${batchNo}...`);
+
+      const query = lastId ? { _id: { $gt: lastId } } : {};
+
+      const records = await sourceCollection
+        .find(query)
+        .sort({ _id: 1 })
+        .limit(batchSize)
+        .toArray();
+
+      if (!records.length) {
+        console.log("🛑 No more records to process");
+        break;
+      }
+
+      lastId = records[records.length - 1]._id;
+
+      console.log(`📄 Batch #${batchNo} fetched: ${records.length} records`);
+
+      let batchMatched = 0;
+      let batchModified = 0;
+      let index = 0;
+
+      for (const record of records) {
+        index++;
+        totalProcessed++;
+
+        // Skip invalid records
+        if (!record?.uniqueId || !record?.path) {
+          if (index % 5000 === 0) {
+            console.log(`⏭ Skipped ${index} records in batch #${batchNo}`);
+          }
+          continue;
+        }
+
+        const result = await ticketCollection.updateMany(
+          {
+            CallingUniqueID: record.uniqueId,
+            $or: [
+              { CallingAudioFile: null },
+              { CallingAudioFile: "" },
+              { CallingAudioFile: { $exists: false } }
+            ]
+          },
+          {
+            $set: {
+              CallingAudioFile: record.path
+            }
+          }
+        );
+
+        if (result.matchedCount > 0) {
+          batchMatched += result.matchedCount;
+          totalMatched += result.matchedCount;
+        }
+
+        if (result.modifiedCount > 0) {
+          batchModified += result.modifiedCount;
+          totalUpdated += result.modifiedCount;
+        }
+
+        if (index % 1000 === 0) {
+          console.log(
+            `🔄 Batch #${batchNo} progress: ${index}/${records.length} | Updated: ${batchModified}`
+          );
+        }
+      }
+
+      console.log("📊 Batch Completed:", {
+        batchNo,
+        processed: records.length,
+        matched: batchMatched,
+        updated: batchModified,
+        lastProcessedId: lastId.toString()
+      });
+    }
+
+    console.log("\n✅ Job Summary:");
+    console.log({
+      totalProcessed,
+      totalMatched,
+      totalUpdated
+    });
+
+    console.log("✔ Audio file update job completed successfully");
+
+    return { status: true };
+
+  } catch (err) {
+    console.error("❌ Job failed:", err);
+    return { status: false, error: err.message };
+  }
 }
 
 
