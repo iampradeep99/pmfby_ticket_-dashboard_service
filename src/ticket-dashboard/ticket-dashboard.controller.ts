@@ -561,6 +561,42 @@ async testBrokerValue(
 }
 
 
+@Post('SyncAudioInfo')
+async SyncAudioInfo(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res() res: Response,
+) {
+  try {
+    // ✅ 1. Send response immediately
+    res.status(202).json({
+      success: true,
+      message: 'Audio sync started. Processing in background.',
+    });
+
+    // ✅ 2. Background processing (non-blocking)
+    setImmediate(async () => {
+      try {
+        console.log('🚀 Background SyncAudioInfo started');
+
+    
+          await this.dashboardService.syncAudioCall();
+
+      
+      } catch (bgErr) {
+        console.error('❌ Background SyncAudioInfo failed:', bgErr);
+      }
+    });
+
+  } catch (err) {
+    console.error('Immediate error in SyncAudioInfo:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to start audio sync',
+    });
+  }
+}
+
 }
 
  
