@@ -561,6 +561,25 @@ async testBrokerValue(
 }
 
 
+@Post('SyncAudioCSC')
+async KrphUpdateAudioURLByCSCCloud(
+  @Body() payload: any,
+  @Req() req: Request,
+  @Res({ passthrough: false }) res: Response
+) {
+  try {
+    res.status(200).json({ message: 'Request received successfully' });
+
+     await this.dashboardService.KrphUpdateAudioURLByCSCCloudService(payload);
+
+    return;
+  } catch (err) {
+    return jsonErrorHandler(err, req, res, () => {});
+  }
+}
+
+
+
 }
 
  
