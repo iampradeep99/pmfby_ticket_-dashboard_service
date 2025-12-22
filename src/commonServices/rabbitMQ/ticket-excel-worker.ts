@@ -505,6 +505,9 @@ async function validateUserPermissions(
 ): Promise<{ valid: boolean; baseMatch?: any; error?: string }> {
   const { InsuranceCompanyID, StateMasterID, LocationTypeID, DistrictIDs } = userDetail
 
+  console.log(JSON.stringify(userDetail));
+  
+
   let locationFilter: any = {}
   if (LocationTypeID === 1 && StateMasterID?.length) {
     locationFilter = { FilterStateID: { $in: StateMasterID } }
@@ -527,7 +530,10 @@ async function validateUserPermissions(
   }
 
   if (spStateId && spStateId !== "#ALL") {
-    const requestedStateIDs = spStateId.split(",").map((id) => id.trim())
+    // const requestedStateIDs = spStateId.split(",").map((id) => id.trim())
+    const requestedStateIDs = spStateId
+    .split(",")
+    .map((id) => Number(id.trim()))
     const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id))
     if (!validStateIDs.length) {
       return { valid: false, error: "Unauthorized StateID(s)." }
