@@ -2223,7 +2223,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
       }else{
         ticketData = [];
          message["msg"] = "Success";
-        message["code"] = "1"
+        message["code"] = "0"
       }
       
       return { data: ticketData, message: message } 
