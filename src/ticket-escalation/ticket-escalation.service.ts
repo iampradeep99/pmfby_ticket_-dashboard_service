@@ -2456,15 +2456,15 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
     if (ticketCount === 0) {
       message["msg"] = "Success";
-      message["code"] = "1";
-      count = ticketCount.toString();
+      message["code"] = "0";
+      count = ticketCount
     } else {
       message["msg"] = "Success";
-      message["code"] = "0";
-      count = ticketCount.toString();
+      message["code"] = "1";
+      count = ticketCount
     }
 
-    return { data: count, message: message };
+    return { data: {count:count}, message: message };
     
   } catch (err) {
     console.log("Error while fetching bucket ticket count:", err);
