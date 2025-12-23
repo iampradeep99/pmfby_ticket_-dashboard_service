@@ -209,136 +209,6 @@ export class TicketEscalationService {
 
 
 
-  /*   async getRolesForGovt(payload: any) {
-    try {
-      let token: string;
-      try {
-        token = await this.getToken();
-      } catch (tokenErr: any) {
-        return {
-          data: null,
-          message: {
-            msg: "Failed to generate token",
-            code: 0,
-            errorType: "TOKEN_ERROR",
-            detail: tokenErr?.message
-          },
-        };
-      }
-  
-    
-  
-      const EnumRole: Record<string, number> = {
-        STATE_GOVT_ADMIN: 1,
-        STATE_GOVT_USER: 2,
-        DEPUTY_DIRECTOR: 3
-      };
-  
-      const roleMap: Record<number, string> = {
-        1: "STATE_GOVT_ADMIN",
-        2: "STATE_GOVT_USER",
-        3: "DEPUTY_DIRECTOR"
-      };
-  
-      const axiosPayload = {
-        roleName: roleMap[payload?.roleName],
-        stateID: payload?.stateID,
-      };
-  
-      if (!axiosPayload.roleName) {
-        return {
-          data: null,
-          message: {
-            msg: "Invalid roleName provided in payload",
-            code: 0,
-            errorType: "INPUT_VALIDATION_ERROR",
-            detail: { received: payload?.roleName }
-          },
-        };
-      }
-  
-      console.log("Calling External API With Payload:", axiosPayload);
-  
-      let apiResponse: any;
-      try {
-        apiResponse = await axios.get(this.RoleURL, {
-          params: axiosPayload,
-          timeout: 10000,
-          headers: { token },
-        });
-      } catch (axiosErr: any) {
-        const status = axiosErr?.response?.status;
-        const apiMsg = axiosErr?.response?.data?.message || axiosErr?.message;
-  
-        return {
-          data: null,
-          message: {
-            msg: "External API call failed",
-            code: 0,
-            errorType: "EXTERNAL_API_ERROR",
-            httpStatus: status,
-            detail: apiMsg,
-            url: this.RoleURL,
-          },
-        };
-      }
-  
-      const data = apiResponse?.data;
-  
-      if (!data?.data) {
-        return {
-          data: null,
-          message: {
-            msg: "No data received from external API",
-            code: 0,
-            errorType: "API_NO_DATA",
-          },
-        };
-      }
-  
-      let updatedData: any[] = [];
-      try {
-        updatedData = data.data
-          .map((item: any) => ({
-            ...item,
-            roleName: EnumRole[item.roleName] || item.roleName,
-          }))
-          .filter(
-            (item: any, index: number, self: any[]) =>
-              index === self.findIndex((t) => t.userID === item.userID)
-          );
-  
-  
-  
-      } catch (processingErr: any) {
-        return {
-          data: null,
-          message: {
-            msg: "Error occurred while processing API data",
-            code: 0,
-            errorType: "DATA_PROCESSING_ERROR",
-            detail: processingErr.message,
-          },
-        };
-      }
-  
-      return {
-        data: updatedData,
-        message: { msg: "Success", code: 1 },
-      };
-    } catch (unexpectedErr: any) {
-      return {
-        data: null,
-        message: {
-          msg: "Unexpected internal server error",
-          code: 0,
-          errorType: "UNHANDLED_ERROR",
-          detail: unexpectedErr?.message,
-        },
-      };
-    }
-  } */
-
 
   async getRolesForGovt(payload: any) {
     try {
@@ -938,294 +808,13 @@ export class TicketEscalationService {
 
 
 
-  /*  async AssignTicketService(payload: any) {
-     const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo, districtID } = payload || {};
-     if (!ticketIds) {
-       return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
-     }
-     let roleId = roleName
- 
-     const ticketIdArray = ticketIds.split(",").map(id => id.trim()).filter(Boolean);
-     if (!ticketIdArray.length) {
-       return { data: {}, message: { msg: "No valid ticket IDs provided.", code: 0 } };
-     }
- 
-     const ticketCollection = this.db.collection("SLA_Ticket_listing");
-     const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
-     const now = new Date();
-     const results: any[] = [];
- 
- 
- 
-     let assignedRoleName: string;
-     if (roleId == 1) {
-       assignedRoleName = "STATE_GOVT_ADMIN"
-     }
-     if (roleId == 2) {
-       assignedRoleName = "STATE_GOVT_USER"
-     }
-     if (roleId == 3) {
-       assignedRoleName = "DEPUTY_DIRECTOR"
-     }
- 
- 
-     for (const ticketIdStr of ticketIdArray) {
-       const ticketId = Number(ticketIdStr);
-       if (isNaN(ticketId)) {
-         results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
-         continue;
-       }
- 
-       try {
-         const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
-         if (!ticket) {
-           results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
-           continue;
-         }
- 
-         const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketId });
-         if (alreadyAssigned) {
-           results.push({
-             ticketId,
-             ticketNo: ticket.SupportTicketNo,
-             status: "Failed",
-             reason: "Ticket already assigned"
-           });
-           continue;
-         }
- 
-         const assignmentData = {
-           SupportTicketID: ticketId,
-           SupportTicketNo: ticket.SupportTicketNo,
-           TicketStatusID: ticket.TicketStatusID || null,
-           TicketStatus: ticket.TicketStatus || null,
-           assignedBy,
-           assignedTo,
-           AssignedDate: now,
-           AssigneeStateID: stateID,
-           AssigneeMobileNo: mobileNo,
-           AssigneRoleName: assignedRoleName,
-           AssigneeRoleID: roleId,
-           DistrictID:districtID
-           
-         };
- 
-         const insertRes = await assignHistoryCollection.insertOne(assignmentData);
-         if (!insertRes.insertedId) {
-           results.push({
-             ticketId,
-             ticketNo: ticket.SupportTicketNo,
-             status: "Failed",
-             reason: "Failed to save assignment history"
-           });
-           continue;
-         }
- 
-         results.push({
-           ticketId,
-           ticketNo: ticket.SupportTicketNo,
-           status: "Success",
-           reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
-         });
- 
-       } catch (err: any) {
-         results.push({ ticketId, status: "Error", reason: err.message || "Unexpected error" });
-       }
-     }
-     console.log(results)
-     const successCount = results.filter(r => r.status === "Success").length;
-     const failedCount = results.length - successCount;
- 
-     const summary = {
-       totalTickets: results.length,
-       successCount,
-       failedCount,
-       message:
-         successCount === results.length
-           ? "All tickets assigned successfully."
-           : successCount === 0
-             ? "All tickets failed."
-             : `${successCount} assigned, ${failedCount} failed.`
-     };
- 
- 
- 
- 
-     if (successCount === 0) {
-       return { data: summary, message: { msg: "All Failed", code: "0" } };
-     } else {
-       return { data: summary, message: { msg: "Success", code: "1" } };
-     }
-   } */
-
-
-  /*  async AssignTicketService(payload: any) {
-     const {
-       ticketIds,
-       assignedBy,
-       assignedTo,
-       roleName,
-       stateID,
-       mobileNo,
-       districtID
-     } = payload || {};
- 
-     if (!ticketIds) {
-       return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
-     }
- 
-     const roleId = roleName;
- 
-     const ticketIdArray = ticketIds
-       .split(",")
-       .map(id => id.trim())
-       .filter(Boolean);
- 
-     if (!ticketIdArray.length) {
-       return { data: {}, message: { msg: "No valid ticket IDs provided.", code: 0 } };
-     }
- 
-     const ticketCollection = this.db.collection("SLA_Ticket_listing");
-     const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
-     const now = new Date();
-     const results: any[] = [];
- 
-     let assignedRoleName = "";
-     if (roleId == 1) assignedRoleName = "STATE_GOVT_ADMIN";
-     if (roleId == 2) assignedRoleName = "STATE_GOVT_USER";
-     if (roleId == 3) assignedRoleName = "DEPUTY_DIRECTOR";
- 
-     for (const ticketIdStr of ticketIdArray) {
-       const ticketId = Number(ticketIdStr);
- 
-       if (isNaN(ticketId)) {
-         results.push({
-           ticketId: ticketIdStr,
-           status: "Failed",
-           reason: "Invalid ticket ID"
-         });
-         continue;
-       }
- 
-       try {
-         const ticket = await ticketCollection.findOne({
-           SupportTicketID: ticketId
-         });
- 
-         if (!ticket) {
-           results.push({
-             ticketId,
-             status: "Failed",
-             reason: "Ticket not found"
-           });
-           continue;
-         }
- 
-         const alreadyAssignedToUser = await assignHistoryCollection.findOne({
-           SupportTicketID: ticketId,
-           assignedTo: assignedTo,
-           IsActive: true
-         });
- 
-         if (alreadyAssignedToUser) {
-           results.push({
-             ticketId,
-             ticketNo: ticket.SupportTicketNo,
-             status: "Failed",
-             reason: "Ticket already assigned to this user"
-           });
-           continue;
-         }
- 
-         await assignHistoryCollection.updateMany(
-           {
-             SupportTicketID: ticketId,
-             IsActive: true
-           },
-           {
-             $set: {
-               IsActive: false,
-               UpdatedDate: now
-             }
-           }
-         );
- 
-         const assignmentData = {
-           SupportTicketID: ticketId,
-           SupportTicketNo: ticket.SupportTicketNo,
-           TicketStatusID: ticket.TicketStatusID || null,
-           TicketStatus: ticket.TicketStatus || null,
- 
-           assignedBy,
-           assignedTo,
- 
-           AssignedDate: now,
-           AssigneeStateID: stateID,
-           AssigneeMobileNo: mobileNo,
-           AssigneRoleName: assignedRoleName,
-           AssigneeRoleID: roleId,
-           DistrictID: districtID,
- 
-           IsActive: true
-         };
- 
-         const insertRes = await assignHistoryCollection.insertOne(assignmentData);
- 
-         if (!insertRes.insertedId) {
-           results.push({
-             ticketId,
-             ticketNo: ticket.SupportTicketNo,
-             status: "Failed",
-             reason: "Failed to save assignment history"
-           });
-           continue;
-         }
- 
-         results.push({
-           ticketId,
-           ticketNo: ticket.SupportTicketNo,
-           status: "Success",
-           reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
-         });
- 
-       } catch (err: any) {
-         results.push({
-           ticketId,
-           status: "Error",
-           reason: err.message || "Unexpected error"
-         });
-       }
-     }
- 
-     const successCount = results.filter(r => r.status === "Success").length;
-     const failedCount = results.length - successCount;
- 
-     const summary = {
-       totalTickets: results.length,
-       successCount,
-       failedCount,
-       message:
-         successCount === results.length
-           ? "All tickets assigned successfully."
-           : successCount === 0
-             ? "All tickets failed."
-             : `${successCount} assigned, ${failedCount} failed.`
-     };
- 
-     if (successCount === 0) {
-       return { data: summary, message: { msg: "All Failed", code: "0" } };
-     }
- 
-     return { data: summary, message: { msg: "Success", code: "1" } };
-   } */
-
-
 
   async AssignTicketService(payload: any) {
     const {
       ticketIds,
       assignedBy,
       assignedTo,
+      assignToName,
       roleName,
       stateID,
       mobileNo,
@@ -1301,13 +890,11 @@ export class TicketEscalationService {
           continue;
         }
 
-        // 🔹 Deactivate previous active assignments (History)
         await assignHistoryCollection.updateMany(
           { SupportTicketID: ticketId, IsActive: true },
           { $set: { IsActive: false, UpdatedDate: now } }
         );
 
-        // 🔹 History Insert (UNCHANGED)
         const assignmentHistoryData = {
           SupportTicketID: ticketId,
           SupportTicketNo: ticket.SupportTicketNo,
@@ -1316,7 +903,7 @@ export class TicketEscalationService {
 
           assignedBy,
           assignedTo,
-
+          assignToName,
           AssignedDate: now,
           AssigneeStateID: stateID,
           AssigneeMobileNo: mobileNo,
@@ -1341,7 +928,6 @@ export class TicketEscalationService {
           continue;
         }
 
-        // 🔹 CURRENT ASSIGNMENT (UPSERT)
         await currentAssignCollection.updateOne(
           { SupportTicketID: ticketId },
           {
@@ -1352,6 +938,7 @@ export class TicketEscalationService {
 
               assignedBy,
               assignedTo,
+              assignToName,
 
               AssignedDate: now,
               AssigneeStateID: stateID || "",
@@ -1383,6 +970,22 @@ export class TicketEscalationService {
     }
 
     const successCount = results.filter(r => r.status === "Success").length;
+
+      for(let i=0; i<results.length; i++){
+        let item = results[i]
+        if(item.status === "Success" ){
+          let payload = {
+            ticket:item?.ticketNo,
+            // mobileNO:mobileNo,
+            mobileNO:"916386236314",
+
+            Name:assignToName
+
+          }
+          await this.sendSMSToUser(payload)
+        }
+      }
+
     const failedCount = results.length - successCount;
 
     const summary = {
@@ -1403,6 +1006,55 @@ export class TicketEscalationService {
 
     return { data: summary, message: { msg: "Success", code: "1" } };
   }
+
+
+
+
+  async sendSMSToUser(payload) {
+    try {
+
+      let templateID = "1707176646596240405";
+
+      let customTemplate = `Dear ${payload?.Name}, Grievance Ticket Number ${payload?.ticket} has been assigned to you for review and action. Please log in to the system and proceed as per the prescribed timelines. Portal: https://pmfby.gov.in/krph Regards CSC SPV/Ministry of Agriculture & Farmers Welfare Government of India`;
+      let definedTemplate = await this.GetSingleUnicodeHex(customTemplate)
+      payload["mobileNO"] = "916386236314"
+
+      const response = await axios.post(`https://bulksmsapi.vispl.in/?username=cscetrnapi3&password=csce_123&messageType=unicode&mobile=${payload.mobileNO}&senderId=CSCSPV&ContentID=${templateID}&EntityID=1301157363501533886&message=${definedTemplate}`);
+
+      if (response.status === 200) {
+        const val = response.data.split('#');
+        if (val.length === 0) {
+          throw new Error('Could not send Message');
+        }
+        console.log("SMS Sent")
+
+
+
+
+      }
+
+
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+
+  async GetSingleUnicodeHex(x) {
+    let result = "", notation = "";
+    for (let i = 0; i < x.length; i++)
+      result += notation + ("000" + x[i].charCodeAt(0).toString(16)).substr(-4);
+    return result;
+  }
+
+
+
+
+
+
+
+
+
 
   async UserWiseState(payload: any) {
     try {
@@ -2228,192 +1880,192 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
             AssignedRoleID: "$AssigneeRoleID",
             AssigneRoleName: "$AssigneRoleName",
             AssignedUserName: "$user.UserDisplayName",
-            
-    TicketInformation: {
-      SupportTicketID: "$Ticket.SupportTicketID",
-      CallerContactNumber: "$Ticket.CallerContactNumber",
-      CallingAudioFile: "$Ticket.CallingAudioFile",
-      TicketRequestorID: "$Ticket.TicketRequestorID",
-      StateCodeAlpha: "$Ticket.StateCodeAlpha",
-      StateMasterID: "$Ticket.StateMasterID",
-      DistrictMasterID: "$Ticket.DistrictMasterID",
-      VillageRequestorID: "$Ticket.VillageRequestorID",
-      NyayPanchayatID: "$Ticket.NyayPanchayatID",
-      NyayPanchayat: "$Ticket.NyayPanchayat",
-      GramPanchayatID: "$Ticket.GramPanchayatID",
-      GramPanchayat: "$Ticket.GramPanchayat",
-      CallerID: "$Ticket.CallerID",
-      CreationMode: "$Ticket.CreationMode",
-      SupportTicketNo: "$Ticket.SupportTicketNo",
-      RequestorUniqueNo: "$Ticket.RequestorUniqueNo",
-      RequestorName: "$Ticket.RequestorName",
-      RequestorMobileNo: "$Ticket.RequestorMobileNo",
-      RequestorAccountNo: "$Ticket.RequestorAccountNo",
-      RequestorAadharNo: "$Ticket.RequestorAadharNo",
-      TicketCategoryID: "$Ticket.TicketCategoryID",
-      CropCategoryOthers: "$Ticket.CropCategoryOthers",
-      CropStageMaster: "$Ticket.CropStageMaster",
-      CropStageMasterID: "$Ticket.CropStageMasterID",
-      TicketHeaderID: "$Ticket.TicketHeaderID",
-      SupportTicketTypeID: "$Ticket.SupportTicketTypeID",
-      RequestYear: "$Ticket.RequestYear",
-      RequestSeason: "$Ticket.RequestSeason",
-      TicketSourceID: "$Ticket.TicketSourceID",
-      TicketDescription: "$Ticket.TicketDescription",
-      LossDate: "$Ticket.LossDate",
-      LossTime: "$Ticket.LossTime",
-      OnTimeIntimationFlag: "$Ticket.OnTimeIntimationFlag",
-      VillageName: "$Ticket.VillageName",
-      ApplicationCropName: "$Ticket.ApplicationCropName",
-      CropName: "$Ticket.CropName",
-      AREA: "$Ticket.AREA",
-      DistrictRequestorID: "$Ticket.DistrictRequestorID",
-      PostHarvestDate: "$Ticket.PostHarvestDate",
-      TicketStatusID: "$Ticket.TicketStatusID",
-      StatusUpdateTime: "$Ticket.StatusUpdateTime",
-      StatusUpdateUserID: "$Ticket.StatusUpdateUserID",
-      ApplicationNo: "$Ticket.ApplicationNo",
-      InsuranceCompanyCode: "$Ticket.InsuranceCompanyCode",
-      InsuranceCompanyID: "$Ticket.InsuranceCompanyID",
-      InsurancePolicyNo: "$Ticket.InsurancePolicyNo",
-      InsurancePolicyDate: "$Ticket.InsurancePolicyDate",
-      InsuranceExpiryDate: "$Ticket.InsuranceExpiryDate",
-      BankMasterID: "$Ticket.BankMasterID",
-      AgentUserID: "$Ticket.AgentUserID",
-      SchemeID: "$Ticket.SchemeID",
-      AttachmentPath: "$Ticket.AttachmentPath",
-      HasDocument: "$Ticket.HasDocument",
-      Relation: "$Ticket.Relation",
-      RelativeName: "$Ticket.RelativeName",
-      SubDistrictID: "$Ticket.SubDistrictID",
-      SubDistrictName: "$Ticket.SubDistrictName",
-      PolicyPremium: "$Ticket.PolicyPremium",
-      PolicyArea: "$Ticket.PolicyArea",
-      PolicyType: "$Ticket.PolicyType",
-      LandSurveyNumber: "$Ticket.LandSurveyNumber",
-      LandDivisionNumber: "$Ticket.LandDivisionNumber",
-      PlotVillageName: "$Ticket.PlotVillageName",
-      PlotDistrictName: "$Ticket.PlotDistrictName",
-      PlotStateName: "$Ticket.PlotStateName",
-      ApplicationSource: "$Ticket.ApplicationSource",
-      CropShare: "$Ticket.CropShare",
-      IFSCCode: "$Ticket.IFSCCode",
-      FarmerShare: "$Ticket.FarmerShare",
-      CropSeasonName: "$Ticket.CropSeasonName",
-      TicketSourceName: "$Ticket.TicketSourceName",
-      TicketCategoryName: "$Ticket.TicketCategoryName",
-      TicketStatus: "$Ticket.TicketStatus",
-      InsuranceCompany: "$Ticket.InsuranceCompany",
-      TicketTypeName: "$Ticket.TicketTypeName",
-      StateMasterName: "$Ticket.StateMasterName",
-      DistrictMasterName: "$Ticket.DistrictMasterName",
-      TicketHeadName: "$Ticket.TicketHeadName",
-      BMCGCode: "$Ticket.BMCGCode",
-      BusinessRelationName: "$Ticket.BusinessRelationName",
-      CropLossDetailID: "$Ticket.CropLossDetailID",
-      CallingUniqueID: "$Ticket.CallingUniqueID",
-      CallingInsertUserID: "$Ticket.CallingInsertUserID",
-      CropStage: "$Ticket.CropStage",
-      CategoryHeadID: "$Ticket.CategoryHeadID",
-      Sos: "$Ticket.Sos",
-      IsSos: "$Ticket.IsSos",
-      TicketNCIPDocketNo: "$Ticket.TicketNCIPDocketNo",
-      FilterDistrictRequestorID: "$Ticket.FilterDistrictRequestorID",
-      FilterStateID: "$Ticket.FilterStateID",
-      SchemeName: "$Ticket.SchemeName",
-      InsertUserID: "$Ticket.InsertUserID",
-      InsertIPAddress: "$Ticket.InsertIPAddress",
-      UpdateUserID: "$Ticket.UpdateUserID",
-      AgentName: "$Ticket.AgentName",
-      CreatedBY: "$Ticket.CreatedBY",
-      CallingUserID: "$Ticket.CallingUserID",
 
-      TicketReOpenDate: {
-        $cond: {
-          if: {
-            $or: [
-              { $eq: ["$Ticket.TicketReOpenDate", null] },
-              { $eq: ["$Ticket.TicketReOpenDate", ""] }
-            ]
-          },
-          then: null,
-          else: {
-            $dateToString: {
-              date: { $toDate: "$Ticket.TicketReOpenDate" },
-              format: "%Y-%m-%dT%H:%M:%S",
-              timezone: "Asia/Kolkata"
+            TicketInformation: {
+              SupportTicketID: "$Ticket.SupportTicketID",
+              CallerContactNumber: "$Ticket.CallerContactNumber",
+              CallingAudioFile: "$Ticket.CallingAudioFile",
+              TicketRequestorID: "$Ticket.TicketRequestorID",
+              StateCodeAlpha: "$Ticket.StateCodeAlpha",
+              StateMasterID: "$Ticket.StateMasterID",
+              DistrictMasterID: "$Ticket.DistrictMasterID",
+              VillageRequestorID: "$Ticket.VillageRequestorID",
+              NyayPanchayatID: "$Ticket.NyayPanchayatID",
+              NyayPanchayat: "$Ticket.NyayPanchayat",
+              GramPanchayatID: "$Ticket.GramPanchayatID",
+              GramPanchayat: "$Ticket.GramPanchayat",
+              CallerID: "$Ticket.CallerID",
+              CreationMode: "$Ticket.CreationMode",
+              SupportTicketNo: "$Ticket.SupportTicketNo",
+              RequestorUniqueNo: "$Ticket.RequestorUniqueNo",
+              RequestorName: "$Ticket.RequestorName",
+              RequestorMobileNo: "$Ticket.RequestorMobileNo",
+              RequestorAccountNo: "$Ticket.RequestorAccountNo",
+              RequestorAadharNo: "$Ticket.RequestorAadharNo",
+              TicketCategoryID: "$Ticket.TicketCategoryID",
+              CropCategoryOthers: "$Ticket.CropCategoryOthers",
+              CropStageMaster: "$Ticket.CropStageMaster",
+              CropStageMasterID: "$Ticket.CropStageMasterID",
+              TicketHeaderID: "$Ticket.TicketHeaderID",
+              SupportTicketTypeID: "$Ticket.SupportTicketTypeID",
+              RequestYear: "$Ticket.RequestYear",
+              RequestSeason: "$Ticket.RequestSeason",
+              TicketSourceID: "$Ticket.TicketSourceID",
+              TicketDescription: "$Ticket.TicketDescription",
+              LossDate: "$Ticket.LossDate",
+              LossTime: "$Ticket.LossTime",
+              OnTimeIntimationFlag: "$Ticket.OnTimeIntimationFlag",
+              VillageName: "$Ticket.VillageName",
+              ApplicationCropName: "$Ticket.ApplicationCropName",
+              CropName: "$Ticket.CropName",
+              AREA: "$Ticket.AREA",
+              DistrictRequestorID: "$Ticket.DistrictRequestorID",
+              PostHarvestDate: "$Ticket.PostHarvestDate",
+              TicketStatusID: "$Ticket.TicketStatusID",
+              StatusUpdateTime: "$Ticket.StatusUpdateTime",
+              StatusUpdateUserID: "$Ticket.StatusUpdateUserID",
+              ApplicationNo: "$Ticket.ApplicationNo",
+              InsuranceCompanyCode: "$Ticket.InsuranceCompanyCode",
+              InsuranceCompanyID: "$Ticket.InsuranceCompanyID",
+              InsurancePolicyNo: "$Ticket.InsurancePolicyNo",
+              InsurancePolicyDate: "$Ticket.InsurancePolicyDate",
+              InsuranceExpiryDate: "$Ticket.InsuranceExpiryDate",
+              BankMasterID: "$Ticket.BankMasterID",
+              AgentUserID: "$Ticket.AgentUserID",
+              SchemeID: "$Ticket.SchemeID",
+              AttachmentPath: "$Ticket.AttachmentPath",
+              HasDocument: "$Ticket.HasDocument",
+              Relation: "$Ticket.Relation",
+              RelativeName: "$Ticket.RelativeName",
+              SubDistrictID: "$Ticket.SubDistrictID",
+              SubDistrictName: "$Ticket.SubDistrictName",
+              PolicyPremium: "$Ticket.PolicyPremium",
+              PolicyArea: "$Ticket.PolicyArea",
+              PolicyType: "$Ticket.PolicyType",
+              LandSurveyNumber: "$Ticket.LandSurveyNumber",
+              LandDivisionNumber: "$Ticket.LandDivisionNumber",
+              PlotVillageName: "$Ticket.PlotVillageName",
+              PlotDistrictName: "$Ticket.PlotDistrictName",
+              PlotStateName: "$Ticket.PlotStateName",
+              ApplicationSource: "$Ticket.ApplicationSource",
+              CropShare: "$Ticket.CropShare",
+              IFSCCode: "$Ticket.IFSCCode",
+              FarmerShare: "$Ticket.FarmerShare",
+              CropSeasonName: "$Ticket.CropSeasonName",
+              TicketSourceName: "$Ticket.TicketSourceName",
+              TicketCategoryName: "$Ticket.TicketCategoryName",
+              TicketStatus: "$Ticket.TicketStatus",
+              InsuranceCompany: "$Ticket.InsuranceCompany",
+              TicketTypeName: "$Ticket.TicketTypeName",
+              StateMasterName: "$Ticket.StateMasterName",
+              DistrictMasterName: "$Ticket.DistrictMasterName",
+              TicketHeadName: "$Ticket.TicketHeadName",
+              BMCGCode: "$Ticket.BMCGCode",
+              BusinessRelationName: "$Ticket.BusinessRelationName",
+              CropLossDetailID: "$Ticket.CropLossDetailID",
+              CallingUniqueID: "$Ticket.CallingUniqueID",
+              CallingInsertUserID: "$Ticket.CallingInsertUserID",
+              CropStage: "$Ticket.CropStage",
+              CategoryHeadID: "$Ticket.CategoryHeadID",
+              Sos: "$Ticket.Sos",
+              IsSos: "$Ticket.IsSos",
+              TicketNCIPDocketNo: "$Ticket.TicketNCIPDocketNo",
+              FilterDistrictRequestorID: "$Ticket.FilterDistrictRequestorID",
+              FilterStateID: "$Ticket.FilterStateID",
+              SchemeName: "$Ticket.SchemeName",
+              InsertUserID: "$Ticket.InsertUserID",
+              InsertIPAddress: "$Ticket.InsertIPAddress",
+              UpdateUserID: "$Ticket.UpdateUserID",
+              AgentName: "$Ticket.AgentName",
+              CreatedBY: "$Ticket.CreatedBY",
+              CallingUserID: "$Ticket.CallingUserID",
+
+              TicketReOpenDate: {
+                $cond: {
+                  if: {
+                    $or: [
+                      { $eq: ["$Ticket.TicketReOpenDate", null] },
+                      { $eq: ["$Ticket.TicketReOpenDate", ""] }
+                    ]
+                  },
+                  then: null,
+                  else: {
+                    $dateToString: {
+                      date: { $toDate: "$Ticket.TicketReOpenDate" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              },
+
+              InsertDateTime: {
+                $cond: {
+                  if: {
+                    $or: [
+                      { $eq: ["$Ticket.InsertDateTime", null] },
+                      { $eq: ["$Ticket.InsertDateTime", ""] }
+                    ]
+                  },
+                  then: null,
+                  else: {
+                    $dateToString: {
+                      date: { $toDate: "$Ticket.InsertDateTime" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              },
+
+              UpdateDateTime: {
+                $cond: {
+                  if: {
+                    $or: [
+                      { $eq: ["$Ticket.UpdateDateTime", null] },
+                      { $eq: ["$Ticket.UpdateDateTime", ""] }
+                    ]
+                  },
+                  then: null,
+                  else: {
+                    $dateToString: {
+                      date: { $toDate: "$Ticket.UpdateDateTime" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              },
+
+              SowingDate: {
+                $cond: {
+                  if: {
+                    $or: [
+                      { $eq: ["$Ticket.SowingDate", null] },
+                      { $eq: ["$Ticket.SowingDate", ""] }
+                    ]
+                  },
+                  then: null,
+                  else: {
+                    $dateToString: {
+                      date: { $toDate: "$Ticket.SowingDate" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              },
+
+              CreatedAt: {
+                $dateToString: {
+                  date: { $toDate: "$Ticket.Created" },
+                  format: "%Y-%m-%dT%H:%M:%S",
+                  timezone: "Asia/Kolkata"
+                }
+              }
             }
-          }
-        }
-      },
 
-      InsertDateTime: {
-        $cond: {
-          if: {
-            $or: [
-              { $eq: ["$Ticket.InsertDateTime", null] },
-              { $eq: ["$Ticket.InsertDateTime", ""] }
-            ]
-          },
-          then: null,
-          else: {
-            $dateToString: {
-              date: { $toDate: "$Ticket.InsertDateTime" },
-              format: "%Y-%m-%dT%H:%M:%S",
-              timezone: "Asia/Kolkata"
-            }
-          }
-        }
-      },
 
-      UpdateDateTime: {
-        $cond: {
-          if: {
-            $or: [
-              { $eq: ["$Ticket.UpdateDateTime", null] },
-              { $eq: ["$Ticket.UpdateDateTime", ""] }
-            ]
-          },
-          then: null,
-          else: {
-            $dateToString: {
-              date: { $toDate: "$Ticket.UpdateDateTime" },
-              format: "%Y-%m-%dT%H:%M:%S",
-              timezone: "Asia/Kolkata"
-            }
-          }
-        }
-      },
-
-      SowingDate: {
-        $cond: {
-          if: {
-            $or: [
-              { $eq: ["$Ticket.SowingDate", null] },
-              { $eq: ["$Ticket.SowingDate", ""] }
-            ]
-          },
-          then: null,
-          else: {
-            $dateToString: {
-              date: { $toDate: "$Ticket.SowingDate" },
-              format: "%Y-%m-%dT%H:%M:%S",
-              timezone: "Asia/Kolkata"
-            }
-          }
-        }
-      },
-
-      CreatedAt: {
-        $dateToString: {
-          date: { $toDate: "$Ticket.Created" },
-          format: "%Y-%m-%dT%H:%M:%S",
-          timezone: "Asia/Kolkata"
-        }
-      }
-    }
-
-           
 
 
 
@@ -2442,36 +2094,43 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
 
   async getBucketTicketCount(payload: any) {
-  try {
-    const { loginId } = payload;
-    let message = {
-      msg: "",
-      code: "",
-    };
-    let count;
+    try {
+      const { loginId } = payload;
+      let message = {
+        msg: "",
+        code: "",
+      };
+      let count;
 
-    const ticketCount = await this.db.collection('Ticket_Assignment_History')
-      .find({ assignedBy: loginId.toString() })
-      .count();
+      const ticketCount = await this.db.collection('Ticket_Assignment_History')
+        .find({ assignedBy: loginId.toString() })
+        .count();
 
-    if (ticketCount === 0) {
-      message["msg"] = "Success";
-      message["code"] = "0";
-      count = ticketCount
-    } else {
-      message["msg"] = "Success";
-      message["code"] = "1";
-      count = ticketCount
+      if (ticketCount === 0) {
+        message["msg"] = "Success";
+        message["code"] = "0";
+        count = ticketCount
+      } else {
+        message["msg"] = "Success";
+        message["code"] = "1";
+        count = ticketCount
+      }
+
+
+      return { data: count, message: message };
+
+    } catch (err) {
+      console.log("Error while fetching bucket ticket count:", err);
+      return { data: "", message: { msg: "Error", code: "0" } };
     }
-    
-
-    return { data: count, message: message };
-    
-  } catch (err) {
-    console.log("Error while fetching bucket ticket count:", err);
-    return { data: "", message: { msg: "Error", code: "0" } };
   }
-}
+
+
+
+
+
+
+
 
 
 
