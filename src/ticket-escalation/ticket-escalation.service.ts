@@ -2142,7 +2142,10 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
       let { loginId } = payload;
       let ticketData;
-
+      let message = {
+        msg:"",
+        code:0
+      }
       let pipeline = [
   {
     $match: {
@@ -2215,9 +2218,15 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
       let getBucketData = await this.db.collection('Ticket_Assignment_History').aggregate(pipeline).toArray()
       if (getBucketData.length > 0) {
         ticketData = getBucketData
+        message["msg"] = "Success";
+        message["code"] = 1
+      }else{
+        ticketData = [];
+         message["msg"] = "Success";
+        message["code"] = 0
       }
       
-      return { data: ticketData, message: { msg: "", code: 1 } }
+      return { data: ticketData, message: message } 
 
     } catch (err) {
       console.log(err)
