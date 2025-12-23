@@ -2144,7 +2144,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
       let ticketData;
       let message = {
         msg:"",
-        code:0
+        code:""
       }
       let pipeline = [
   {
@@ -2219,11 +2219,11 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
       if (getBucketData.length > 0) {
         ticketData = getBucketData
         message["msg"] = "Success";
-        message["code"] = 1
+        message["code"] = "1"
       }else{
         ticketData = [];
          message["msg"] = "Success";
-        message["code"] = 0
+        message["code"] = "1"
       }
       
       return { data: ticketData, message: message } 
