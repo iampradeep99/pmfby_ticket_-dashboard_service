@@ -2196,6 +2196,21 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
     }
   },
   {
+      $lookup:{
+        from:"bm_app_access",
+        localField:"assignedTo",
+        foreignField:"OtherAccessID",
+        as:"user"
+      }
+  },
+  {
+    $unwind: {
+      path: "$user",
+      preserveNullAndEmptyArrays: true
+    }
+  },
+
+  {
     $project: {
       _id: 0,
       SupportTicketID: 1,
@@ -2211,7 +2226,8 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
       AssignedMobile: "$AssigneeMobileNo",
       AssignedRoleName: "$AssigneeRoleName",
       AssignedRoleID: "$AssigneeRoleID",
-      AssigneRoleName:"$AssigneRoleName"
+      AssigneRoleName:"$AssigneRoleName",
+      AssignedUserName:"$user.UserDisplayName"
     }
   }
 ]
