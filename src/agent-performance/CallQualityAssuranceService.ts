@@ -87,7 +87,6 @@
       }
     ];
 
-    // Run aggregation
     const result = await db.collection(collectionName).aggregate(pipeline).toArray();
 
     this.logger.info(

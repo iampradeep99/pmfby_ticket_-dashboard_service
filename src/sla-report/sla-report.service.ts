@@ -340,7 +340,7 @@ export class SlaReportService {
         this.logger.info("⏳ Running MongoDB Aggregation...");
 
         let results: any = [];
-        try {
+       /*  try {
           results = await db.collection("SLA_Inbound_Calls").aggregate([
             {
               $addFields: {
@@ -431,7 +431,248 @@ export class SlaReportService {
         } catch (err: any) {
           this.logger.error(`❌ Aggregation failed for date: ${date.format("YYYY-MM-DD")} - ${err.message}`);
           continue;
+        } */
+
+       try {
+  results = await db.collection("SLA_Inbound_Calls").aggregate([
+    {
+      $addFields: {
+        Call_Start_Time: {
+          $cond: [
+            { $in: [{ $type: "$Call_Start_Time" }, ["null", "missing"]] },
+            null,
+            {
+              $cond: [
+                { $eq: [{ $type: "$Call_Start_Time" }, "date"] },
+                "$Call_Start_Time",
+                {
+                  $cond: [
+                    { $in: ["$Call_Start_Time", ["0000-00-00 00:00:00", ""]] },
+                    null,
+                    {
+                      $dateFromString: {
+                        dateString: "$Call_Start_Time",
+                        format: "%Y-%m-%d %H:%M:%S"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+
+        Call_End_Time: {
+          $cond: [
+            { $in: [{ $type: "$Call_End_Time" }, ["null", "missing"]] },
+            null,
+            {
+              $cond: [
+                { $eq: [{ $type: "$Call_End_Time" }, "date"] },
+                "$Call_End_Time",
+                {
+                  $cond: [
+                    { $in: ["$Call_End_Time", ["0000-00-00 00:00:00", ""]] },
+                    null,
+                    {
+                      $dateFromString: {
+                        dateString: "$Call_End_Time",
+                        format: "%Y-%m-%d %H:%M:%S"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+
+        Customer_Queue_Seconds: {
+          $cond: [
+            { $in: ["$Customer_Queue_Seconds", ["", null]] },
+            0,
+            { $toInt: "$Customer_Queue_Seconds" }
+          ]
+        },
+
+        Agent_TalkTime: {
+          $cond: [
+            { $in: ["$Agent_TalkTime", ["", null]] },
+            0,
+            { $toInt: "$Agent_TalkTime" }
+          ]
+        },
+
+        Agent_ID: {
+          $cond: [
+            { $in: ["$Agent_ID", ["", null]] },
+            null,
+            { $toInt: "$Agent_ID" }
+          ]
         }
+      }
+    },
+
+    {
+      $facet: {
+        ASA: [
+          { $match: { Call_Start_Time: { $gte: startTime, $lte: endTime }, Status: { $in: statuses } } },
+          {
+            $group: {
+              _id: null,
+              totalAnsweredCallASA: { $sum: 1 },
+              totalQuedCallsASA: {
+                $sum: {
+                  $cond: [
+                    { $gt: ["$Customer_Queue_Seconds", 0] },
+                    { $cond: [{ $lte: ["$Customer_Queue_Seconds", queedvalue] }, 1, 0] },
+                    0
+                  ]
+                }
+              }
+            }
+          },
+          {
+            $project: {
+              totalAnsweredCallASA: 1,
+              totalQuedCallsASA: 1,
+              percentQuedCallsASA: {
+                $cond: {
+                  if: { $gt: ["$totalAnsweredCallASA", 0] },
+                  then: {
+                    $round: [
+                      { $multiply: [{ $divide: ["$totalQuedCallsASA", "$totalAnsweredCallASA"] }, 100] },
+                      2
+                    ]
+                  },
+                  else: 0
+                }
+              }
+            }
+          }
+        ],
+
+        AHT: [
+          { $match: { Call_Start_Time: { $gte: startTime, $lte: endTime }, Status: { $in: statuses } } },
+          {
+            $group: {
+              _id: null,
+              totalAnsweredCallAHT: { $sum: 1 },
+              callAHT_300_seconds: {
+                $sum: {
+                  $cond: [
+                    { $gt: ["$Agent_TalkTime", 0] },
+                    { $cond: [{ $gt: ["$Agent_TalkTime", 300] }, 1, 0] },
+                    0
+                  ]
+                }
+              }
+            }
+          },
+          {
+            $project: {
+              totalAnsweredCallAHT: 1,
+              callAHT_300_seconds: 1,
+              percentAHT_300_seconds: {
+                $cond: {
+                  if: { $gt: ["$totalAnsweredCallAHT", 0] },
+                  then: {
+                    $round: [
+                      { $multiply: [{ $divide: ["$callAHT_300_seconds", "$totalAnsweredCallAHT"] }, 100] },
+                      2
+                    ]
+                  },
+                  else: 0
+                }
+              }
+            }
+          }
+        ],
+
+        SU: [
+          { $match: { Call_Start_Time: { $gte: startTime, $lte: endTime }, Status: { $ne: "System Missed" } } },
+          {
+            $group: {
+              _id: null,
+              totalCallsLanded: { $sum: 1 },
+              activeAgents: {
+                $addToSet: {
+                  $cond: [{ $ne: ["$Agent_ID", null] }, "$Agent_ID", null]
+                }
+              }
+            }
+          },
+          {
+            $project: {
+              totalCallsLanded: 1,
+              activeAgentCount: {
+                $size: {
+                  $filter: {
+                    input: "$activeAgents",
+                    as: "agent",
+                    cond: { $ne: ["$$agent", null] }
+                  }
+                }
+              },
+              callsPerActiveAgent: {
+                $cond: {
+                  if: {
+                    $gt: [
+                      {
+                        $size: {
+                          $filter: {
+                            input: "$activeAgents",
+                            as: "agent",
+                            cond: { $ne: ["$$agent", null] }
+                          }
+                        }
+                      },
+                      0
+                    ]
+                  },
+                  then: {
+                    $round: [
+                      {
+                        $divide: [
+                          "$totalCallsLanded",
+                          {
+                            $size: {
+                              $filter: {
+                                input: "$activeAgents",
+                                as: "agent",
+                                cond: { $ne: ["$$agent", null] }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      2
+                    ]
+                  },
+                  else: 0
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+
+    {
+      $project: {
+        ASA: { $arrayElemAt: ["$ASA", 0] },
+        AHT: { $arrayElemAt: ["$AHT", 0] },
+        SU: { $arrayElemAt: ["$SU", 0] }
+      }
+    }
+  ]).toArray();
+
+} catch (err: any) {
+  this.logger.error(
+    `❌ Aggregation failed for date: ${date.format("YYYY-MM-DD")} - ${err.message}`
+  );
+}
+
 
         const response = {
           ASA_REPORT: results[0]?.ASA || { totalAnsweredCallASA: 0, totalQuedCallsASA: 0, percentQuedCallsASA: 0 },
@@ -1097,116 +1338,6 @@ async startCallQualityFileUploading(file: Express.Multer.File, yearMonth: string
   return { message: 'File upload started. Processing in the background.', code: 1 };
 }
 
-
-/* async uploadCallQualityFileService(file: Express.Multer.File, yearMonth: string) {
-  try {
-    const db = this.db;
-
-    if (!file || !file.buffer) {
-      this.logger.info("No file uploaded");
-      return { data: {}, message: { msg: 'No file uploaded', code: 0 } };
-    }
-
-    const fileContent = file.buffer.toString('utf-8');
-    if (!fileContent.trim()) {
-      this.logger.info("CSV file is empty");
-      return { data: {}, message: { msg: 'CSV file is empty', code: 0 } };
-    }
-
-    let records: Record<string, any>[];
-    try {
-      this.logger.info("Parsing CSV content...");
-      records = parse(fileContent, { columns: true, skip_empty_lines: true, trim: true });
-    } catch (parseErr) {
-      this.logger.error("CSV parsing error", { error: parseErr });
-      return { data: {}, message: { msg: 'Invalid CSV format', code: -2 } };
-    }
-
-    if (!records.length) {
-      this.logger.info("CSV file contains no records");
-      return { data: {}, message: { msg: 'CSV file contains no records', code: 0 } };
-    }
-
-    this.logger.info(`Year-Month received: ${yearMonth}`);
-    if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
-      this.logger.info("Invalid year_month format");
-      return { data: {}, message: { msg: 'Invalid year_month format', code: -4 } };
-    }
-
-    const startDate = moment(yearMonth + '-01').startOf('day');
-    const endDate = startDate.clone().endOf('month');
-    this.logger.info(`Filtering records for the period: ${startDate.format()} to ${endDate.format()}`);
-
-    const filteredRecords = records.filter(record => {
-      const callDate = moment(record.call_date);
-      return callDate.isValid() && callDate.isBetween(startDate, endDate, undefined, '[]');
-    });
-
-    if (!filteredRecords.length) {
-      this.logger.info("No records match the selected month");
-      return { data: {}, message: { msg: 'No records match the selected month', code: 0 } };
-    }
-
-    this.logger.info(`Filtered ${filteredRecords.length} records for the month`);
-
-    const rows = filteredRecords.map(record => ({
-      ...record,
-      InsertedDateTime: moment().toISOString(),
-    }));
-
-    const collectionName = `sla_call_quality_data_${yearMonth.replace('-', '_')}`;
-    this.logger.info(`Checking if collection ${collectionName} exists...`);
-
-    const collections = await db.listCollections({ name: collectionName }).toArray();
-    if (!collections.length) {
-      this.logger.info(`Collection ${collectionName} does not exist. Creating new collection.`);
-      await db.createCollection(collectionName);
-    } else {
-      this.logger.info(`Collection ${collectionName} already exists.`);
-    }
-
-    const chunkSize = 1000;
-    const chunkedRecords = [];
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      chunkedRecords.push(rows.slice(i, i + chunkSize));
-    }
-
-    this.logger.info(`Processing records in ${chunkedRecords.length} chunks`);
-
-    for (const chunk of chunkedRecords) {
-      const uniqueRecords = [];
-      this.logger.info(`Processing chunk with ${chunk.length} records`);
-
-      for (const record of chunk) {
-        const existingRecord = await db.collection(collectionName).findOne({ uniqueid: record.uniqueid });
-        if (!existingRecord) {
-          uniqueRecords.push(record);
-        }
-      }
-
-      if (uniqueRecords.length > 0) {
-        this.logger.info(`Inserting ${uniqueRecords.length} unique records into the database`);
-        try {
-          await db.collection(collectionName).insertMany(uniqueRecords);
-        } catch (dbErr) {
-          this.logger.error("DB insertion error", { error: dbErr });
-          return { data: {}, message: { msg: 'Failed to insert records into DB', code: -3 } };
-        }
-      } else {
-        this.logger.info("No unique records to insert in this chunk");
-      }
-    }
-
-    this.logger.info(`${rows.length} records have been successfully inserted into ${collectionName}`);
-    return {
-      data: { insertedCount: rows.length, collection: collectionName },
-      message: { msg: `${rows.length} records have been successfully inserted into ${collectionName}.`, code: 1 },
-    };
-  } catch (err) {
-    this.logger.error("Unexpected error", { error: err });
-    return { data: {}, message: { msg: 'Unexpected error occurred', code: -99 } };
-  }
-} */
 
 
 
