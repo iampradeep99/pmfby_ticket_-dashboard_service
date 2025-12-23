@@ -2441,6 +2441,40 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
   }
 
 
+  async getBucketTicketCount(payload: any) {
+  try {
+    const { loginId } = payload;
+    let message = {
+      msg: "",
+      code: "",
+    };
+    let count;
+
+    const ticketCount = await this.db.collection('Ticket_Assignment_History')
+      .find({ assignedBy: loginId.toString() })
+      .count();
+
+    if (ticketCount === 0) {
+      message["msg"] = "Success";
+      message["code"] = "1";
+      count = ticketCount.toString();
+    } else {
+      message["msg"] = "Success";
+      message["code"] = "0";
+      count = ticketCount.toString();
+    }
+
+    return { data: count, message: message };
+    
+  } catch (err) {
+    console.log("Error while fetching bucket ticket count:", err);
+    return { data: "", message: { msg: "Error", code: "0" } };
+  }
+}
+
+
+
+
 
 
 
