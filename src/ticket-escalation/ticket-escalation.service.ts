@@ -1860,20 +1860,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
             preserveNullAndEmptyArrays: true
           }
         },
-        // {
-        //   $lookup: {
-        //     from: "bm_app_access",
-        //     localField: "assignedTo",
-        //     foreignField: "OtherAccessID",
-        //     as: "user"
-        //   }
-        // },
-        // {
-        //   $unwind: {
-        //     path: "$user",
-        //     preserveNullAndEmptyArrays: true
-        //   }
-        // },
+    
 
         {
           $project: {
