@@ -1826,7 +1826,10 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
             AssigneeMobileNo: 1,
             AssigneeRoleName: 1,
             AssigneeRoleID: 1,
-            AssigneRoleName: 1
+            AssigneRoleName: 1,
+            assignToName:1,
+            assignedByName:1
+
           }
         },
         {
@@ -1857,20 +1860,20 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
             preserveNullAndEmptyArrays: true
           }
         },
-        {
-          $lookup: {
-            from: "bm_app_access",
-            localField: "assignedTo",
-            foreignField: "OtherAccessID",
-            as: "user"
-          }
-        },
-        {
-          $unwind: {
-            path: "$user",
-            preserveNullAndEmptyArrays: true
-          }
-        },
+        // {
+        //   $lookup: {
+        //     from: "bm_app_access",
+        //     localField: "assignedTo",
+        //     foreignField: "OtherAccessID",
+        //     as: "user"
+        //   }
+        // },
+        // {
+        //   $unwind: {
+        //     path: "$user",
+        //     preserveNullAndEmptyArrays: true
+        //   }
+        // },
 
         {
           $project: {
@@ -1889,7 +1892,8 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
             AssignedRoleName: "$AssigneeRoleName",
             AssignedRoleID: "$AssigneeRoleID",
             AssigneRoleName: "$AssigneRoleName",
-            AssignedUserName: "$user.UserDisplayName",
+            AssignedUserName: "$assignToName",
+            AssignedByName:"$assignedByName",
 
             TicketInformation: {
               SupportTicketID: "$Ticket.SupportTicketID",
