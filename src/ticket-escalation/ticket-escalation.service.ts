@@ -971,20 +971,20 @@ export class TicketEscalationService {
 
     const successCount = results.filter(r => r.status === "Success").length;
 
-      for(let i=0; i<results.length; i++){
-        let item = results[i]
-        if(item.status === "Success" ){
-          let payload = {
-            ticket:item?.ticketNo,
-            // mobileNO:mobileNo,
-            mobileNO:"916386236314",
+    for (let i = 0; i < results.length; i++) {
+      let item = results[i]
+      if (item.status === "Success") {
+        let payload = {
+          ticket: item?.ticketNo,
+          // mobileNO:mobileNo,
+          mobileNO: "916386236314",
 
-            Name:assignToName
+          Name: assignToName
 
-          }
-          await this.sendSMSToUser(payload)
         }
+        await this.sendSMSToUser(payload)
       }
+    }
 
     const failedCount = results.length - successCount;
 
@@ -1028,8 +1028,15 @@ export class TicketEscalationService {
         }
         console.log("SMS Sent")
 
-
-
+        let collection = "SMS_Send_History_Records";
+        let payloadForSms = {
+          SupportTicketNo: payload?.ticket,
+          SMSReferenceNo: val[2] || '',
+          WhatsAppReferenceNo: '',
+          TemplateID: templateID,
+          MobileNo: payload.mobileNO,
+        }
+       await this.db.collection(collection).insertOne(payloadForSms)
 
       }
 
