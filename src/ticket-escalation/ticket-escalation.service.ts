@@ -813,6 +813,7 @@ export class TicketEscalationService {
     const {
       ticketIds,
       assignedBy,
+      assignedByName,
       assignedTo,
       assignToName,
       roleName,
@@ -902,6 +903,7 @@ export class TicketEscalationService {
           TicketStatus: ticket.TicketStatus || null,
 
           assignedBy,
+          assignedByName,
           assignedTo,
           assignToName,
           AssignedDate: now,
@@ -937,6 +939,7 @@ export class TicketEscalationService {
               TicketStatus: ticket.TicketStatus || null,
 
               assignedBy,
+              assignedByName,
               assignedTo,
               assignToName,
 
