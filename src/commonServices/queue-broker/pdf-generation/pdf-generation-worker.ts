@@ -1713,7 +1713,17 @@ export class PDFGenerationWorkerService {
                 "          </div>" +
                 '          <div class="SubBox">' +
                 '            <p>Premium Amount : <span id="spnPremiumAmount">' +
-                (data && data.PolicyPremium ? data.PolicyPremium : "") +
+                (data && data.farmerShare !== undefined ? this.formatInRupees(data.farmerShare) : this.formatInRupees(0)) + 
+                "</span></p>" +
+                "          </div>" +
+
+
+
+                '          <div class="SubBox">' +
+                '            <p>Sum Insured : <span id="spnSumInsured">' +
+                // (data &&  this.formatInRupees(data.sumInsured) ?  this.formatInRupees(data.sumInsured) : "") +
+
+                 (data && data.sumInsured !== undefined ? this.formatInRupees(data.sumInsured) : this.formatInRupees(0)) + 
                 "</span></p>" +
                 "          </div>" +
                 '          <div class="SubBox">' +
@@ -1804,7 +1814,7 @@ export class PDFGenerationWorkerService {
             "  .summary-table.no-inner-border tr td:first-child { border-right: 1px solid transparent; }" +
             "  .currency { font-family: 'DejaVu Sans', Arial, sans-serif; }" +
             "  .h6Tag { font-weight: 600; font-size: 14px; }" +
-            "  .pTag { font-size: 12.5px; text-align: left; }" +
+            "  .pTag { font-size: 13.5px; text-align: left; }" +
             "  .hrTag { font-weight: bold; }" +
             "  .containerhistory { display: flex; flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%; font-size: 12px; }" +
             "  .left-panel { flex: 2.2; background: #fff; border-radius: 10px; padding: 0px; width: 550px; }" +
@@ -1853,6 +1863,7 @@ export class PDFGenerationWorkerService {
             "  .hover-cardSendPdf { position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%) scale(0.95); min-width: 300px; max-width: 220px; padding: 8px 10px; background: #fff; color: #333; border-radius: 8px; font-size: 11px; line-height: 1.4; text-align: justify; box-shadow: 0 4px 10px rgba(0,0,0,0.25); opacity: 0; visibility: hidden; transition: all 0.25s ease; z-index: 2000; }" +
             "  .card-tooltipSendPdf:hover .hover-cardSendPdf { opacity: 1; visibility: visible; transform: translateX(-50%) scale(1); }" +
             "  .hover-cardSendPdf::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px; border-width: 6px; border-style: solid; border-color: #fff transparent transparent transparent; }" +
+              "   .accordion{font-size: 16px !important;}" +
             "</style>" +
             "</head>" +
             "<body>" +
@@ -1972,21 +1983,11 @@ export class PDFGenerationWorkerService {
             "    <br />" +
             "    <div>" +
             '      <h6 class="h6Tag">Important Note: </h6>' +
-            '      <p class="pTag">The last page of this document contains verification points and general advisory related to the farmer\'s enrollment and insurance coverage. Applicants must adhere to the terms and conditions of the scheme.</p>' +
-            '      <h6 class="h6Tag">Disclaimer: </h6>' +
-            '      <p class="pTag">This document is only for payment of the insurance premium by the farmer. As per the operational guidelines of the Pradhan Mantri Fasal Bima Yojana (PMFBY), the farmer\'s participation in the scheme will be determined after verification of the required documents.</p>' +
-            '      <hr class="hrTag" />' +
-            '      <h6 class="h6Tag"> Important Points to Consider Before Participating in the Scheme:</h6>' +
-            '      <p class="pTag">(a) After receiving the registration receipt, the information entered by the Walker Agent / CSC-VLE / Bank / Intermediary should be cross-checked. Land details, bank account number, insured crop, insured area, and premium amount must be verified again at the time of enrollment.</p>' +
-            '      <p class="pTag">(b) The authenticity of this registration receipt can be verified by scanning the QR code printed on page 1 of the receipt. The applicant farmer should verify the land and related details obtained through the QR scan.</p>' +
-            '      <p class="pTag">(c) In case of any discrepancy in the registration details, the applicant farmer is advised to immediately report it to the Walker Agent / CSC Center / Bank / Intermediary for correction.</p>' +
-            '      <hr class="hrTag" />' +
-            '      <h6 class="h6Tag">General Instructions for Applicant Farmers: </h6>' +
-            '      <p class="pTag">(a) The applicant farmer is not required to pay any additional service or processing fee for enrollment through any mode. Only the farmer\'s premium amount is payable.</p>' +
-            '      <p class="pTag">(b) If any incorrect information is found in the portal data or the attached documents, the respective application may be rejected.</p>' +
-            '      <p class="pTag">(c) As per the scheme guidelines, in case of natural calamities (hailstorm, landslide, flood, cloudburst, lightning) or post-harvest losses (storm, unseasonal rain, etc.), the farmer must inform the bank or concerned department within 72 hours through the Crop Insurance App.</p>' +
-            '      <p class="pTag">(d) The claim amount under the scheme is determined based on the shortfall in average yield as assessed through CCEs (Crop Cutting Experiments) in the notified insurance area. Data declared by any other department or institution on drought or flood conditions will not be considered.</p>' +
-            '      <p class="pTag">(e) Farmers can track the status of their applications through the Aadhaar-based Crop Insurance App, available on the Google Play Store and at <a href="https://pmfby.gov.in/" target="_blank">www.pmfby.gov.in</a>.</p>' +
+                   '<p class="pTag"> 1 - This document contains general advisory related to claim payments, crop-loss intimation, and grievance resolution.</p>' +
+            '      <p class="pTag"> 2 - This document is system-generated and does not require any signature.</p>' +
+            '      <p class="pTag"> 3 - The authenticity of this document can be verified by scanning the QR code printed on page 1 of the receipt.</p>' +
+            '      <p class="pTag"> 4 - For additional details, please visit the  https://pmfby.gov.in/krph/FarmerLogin or call the Krishi Raksha Helpline at 14447. You can also chat through the WhatsApp Bot Number: 7065514447.</p>' +
+         
             "    </div>" +
             "  </div>" +
             "</body>" +
@@ -2008,5 +2009,9 @@ export class PDFGenerationWorkerService {
             .replace(/&#39;/g, "'")
             .replace(/\s+/g, " ")
             .trim()
+    }
+
+       formatInRupees(amount) {
+        return "₹" + " " + amount.toLocaleString('en-IN');
     }
 }
