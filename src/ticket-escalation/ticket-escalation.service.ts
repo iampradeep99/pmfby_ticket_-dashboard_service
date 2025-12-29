@@ -1901,45 +1901,28 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
           }
         }
       },
-      {
-        $lookup: {
-          from: "SLA_Ticket_listing",
-          let: { ticketId: "$SupportTicketID" },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ["$SupportTicketID", "$$ticketId"] }
-              }
-            },
-            { $limit: 1 }
-          ],
-          as: "TicketInfo"
-        }
-      },
-      {
-        $unwind: {
-          path: "$TicketInfo",
-          preserveNullAndEmptyArrays: false
-        }
-      },
-      {
-        $group: {
-          _id: "$TicketInfo.InsuranceCompany",
-          TicketCount: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          InsuranceCompany: "$_id",
-          TicketCount: 1
-        }
-      },
-      {
-        $sort: { TicketCount: -1 }
-      }
+    
+     {
+    $group: {
+      _id: "$InsuranceCompanyId",
+      InsuranceCompany: { $first: "$InsuranceCompanyName" },
+      TicketCount: { $sum: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      InsuranceCompanyId: "$_id",
+      InsuranceCompany: 1,
+      TicketCount: 1
+    }
+  },
+  {
+    $sort: { TicketCount: -1 }
+  }
     ];
-
+    
+    console.log(JSON.stringify(pipeline))
     const fetchedData = await this.db
       .collection("Ticket_Assignment_History")
       .aggregate(pipeline)
