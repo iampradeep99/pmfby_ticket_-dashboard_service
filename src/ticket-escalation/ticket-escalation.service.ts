@@ -1782,6 +1782,118 @@ async getPhotoServie(payload?: any) {
 
 
 
+  async insuranceWiseTicketList(payload: any) {
+  let { month, year } = payload;
+  let message = { msg: "", code: "" };
+
+  if (!month) {
+    message.msg = "Month is required";
+    message.code = "1";
+    return { data: {}, message };
+  }
+
+  if (!year) {
+    message.msg = "Year is required";
+    message.code = "1";
+    return { data: {}, message };
+  }
+
+  const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const endDate = new Date(year, month, 1, 0, 0, 0, 0);
+
+  const pipeline = [
+    {
+      $match: {
+        AssignedDate: {
+          $gte: startDate,
+          $lt: endDate
+        }
+      }
+    },
+    {
+      $lookup: {
+        from: "SLA_Ticket_listing",
+        let: { ticketId: "$SupportTicketID" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$SupportTicketID", "$$ticketId"] }
+            }
+          },
+          { $limit: 1 }
+        ],
+        as: "TicketInfo"
+      }
+    },
+    {
+      $unwind: {
+        path: "$TicketInfo",
+        preserveNullAndEmptyArrays: false
+      }
+    },
+    {
+      $group: {
+        _id: "$TicketInfo.InsuranceCompany",
+        TicketCount: { $sum: 1 }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        InsuranceCompany: "$_id",
+        TicketCount: 1
+      }
+    },
+    {
+      $sort: { TicketCount: -1 }
+    }
+  ];
+
+  const fetchedData = await this.db
+    .collection("Ticket_Assignment_History")
+    .aggregate(pipeline)
+    .toArray();
+
+  const getInsuranceCompany = await this.db
+    .collection("KRPH_InsuranceMaster")
+    .find({})
+    .toArray();
+
+  const insuranceCountMap: Record<string, number> = {};
+
+  for (const fd of fetchedData) {
+    insuranceCountMap[this.normalize(fd.InsuranceCompany)] = fd.TicketCount;
+  }
+
+  const conbinedData = getInsuranceCompany.map(item => {
+    const key = this.normalize(item.InsuranceMasterName);
+    return {
+      // ...item,
+      InsuranceCompanyId:item?.InsuranceMasterID,
+      InsuranceCompany: item.InsuranceMasterName,
+      TicketCount: insuranceCountMap[key] || 0
+    };
+  });
+
+  message.msg = "Success";
+  message.code = "1";
+  let obj ={
+    data:conbinedData
+  }
+
+  return {
+    data: obj,
+    message
+  };
+}
+
+  normalize(str = "") {
+    return str
+      .toUpperCase()
+      .replace(/,/g, "")     // remove commas
+      .replace(/\s+/g, " ")  // normalize spaces
+      .trim();
+  }
 
 }
 
