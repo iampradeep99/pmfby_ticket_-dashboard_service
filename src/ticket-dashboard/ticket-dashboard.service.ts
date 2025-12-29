@@ -18,15 +18,13 @@ import { pipe } from 'rxjs';
 import { Sequelize } from 'sequelize-typescript';
 import { QueryTypes } from 'sequelize';
 import { MongoClient } from 'mongodb';
-// import * as moment from "moment";
-import { parse } from "csv-parse/sync";
+import * as moment from "moment";
+// import { parse } from "csv-parse/sync";
 import { pipeline } from 'stream';
-import * as moment from 'moment-timezone';
-import * as  FormData from "form-data";
+// import { Readable } from "stream";
 
-
-
-
+import { parse } from "csv-parse";
+import { Readable } from "stream";
 
 
 @Injectable()
@@ -7134,43 +7132,16 @@ export class TicketDashboardService {
       console.log(userDetail, "testuserDetails");
 
       const { InsuranceCompanyID, StateMasterID, LocationTypeID, EscalationFlag, AppAccessID } = userDetail;
-
-
-
-      // let locationFilter: any = {};
-      // if (LocationTypeID === 1 && StateMasterID?.length) {
-      //   locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
-      // } else if (LocationTypeID === 2) {
-      //   // fetch district info only if needed
-      //   const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
-      //   const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
-
-      //   const districtId: number[] = [];
-      //   if (collectedDistrictInfo?.masterdatabinding && Array.isArray(collectedDistrictInfo.masterdatabinding)) {
-      //     for (const itemData of collectedDistrictInfo.masterdatabinding) {
-      //       districtId.push(itemData.DistrictCodeAlpha);
-      //     }
-      //     locationFilter = { DistrictMasterID: { $in: districtId } };
-      //   } else {
-      //     console.warn("Invalid district info format:", collectedDistrictInfo);
-      //     locationFilter = {};
-      //   }
-      // }
-
-
       let locationFilter = {};
 
       if (LocationTypeID === 1) {
-        // STATE USER
         if (Array.isArray(StateMasterID) && StateMasterID.length > 0) {
           locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
         } else {
-          // State user but no states assigned → return empty filter
           locationFilter = { FilterStateID: { $in: [] } };
         }
 
       } else if (LocationTypeID === 2) {
-        // DISTRICT USER
         const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
         const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
 
@@ -7209,15 +7180,44 @@ export class TicketDashboardService {
         match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
       }
 
-      if (StateMasterID && StateMasterID.lenth > 0) {
-        if (stateID && stateID !== "" && LocationTypeID !== 2) {
-          const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
-          const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
+      /*  if(StateMasterID && StateMasterID.lenth > 0){
+     if (stateID && stateID !== "" && LocationTypeID !== 2) {
+         const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
+         const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
+         if (validStateIDs.length === 0) {
+           return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
+         }
+         match.FilterStateID = { $in: validStateIDs };
+       } else if (StateMasterID?.length && LocationTypeID !== 2) {
+         match.FilterStateID = { $in: StateMasterID.map(Number) };
+       }
+       } */
+
+      // State Logic
+      if (LocationTypeID !== 2) {
+
+        const hasPayloadState = stateID && String(stateID).trim() !== "";
+
+        if (hasPayloadState) {
+          // User provided states → validate against allowed list
+          const requestedStateIDs = String(stateID)
+            .split(",")
+            .map(id => Number(id.trim()));
+
+          const allowedStateIDs = StateMasterID?.map(Number) || [];
+
+          const validStateIDs = requestedStateIDs.filter(id =>
+            allowedStateIDs.includes(id)
+          );
+
           if (validStateIDs.length === 0) {
             return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
           }
+
           match.FilterStateID = { $in: validStateIDs };
-        } else if (StateMasterID?.length && LocationTypeID !== 2) {
+
+        } else if (StateMasterID?.length > 0) {
+          // No user input → fall back to user detail permissions
           match.FilterStateID = { $in: StateMasterID.map(Number) };
         }
       }
@@ -8853,6 +8853,43 @@ Your Automation System
                 console.error(`❌ Skipping batch ${batchNumber} after ${MAX_RETRIES} retries.`);
               }
             }
+          }));
+
+          try {
+            const result = await collection.bulkWrite(bulkOps, { ordered: false });
+            const matched = result.matchedCount || 0;
+            const modified = result.modifiedCount || 0;
+            totalUpdated += modified;
+            totalMissing += chunk.length - matched;
+
+            console.log(`✅ Mongo BulkWrite Success → Matched: ${matched}, Modified: ${modified}, Missing: ${chunk.length - matched}`);
+
+            const success = chunk.map(r => ({
+              SupportTicketID: r.SupportTicketID,
+              TicketStatusID: r.TicketStatusID,
+              TicketStatus: r.TicketStatus,
+              status: 'updated',
+              updatedAt: new Date()
+            }));
+            successLogs.push(...success);
+
+          } catch (bulkErr) {
+            console.error(`❌ Mongo BulkWrite Error on chunk ${i / CHUNK_SIZE + 1}:`, bulkErr.message);
+
+            const failed = chunk.map(r => ({
+              SupportTicketID: r.SupportTicketID,
+              TicketStatusID: r.TicketStatusID,
+              TicketStatus: r.TicketStatus,
+              status: 'failed',
+              error: bulkErr.message,
+              updatedAt: new Date()
+            }));
+            failedLogs.push(...failed);
+          }
+
+          if (global.gc) {
+            global.gc();
+            console.log("🧹 Memory cleaned up (global.gc invoked).");
           }
         }
 
@@ -9021,520 +9058,346 @@ Your Automation System
 
 
 
+
+
   async csvImportService(payload: any) {
-    try {
-      if (!this.db) {
-        console.error("Database instance not found.");
-        return { data: [], message: "Database connection not initialized" };
-      }
+    console.log("📁 CSV Import Service Started...");
 
-      const { file, collectionName, insertedBy = "system", chunkSize = 100000 } = payload || {};
+    if (!this.db) {
+      console.error("❌ Database not initialized");
+      return { data: [], message: "Database not initialized" };
+    }
 
-      if (!file) return { data: [], message: "Missing CSV file in payload" };
-      if (!collectionName || typeof collectionName !== "string")
-        return { data: [], message: "Missing or invalid collection name" };
+    const { file, collectionName, insertedBy = "system", chunkSize = 10000 } = payload || {};
 
-      let csvString: string;
-      if (Buffer.isBuffer(file)) {
-        csvString = file.toString("utf-8");
-      } else if (file instanceof ArrayBuffer) {
-        csvString = Buffer.from(file).toString("utf-8");
-      } else if (ArrayBuffer.isView(file)) {
-        csvString = Buffer.from(file.buffer, file.byteOffset, file.byteLength).toString("utf-8");
-      } else if (typeof file === "string") {
-        csvString = Buffer.from(file, "base64").toString("utf-8");
-      } else {
-        return { data: [], message: "Invalid file format" };
-      }
+    console.log(`➡ Collection: ${collectionName}`);
+    console.log(`➡ Chunk Size: ${chunkSize}`);
+    console.log(`➡ Uploaded By: ${insertedBy}`);
 
-      const jsonData: any[] = parse(csvString, {
+    if (!file || !collectionName) {
+      console.error("❌ Missing file or collection name");
+      return { data: [], message: "Missing file or collection name" };
+    }
+
+    // Convert input file to string
+    let csvString: string;
+    if (Buffer.isBuffer(file)) {
+      console.log("📦 File type: Buffer");
+      csvString = file.toString("utf-8");
+    } else if (typeof file === "string") {
+      console.log("📦 File type: Base64 string");
+      csvString = Buffer.from(file, "base64").toString("utf-8");
+    } else {
+      console.error("❌ Invalid file format");
+      return { data: [], message: "Invalid file format" };
+    }
+
+    const targetCollection = this.db.collection(collectionName);
+    const logCollection = this.db.collection("ExcelImportLogs");
+
+    let buffer: any[] = [];
+    let insertedCount = 0;
+    let totalRecords = 0;
+
+    console.log("📝 Creating log entry...");
+
+    // Insert initial log entry
+    const logId = (await logCollection.insertOne({
+      collectionName,
+      totalRecords: 0,
+      insertedCount: 0,
+      status: "IN_PROGRESS",
+      insertedBy,
+      startedAt: new Date(),
+    })).insertedId;
+
+    console.log(`📌 Log created with ID: ${logId}`);
+
+    // Create async iterable CSV stream parser
+    const csvStream = Readable.from(csvString).pipe(
+      parse({
         columns: true,
         skip_empty_lines: true,
-        trim: true,
-      });
+        trim: true
+      })
+    ) as AsyncIterable<any>;
 
-      if (!jsonData.length) return { data: [], message: "CSV file contains no data rows" };
+    console.log("🚀 Parsing CSV and inserting records...");
 
-      const targetCollection = this.db.collection(collectionName);
-      const logCollection = this.db.collection("ExcelImportLogs");
+    const startTime = Date.now();
 
-      const totalRecords = jsonData.length;
-      let insertedCount = 0;
+    for await (const record of csvStream) {
+      totalRecords++;
+      buffer.push(record);
 
-      const chunks: any[][] = [];
-      for (let i = 0; i < totalRecords; i += chunkSize) {
-        chunks.push(jsonData.slice(i, i + chunkSize));
-      }
+      // Every chunk inserted
+      if (buffer.length >= chunkSize) {
+        console.log(`⚙️ Inserting chunk... Records processed: ${totalRecords}`);
 
-      const logId = (await logCollection.insertOne({
-        collectionName,
-        totalRecords,
-        insertedCount: 0,
-        status: "IN_PROGRESS",
-        insertedBy,
-        startedAt: new Date(),
-      })).insertedId;
-
-      for (const chunk of chunks) {
-        if (!chunk.length) continue;
-        const result = await targetCollection.insertMany(chunk);
-        insertedCount += result.insertedCount;
+        await targetCollection.insertMany(buffer);
+        insertedCount += buffer.length;
+        buffer = [];
 
         await logCollection.updateOne(
           { _id: logId },
-          { $set: { insertedCount, updatedAt: new Date() } }
+          { $set: { insertedCount, totalRecords, updatedAt: new Date() } }
         );
+
+        console.log(`📌 Progress: Inserted: ${insertedCount} / Read: ${totalRecords}`);
       }
 
-      await logCollection.updateOne(
-        { _id: logId },
-        { $set: { status: "COMPLETED", completedAt: new Date() } }
-      );
-
-      return {
-        data: { totalRecords, insertedCount },
-        message: `Successfully uploaded ${insertedCount} records into ${collectionName}`,
-      };
-    } catch (err: any) {
-      console.error("Error in csvImportService:", err?.message || err);
-      try {
-        const logCollection = this.db.collection("ExcelImportLogs");
-        await logCollection.insertOne({
-          error: err?.message || err,
-          status: "FAILED",
-          failedAt: new Date(),
-        });
-      } catch { }
-
-      if (err.name === "MongoNetworkError") return { data: [], message: "Database network error" };
-      if (err.name === "MongoServerError") return { data: [], message: "Database server error" };
-      return { data: [], message: "Unexpected error occurred" };
+      if (totalRecords % 50000 === 0) {
+        console.log(`📊 Still processing... Total processed so far: ${totalRecords}`);
+      }
     }
+
+    // Insert last batch
+    if (buffer.length > 0) {
+      console.log(`📦 Inserting final chunk: ${buffer.length} records`);
+      await targetCollection.insertMany(buffer);
+      insertedCount += buffer.length;
+    }
+
+    await logCollection.updateOne(
+      { _id: logId },
+      { $set: { totalRecords, insertedCount, status: "COMPLETED", completedAt: new Date() } }
+    );
+
+    const executionTime = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`🎉 Import completed: ${insertedCount} records inserted.`);
+    console.log(`⏱ Execution time: ${executionTime} seconds`);
+
+    return {
+      data: { totalRecords, insertedCount, executionTime },
+      message: `Successfully uploaded ${insertedCount} records in ${collectionName}`,
+    };
   }
 
 
 
 
 
+  async syncAudioCall() {
+    try {
+      const sourceCollection = this.db.collection("KRPH_Calling_CDR_files_paths");
+      const ticketCollection = this.db.collection("SLA_Ticket_listing");
 
+      const batchSize = 100000;
+      let lastId = null;
+      let batchNo = 0;
+      let totalProcessed = 0;
+      let totalMatched = 0;
+      let totalUpdated = 0;
 
- 
+      console.log("🚀 Audio file update job started");
 
+      while (true) {
+        batchNo++;
+        console.log(`\n📦 Fetching batch #${batchNo}...`);
 
+        const query = lastId ? { _id: { $gt: lastId } } : {};
 
+        const records = await sourceCollection
+          .find(query)
+          .sort({ _id: 1 })
+          .limit(batchSize)
+          .toArray();
 
-
-/* async  KrphUpdateAudioURLByCSCCloudService(payload: any) {
-  const BATCH_SIZE = 5;
-const DELAY_BETWEEN_BATCHES = 2000; // ms
-const DEFAULT_DATE_FORMAT = "DD-MM-YYYY";
-const DEFAULT_SUBTRACT_DAYS = 2;
-const MAX_API_CALL_RETRIES = 3;
-  try {
-    const sourceCollection = "SLA_Ticket_listing";
-    let { fromDate, toDate } = payload;
-
-    let startOfDayUTC: Date, endOfDayUTC: Date;
-
-    if (fromDate && toDate) {
-      const { startUTC, endUTC } = this.getUTCStartEndForDateUTC(fromDate);
-      startOfDayUTC = startUTC;
-      endOfDayUTC = endUTC;
-    } else {
-      const tempDate = moment().subtract(DEFAULT_SUBTRACT_DAYS, "days").format(DEFAULT_DATE_FORMAT);
-      const { startUTC, endUTC } = this.getUTCStartEndForDateUTC(tempDate);
-      startOfDayUTC = startUTC;
-      endOfDayUTC = endUTC;
-    }
-
-    const pipeline = [
-      {
-        $match: {
-          InsertDateTime: { $gte: startOfDayUTC, $lte: endOfDayUTC },
-          CallingUniqueID: { $nin: [null, ""] }
-        },
-      },
-      {
-        $match: {
-          $or: [
-            { CallingAudioFile: { $exists: false } },
-            { CallingAudioFile: null },
-            { CallingAudioFile: "" },
-          ],
-        },
-      }, {
-        $limit:1
-      }
-      
-    ];
-
-    console.log("Aggregation Pipeline:", JSON.stringify(pipeline, null, 2));
-
-    const tickets = await this.db
-      .collection(sourceCollection)
-      .aggregate(pipeline, { allowDiskUse: true })
-      .toArray();
-
-    console.log(`Total tickets to process: ${tickets.length}`);
-
-    let results = [];
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    for (let i = 0; i < tickets.length; i += BATCH_SIZE) {
-      const batch = tickets.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async (item) => {
-          try {
-            let UrlData = null;
-            let retries = 0;
-
-            while (!UrlData && retries < MAX_API_CALL_RETRIES) {
-              UrlData = await this.CallingUrlApiCall(item?.CallingUniqueID);
-              if (!UrlData?.recording_url) {
-                console.warn(`No recording URL found for ${item.CallingUniqueID}. Retrying...`);
-                retries++;
-                await delay(2000); 
-              }
-            }
-
-            if (UrlData?.recording_url) {
-              let fixedUrl = await this.generateUrl(UrlData?.recording_url);
-              console.log(`Recording URL for ${item.CallingUniqueID}:`, fixedUrl);
-
-              let audioFile = await this.getAudioFile(fixedUrl);
-              let AudioFileNameForGCP = await this.getFileName(fixedUrl);
-              console.log(`Generated file name for GCP: ${AudioFileNameForGCP}`);
-
-              let GCPSavedRecord = await this.sendFileToGCP(audioFile, AudioFileNameForGCP);
-              console.log(`GCP save result:`, GCPSavedRecord);
-
-              if (GCPSavedRecord?.responseDynamic[0].gcsUrl) {
-                const definedPayload = {
-                  uniqueId: item?.CallingUniqueID,
-                  path: GCPSavedRecord?.responseDynamic[0].gcsUrl,
-                  fileInfo: null,
-                  insertedBy: "Pradeep Sahani"
-                };
-
-                let savedFile = await this.SaveGCPFileToDB(definedPayload);
-                console.log(`File saved to DB:`, savedFile);
-              }
-            }
-
-            return { item, UrlData };
-          } catch (err) {
-            console.error(`Error processing ${item?.CallingUniqueID}:`, err);
-            return { item, UrlData: null, error: err.message };
-          }
-        })
-      );
-
-      results = results.concat(batchResults);
-
-      if (i + BATCH_SIZE < tickets.length) {
-        console.log(`Waiting for ${DELAY_BETWEEN_BATCHES / 1000} seconds before next batch...`);
-        await delay(DELAY_BETWEEN_BATCHES);
-      }
-    }
-
-    return { obj: results, message: { msg: "Processing complete", code: 1 } };
-  } catch (err) {
-    console.error("Error in KrphUpdateAudioURLByCSCCloudService:", err);
-    throw err; 
-  }
-}
- */
-
-async KrphUpdateAudioURLByCSCCloudServicedd(payload: any) {
-  const BATCH_SIZE = 100;
-  const DELAY_BETWEEN_BATCHES = 2000; 
-  const DEFAULT_DATE_FORMAT = "DD-MM-YYYY";
-  const DEFAULT_SUBTRACT_DAYS = 2;
-  const MAX_API_CALL_RETRIES = 3;
-  const MAX_DB_SAVE_RETRIES = 3;
-
-  try {
-    const sourceCollection = "SLA_Ticket_listing";
-    let { fromDate, toDate } = payload;
-
-    let startOfDayUTC: Date, endOfDayUTC: Date;
-
-    if (fromDate && toDate) {
-      const { startUTC, endUTC } = this.getUTCStartEndForDateUTC(fromDate);
-      startOfDayUTC = startUTC;
-      endOfDayUTC = endUTC;
-    } else {
-      const tempDate = moment().subtract(DEFAULT_SUBTRACT_DAYS, "days").format(DEFAULT_DATE_FORMAT);
-      const { startUTC, endUTC } = this.getUTCStartEndForDateUTC(tempDate);
-      startOfDayUTC = startUTC;
-      endOfDayUTC = endUTC;
-    }
-
-    const pipeline = [
-      {
-        $match: {
-          InsertDateTime: { $gte: startOfDayUTC, $lte: endOfDayUTC },
-          CallingUniqueID: { $nin: [null, ""] }
-        },
-      },
-      {
-        $match: {
-          $or: [
-            { CallingAudioFile: { $exists: false } },
-            { CallingAudioFile: null },
-            { CallingAudioFile: "" },
-          ],
-        },
-      },
-     
-    ];
-
-    const tickets = await this.db
-      .collection(sourceCollection)
-      .aggregate(pipeline, { allowDiskUse: true })
-      .toArray();
-
-    let results = [];
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    for (let i = 0; i < tickets.length; i += BATCH_SIZE) {
-      const batch = tickets.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async (item) => {
-          try {
-
-           let uniqueIdExistsInDB = await this.isUniqueIdInDB(item);
-        
-        if (uniqueIdExistsInDB) {
-          console.log('Skipped: ID already in DB' + item?.CallingUniqueID)
-          return null
+        if (!records.length) {
+          console.log("🛑 No more records to process");
+          break;
         }
 
+        lastId = records[records.length - 1]._id;
 
-            let UrlData = null;
-            let retries = 0;
+        console.log(`📄 Batch #${batchNo} fetched: ${records.length} records`);
 
-            while (!UrlData && retries < MAX_API_CALL_RETRIES) {
-              UrlData = await this.CallingUrlApiCall(item?.CallingUniqueID);
-              if (!UrlData?.recording_url) {
-                retries++;
-                await delay(2000); 
-              }
+        let batchMatched = 0;
+        let batchModified = 0;
+        let index = 0;
+
+        for (const record of records) {
+          index++;
+          totalProcessed++;
+
+          // Skip invalid records
+          if (!record?.uniqueId || !record?.path) {
+            if (index % 5000 === 0) {
+              console.log(`⏭ Skipped ${index} records in batch #${batchNo}`);
             }
-
-            if (UrlData?.recording_url) {
-              let fixedUrl = await this.generateUrl(UrlData?.recording_url);
-
-              let audioFile = await this.getAudioFile(fixedUrl);
-              let AudioFileNameForGCP = await this.getFileName(fixedUrl);
-
-              let GCPSavedRecord = await this.sendFileToGCP(audioFile, AudioFileNameForGCP,item);
-
-              if (GCPSavedRecord?.responseDynamic[0].gcsUrl) {
-                const definedPayload = {
-                  uniqueId: item?.CallingUniqueID,
-                  path: GCPSavedRecord?.responseDynamic[0].gcsUrl,
-                  fileInfo: null,
-                  insertedBy: "Pradeep Sahani"
-                };
-
-                let dbSaveSuccess = false;
-                let dbSaveRetries = 0;
-
-                while (!dbSaveSuccess && dbSaveRetries < MAX_DB_SAVE_RETRIES) {
-                  try {
-                    let savedFile = await this.SaveGCPFileToDB(definedPayload);
-                    dbSaveSuccess = true; 
-                  } catch (err) {
-                    dbSaveRetries++;
-                    if (dbSaveRetries < MAX_DB_SAVE_RETRIES) {
-                      await delay(1000); 
-                    }
-                  }
-                }
-
-                if (!dbSaveSuccess) {
-                  console.error(`Failed to save file to DB for ${item.CallingUniqueID} after ${MAX_DB_SAVE_RETRIES} retries.`);
-                }
-              }
-            }
-
-            return { item, UrlData };
-          } catch (err) {
-            return { item, UrlData: null, error: err.message };
+            continue;
           }
-        })
-      );
 
-      results = results.concat(batchResults);
+          const result = await ticketCollection.updateMany(
+            {
+              CallingUniqueID: record.uniqueId,
+              $or: [
+                { CallingAudioFile: null },
+                { CallingAudioFile: "" },
+                { CallingAudioFile: { $exists: false } }
+              ]
+            },
+            {
+              $set: {
+                CallingAudioFile: record.path
+              }
+            }
+          );
 
-      if (i + BATCH_SIZE < tickets.length) {
-        await delay(DELAY_BETWEEN_BATCHES);
+          if (result.matchedCount > 0) {
+            batchMatched += result.matchedCount;
+            totalMatched += result.matchedCount;
+          }
+
+          if (result.modifiedCount > 0) {
+            batchModified += result.modifiedCount;
+            totalUpdated += result.modifiedCount;
+          }
+
+          if (index % 1000 === 0) {
+            console.log(
+              `🔄 Batch #${batchNo} progress: ${index}/${records.length} | Updated: ${batchModified}`
+            );
+          }
+        }
+
+        console.log("📊 Batch Completed:", {
+          batchNo,
+          processed: records.length,
+          matched: batchMatched,
+          updated: batchModified,
+          lastProcessedId: lastId.toString()
+        });
       }
-    }
 
-    return { obj: results, message: { msg: "Processing complete", code: 1 } };
-  } catch (err) {
-    throw err; 
+      console.log("\n✅ Job Summary:");
+      console.log({
+        totalProcessed,
+        totalMatched,
+        totalUpdated
+      });
+
+      console.log("✔ Audio file update job completed successfully");
+
+      return { status: true };
+
+    } catch (err) {
+      console.error("❌ Job failed:", err);
+      return { status: false, error: err.message };
+    }
   }
+
+  async insuranceWiseTicketList(payload: any) {
+  let { month, year } = payload;
+  let message = { msg: "", code: "" };
+
+  if (!month) {
+    message.msg = "Month is required";
+    message.code = "1";
+    return { data: {}, message };
+  }
+
+  if (!year) {
+    message.msg = "Year is required";
+    message.code = "1";
+    return { data: {}, message };
+  }
+
+  const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const endDate = new Date(year, month, 1, 0, 0, 0, 0);
+
+  const pipeline = [
+    {
+      $match: {
+        AssignedDate: {
+          $gte: startDate,
+          $lt: endDate
+        }
+      }
+    },
+    {
+      $lookup: {
+        from: "SLA_Ticket_listing",
+        let: { ticketId: "$SupportTicketID" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$SupportTicketID", "$$ticketId"] }
+            }
+          },
+          { $limit: 1 }
+        ],
+        as: "TicketInfo"
+      }
+    },
+    {
+      $unwind: {
+        path: "$TicketInfo",
+        preserveNullAndEmptyArrays: false
+      }
+    },
+    {
+      $group: {
+        _id: "$TicketInfo.InsuranceCompany",
+        TicketCount: { $sum: 1 }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        InsuranceCompany: "$_id",
+        TicketCount: 1
+      }
+    },
+    {
+      $sort: { TicketCount: -1 }
+    }
+  ];
+
+  const fetchedData = await this.db
+    .collection("Ticket_Assignment_History")
+    .aggregate(pipeline)
+    .toArray();
+
+  const getInsuranceCompany = await this.db
+    .collection("KRPH_InsuranceMaster")
+    .find({})
+    .toArray();
+
+  const insuranceCountMap: Record<string, number> = {};
+
+  for (const fd of fetchedData) {
+    insuranceCountMap[this.normalize(fd.InsuranceCompany)] = fd.TicketCount;
+  }
+
+  const conbinedData = getInsuranceCompany.map(item => {
+    const key = this.normalize(item.InsuranceMasterName);
+    return {
+      // ...item,
+      InsuranceCompanyId:item?.InsuranceMasterID,
+      InsuranceCompany: item.InsuranceMasterName,
+      TicketCount: insuranceCountMap[key] || 0
+    };
+  });
+
+  message.msg = "Success";
+  message.code = "1";
+  let obj ={
+    data:conbinedData
+  }
+
+  return {
+    data: obj,
+    message
+  };
 }
 
-async KrphUpdateAudioURLByCSCCloudService(payload: any) {
-  const BATCH_SIZE = 100;
-  const DELAY_BETWEEN_BATCHES = 2000; 
-  const DEFAULT_DATE_FORMAT = "DD-MM-YYYY";
-  const DEFAULT_SUBTRACT_DAYS = 2;
-  const MAX_API_CALL_RETRIES = 3;
-  const MAX_DB_SAVE_RETRIES = 3;
-
-  try {
-    const sourceCollection = "SLA_Ticket_listing";
-    let { fromDate, toDate } = payload;
-
-    let startOfDayUTC: Date, endOfDayUTC: Date;
-
-    if (fromDate && toDate) {
-      const { startUTC, endUTC } = this.getUTCStartEndForDateUTC(fromDate);
-      startOfDayUTC = startUTC;
-      endOfDayUTC = endUTC;
-    } else {
-      const tempDate = moment().subtract(DEFAULT_SUBTRACT_DAYS, "days").format(DEFAULT_DATE_FORMAT);
-      const { startUTC, endUTC } = this.getUTCStartEndForDateUTC(tempDate);
-      startOfDayUTC = startUTC;
-      endOfDayUTC = endUTC;
-    }
-
-    const pipeline = [
-      {
-        $match: {
-          InsertDateTime: { $gte: startOfDayUTC, $lte: endOfDayUTC },
-          CallingUniqueID: { $nin: [null, ""] }
-        },
-      },
-      {
-        $match: {
-          $or: [
-            { CallingAudioFile: { $exists: false } },
-            { CallingAudioFile: null },
-            { CallingAudioFile: "" },
-          ],
-        },
-      },
-    ];
-
-    console.log(`Starting aggregation query on ${sourceCollection} with date range: ${startOfDayUTC} - ${endOfDayUTC}`);
-
-    const tickets = await this.db
-      .collection(sourceCollection)
-      .aggregate(pipeline, { allowDiskUse: true })
-      .toArray();
-
-    console.log(`Found ${tickets.length} tickets to process.`);
-
-    let results = [];
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    for (let i = 0; i < tickets.length; i += BATCH_SIZE) {
-      const batch = tickets.slice(i, i + BATCH_SIZE);
-      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(tickets.length / BATCH_SIZE)}...`);
-
-      const batchResults = await Promise.all(
-        batch.map(async (item) => {
-          try {
-            let uniqueIdExistsInDB = await this.isUniqueIdInDB(item);
-            if (uniqueIdExistsInDB) {
-              console.log(`Skipped: ID ${item?.CallingUniqueID} already in DB`);
-              return null;
-            }
-
-            let UrlData = null;
-            let retries = 0;
-
-            while (!UrlData && retries < MAX_API_CALL_RETRIES) {
-              console.log(`Attempting API call for unique ID ${item?.CallingUniqueID}, attempt #${retries + 1}`);
-              UrlData = await this.CallingUrlApiCall(item?.CallingUniqueID);
-
-              if (!UrlData?.recording_url) {
-                retries++;
-                console.log(`No recording URL found, retrying...`);
-                await delay(2000); 
-              }
-            }
-
-            if (UrlData?.recording_url) {
-              console.log(`Successfully retrieved recording URL for unique ID ${item?.CallingUniqueID}`);
-
-              let fixedUrl = await this.generateUrl(UrlData?.recording_url);
-              let audioFile = await this.getAudioFile(fixedUrl);
-              let AudioFileNameForGCP = await this.getFileName(fixedUrl);
-
-              console.log(`Sending file to GCP for unique ID ${item?.CallingUniqueID}`);
-              let GCPSavedRecord = await this.sendFileToGCP(audioFile, AudioFileNameForGCP, item);
-
-              if (GCPSavedRecord?.responseDynamic[0].gcsUrl) {
-                console.log(`Successfully saved file to GCP for unique ID ${item?.CallingUniqueID}`);
-
-                const definedPayload = {
-                  uniqueId: item?.CallingUniqueID,
-                  path: GCPSavedRecord?.responseDynamic[0].gcsUrl,
-                  fileInfo: null,
-                  insertedBy: "Pradeep Sahani"
-                };
-
-                let dbSaveSuccess = false;
-                let dbSaveRetries = 0;
-
-                while (!dbSaveSuccess && dbSaveRetries < MAX_DB_SAVE_RETRIES) {
-                  try {
-                    console.log(`Saving file info to DB for unique ID ${item?.CallingUniqueID}, attempt #${dbSaveRetries + 1}`);
-                    let savedFile = await this.SaveGCPFileToDB(definedPayload);
-                    dbSaveSuccess = true; 
-                    console.log(`File info successfully saved to DB for unique ID ${item?.CallingUniqueID}`);
-                  } catch (err) {
-                    dbSaveRetries++;
-                    console.log(`Failed to save file to DB, retrying... (${dbSaveRetries}/${MAX_DB_SAVE_RETRIES})`);
-                    if (dbSaveRetries < MAX_DB_SAVE_RETRIES) {
-                      await delay(1000); 
-                    }
-                  }
-                }
-
-                if (!dbSaveSuccess) {
-                  console.error(`Failed to save file to DB for ${item.CallingUniqueID} after ${MAX_DB_SAVE_RETRIES} retries.`);
-                }
-              }
-            }
-
-            return { item, UrlData };
-          } catch (err) {
-            console.error(`Error processing unique ID ${item?.CallingUniqueID}: ${err.message}`);
-            return { item, UrlData: null, error: err.message };
-          }
-        })
-      );
-
-      results = results.concat(batchResults);
-
-      if (i + BATCH_SIZE < tickets.length) {
-        console.log(`Waiting ${DELAY_BETWEEN_BATCHES / 1000} seconds before processing the next batch...`);
-        await delay(DELAY_BETWEEN_BATCHES);
-      }
-    }
-
-    console.log("Processing complete, returning results.");
-    return { obj: results, message: { msg: "Processing complete", code: 1 } };
-  } catch (err) {
-    console.error(`Error during execution: ${err.message}`);
-    throw err; 
-  }
-}
-
-
-
-  async generateUrl(filePath) {
-    const extractedPath = filePath.replace('/home/monitorDONE', '');
-    const prefix = 'https://krph.csccloud.in/RECORDINGS';
-    return prefix + extractedPath;
+  normalize(str = "") {
+    return str
+      .toUpperCase()
+      .replace(/,/g, "")     // remove commas
+      .replace(/\s+/g, " ")  // normalize spaces
+      .trim();
   }
 
   async sendFileToGCP(documentsPath: any, fileNameGCP: any, item:any) {

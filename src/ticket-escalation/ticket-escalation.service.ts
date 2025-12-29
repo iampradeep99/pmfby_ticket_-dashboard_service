@@ -40,7 +40,7 @@ export class TicketEscalationService {
   private tokenCache = new NodeCache({ stdTTL: 30 * 60 });
 
   private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
-  private readonly RoleURL = "http://10.128.60.9:3011/krishirakshak/v1/user/user/roleWiseUserList"
+  private readonly RoleURL = "https://pmfby.gov.in/krishirakshak/v1/user/user/roleWiseUserList"
   public gcp = new GCPServices();
   logDir = path.join(__dirname, '..', 'logs');
 
@@ -210,6 +210,134 @@ export class TicketEscalationService {
 
 
 
+/* async getRolesForGovt(payload: any) {
+  try {
+    let token: string;
+    try {
+      token = await this.getToken();
+    } catch (tokenErr: any) {
+      return {
+        data: null,
+        message: {
+          msg: "Failed to generate token",
+          code: 0,
+          errorType: "TOKEN_ERROR",
+          detail: tokenErr?.message
+        },
+      };
+    }
+
+    const EnumRole: Record<string, number> = {
+      STATE_GOVT_ADMIN: 1,
+      STATE_GOVT_USER: 2,
+      DEPUTY_DIRECTOR: 3
+    };
+
+    const roleMap: Record<number, string> = {
+      1: "STATE_GOVT_ADMIN",
+      2: "STATE_GOVT_USER",
+      3: "DEPUTY_DIRECTOR"
+    };
+
+      const roleMap: Record<number, string> = {
+        1: "STATE_GOVT_ADMIN",
+        2: "STATE_GOVT_USER",
+        3: "DEPUTY_DIRECTOR"
+      };
+
+    if (!axiosPayload.roleName) {
+      return {
+        data: null,
+        message: {
+          msg: "Invalid roleName provided in payload",
+          code: 0,
+          errorType: "INPUT_VALIDATION_ERROR",
+          detail: { received: payload?.roleName }
+        },
+      };
+    }
+
+    console.log("Calling External API With Payload:", axiosPayload);
+
+    let apiResponse: any;
+    try {
+      apiResponse = await axios.get(this.RoleURL, {
+        params: axiosPayload,
+        timeout: 10000,
+        headers: { token },
+      });
+    } catch (axiosErr: any) {
+      const status = axiosErr?.response?.status;
+      const apiMsg = axiosErr?.response?.data?.message || axiosErr?.message;
+
+      return {
+        data: null,
+        message: {
+          msg: "External API call failed",
+          code: 0,
+          errorType: "EXTERNAL_API_ERROR",
+          httpStatus: status,
+          detail: apiMsg,
+          url: this.RoleURL,
+        },
+      };
+    }
+
+    const data = apiResponse?.data;
+
+    if (!data?.data) {
+      return {
+        data: null,
+        message: {
+          msg: "No data received from external API",
+          code: 0,
+          errorType: "API_NO_DATA",
+        },
+      };
+    }
+
+    let updatedData: any[] = [];
+    try {
+      updatedData = data.data
+        .map((item: any) => ({
+          ...item,
+          roleName: EnumRole[item.roleName] || item.roleName,
+        }))
+        .filter(
+          (item: any, index: number, self: any[]) =>
+            index === self.findIndex((t) => t.userID === item.userID)
+        );
+    } catch (processingErr: any) {
+      return {
+        data: null,
+        message: {
+          msg: "Error occurred while processing API data",
+          code: 0,
+          errorType: "DATA_PROCESSING_ERROR",
+          detail: processingErr.message,
+        },
+      };
+    }
+
+    return {
+      data: updatedData,
+      message: { msg: "Success", code: 1 },
+    };
+  } catch (unexpectedErr: any) {
+    return {
+      data: null,
+      message: {
+        msg: "Unexpected internal server error",
+        code: 0,
+        errorType: "UNHANDLED_ERROR",
+        detail: unexpectedErr?.message,
+      },
+    };
+  }
+} */
+
+
+
   async getRolesForGovt(payload: any) {
     try {
       let token: string;
@@ -264,11 +392,10 @@ export class TicketEscalationService {
           headers: { token },
         });
       } catch (axiosErr: any) {
-        console.log(axiosErr)
         return {
           data: null,
           message: {
-            msg: axiosErr?.message,
+            msg: "External API call failed",
             code: 0,
             errorType: "EXTERNAL_API_ERROR",
             detail: axiosErr?.message,
@@ -377,7 +504,6 @@ export class TicketEscalationService {
       };
     }
   }
-
 
 
 
@@ -861,100 +987,21 @@ export class TicketEscalationService {
         continue;
       }
 
-      try {
-        const ticket = await ticketCollection.findOne({
-          SupportTicketID: ticketId
-        });
-
-        if (!ticket) {
-          results.push({
-            ticketId,
-            status: "Failed",
-            reason: "Ticket not found"
-          });
-          continue;
-        }
-
-        const alreadyAssignedToUser = await assignHistoryCollection.findOne({
-          SupportTicketID: ticketId,
-          assignedTo,
-          IsActive: true
-        });
-
-        if (alreadyAssignedToUser) {
-          results.push({
-            ticketId,
-            ticketNo: ticket.SupportTicketNo,
-            status: "Failed",
-            reason: "Ticket already assigned to this user"
-          });
-          continue;
-        }
-
-        await assignHistoryCollection.updateMany(
-          { SupportTicketID: ticketId, IsActive: true },
-          { $set: { IsActive: false, UpdatedDate: now } }
-        );
-
-        const assignmentHistoryData = {
-          SupportTicketID: ticketId,
-          SupportTicketNo: ticket.SupportTicketNo,
-          TicketStatusID: ticket.TicketStatusID || null,
-          TicketStatus: ticket.TicketStatus || null,
-
-          assignedBy,
-          assignedByName,
-          assignedTo,
-          assignToName,
-          AssignedDate: now,
-          AssigneeStateID: stateID,
-          AssigneeMobileNo: mobileNo,
-          AssigneRoleName: assignedRoleName,
-          AssigneeRoleID: roleId,
-          DistrictID: districtID,
-
-          IsActive: true
-        };
-
-        const insertRes = await assignHistoryCollection.insertOne(
-          assignmentHistoryData
-        );
-
-        if (!insertRes.insertedId) {
-          results.push({
-            ticketId,
-            ticketNo: ticket.SupportTicketNo,
-            status: "Failed",
-            reason: "Failed to save assignment history"
-          });
-          continue;
-        }
-
-        await currentAssignCollection.updateOne(
-          { SupportTicketID: ticketId },
-          {
-            $set: {
-              SupportTicketNo: ticket.SupportTicketNo,
-              TicketStatusID: ticket.TicketStatusID || null,
-              TicketStatus: ticket.TicketStatus || null,
-
-              assignedBy,
-              assignedByName,
-              assignedTo,
-              assignToName,
-
-              AssignedDate: now,
-              AssigneeStateID: stateID || "",
-              AssigneeMobileNo: mobileNo,
-              AssigneRoleName: assignedRoleName,
-              AssigneeRoleID: roleId,
-              DistrictID: districtID,
-
-              UpdatedDate: now
-            }
-          },
-          { upsert: true }
-        );
+      const assignmentData = {
+        SupportTicketID: ticketId,
+        SupportTicketNo: ticket.SupportTicketNo,
+        TicketStatusID: ticket.TicketStatusID || null,
+        TicketStatus: ticket.TicketStatus || null,
+        assignedBy,
+        assignedTo,
+        AssignedDate: now,
+        AssigneeStateID: stateID,
+        AssigneeMobileNo: mobileNo,
+        AssigneRoleName: assignedRoleName,
+        AssigneeRoleID: roleId,
+        InsuranceCompanyId:ticket?.InsuranceCompanyID,
+        InsuranceCompanyName:ticket?.InsuranceCompany
+      };
 
         results.push({
           ticketId,

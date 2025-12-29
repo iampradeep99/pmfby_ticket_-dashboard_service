@@ -16,6 +16,7 @@ import { BrowserPoolService } from "./browser-pool.service"
 
 
 var selectedData
+var currentIndex = 0
 
 const stepsTATJourneyCrpLs = [
     {
@@ -276,54 +277,227 @@ export class PDFGenerationWorkerService {
     }
 
 
-//     async gupshupCallForPDFSend(payload) {
-//     try {
+    async gupshupCallForPDFSendWorking(payload) {
+        try {
 
-//         const allowedNumbers = [
-//             "919873382826",
-//             "919891651196",
-//             "916386236314",
-//             "919899499022",
-//             "919215368699"
-//         ];
+            const allowedNumbers = [
+                "919873382826",
+                "919891651196",
+                //  "916386236314",
+                "919899499022",
+                 "919215368699"
+            ];
 
-//         const requestorMobileNo = allowedNumbers[Math.floor(Math.random() * allowedNumbers.length)];
-        
-//         const requestData = {
-//             userid: config.gupshupConfig.userid,
-//             password: config.gupshupConfig.password,
-//             send_to: requestorMobileNo,
-//             v: config.gupshupConfig.version,
-//             format: config.gupshupConfig.format,
-//             msg_type: config.gupshupConfig.msg_type,
-//             method: config.gupshupConfig.method,
-//             caption: config.gupshupConfig.caption,
-//             media_url: payload?.TicketFileURl,
-//             filename: payload?.fileName
-//         };
+            const requestorMobileNo = allowedNumbers[Math.floor(Math.random() * allowedNumbers.length)];
 
-//         let apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
+            const requestData = {
+                userid: config.gupshupConfig.userid,
+                password: config.gupshupConfig.password,
+                send_to: requestorMobileNo,
+                v: config.gupshupConfig.version,
+                format: config.gupshupConfig.format,
+                msg_type: config.gupshupConfig.msg_type,
+                method: config.gupshupConfig.method,
+                caption: config.gupshupConfig.caption,
+                media_url: payload?.TicketFileURl,
+                filename: payload?.fileName
+            };
+
+            let apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
+
+            const response = await this.client.post(apiUrl, requestData, {
+                headers: { "Content-Type": "application/json" },
+            });
+
+            console.log("Sent To:", requestorMobileNo);
+            console.log("Response:", response.data);
+
+            return response.data;
+
+        } catch (err) {
+            console.error("Error:", err);
+        }
+    }
+
+
+    async  gupshupCallForPDFSendOld(payload) {
+    try {
+
+        const allowedNumbers = payload?.RequestorMobileNo
+
+        // Select number in sequence and update index
+        const requestorMobileNoInfo = allowedNumbers[currentIndex];
+        currentIndex = (currentIndex + 1) % allowedNumbers.length; // Circular rotation
+
+        const requestData = {
+            userid: config.gupshupConfig.userid,
+            password: config.gupshupConfig.password,
+            send_to: requestorMobileNoInfo,
+            v: config.gupshupConfig.version,
+            format: config.gupshupConfig.format,
+            msg_type: config.gupshupConfig.msg_type,
+            method: config.gupshupConfig.method,
+            caption: config.gupshupConfig.caption,
+            media_url: payload?.TicketFileURl,
+            filename: payload?.fileName
+        };
+
+        const apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
 
 //         const response = await this.client.post(apiUrl, requestData, {
 //             headers: { "Content-Type": "application/json" },
 //         });
 
-//         console.log("Sent To:", requestorMobileNo);
-//         console.log("Response:", response.data);
+        console.log("Sent To:", requestorMobileNoInfo);
+        console.log("Response:", response.data);
 
 //         return response.data;
 
-//     } catch (err) {
-//         console.error("Error:", err);
-//     }
-// }
+    } catch (err) {
+        console.error("Error sending WhatsApp message:", err.message);
+        return { success: false, error: err.message };
+    }
+}
 
 
 
+
+    /*    async ProcessInformationForFarmer(payload: any): Promise<any> {
+           try {
+               return this.queue.add(async () => {
+                   const startTime = Date.now();
+                   let browser: any = null;
+                   let context: any = null;
+                   let page: any = null;
+   
+                   try {
+                       console.log(`Processing ticket: ${payload.SupportTicketNo}`);
+   
+                       selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
+                       console.log(selectedData, "test")
+                       const ticketListDetails: any = await this.FetchTicketInformation(payload);
+                       const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
+   
+                       browser = await chromium.launch({ headless: true });
+                       context = await browser.newContext();
+                       page = await context.newPage();
+   
+                       await page.setContent(prinHTML, {
+                           waitUntil: 'networkidle',
+                           timeout: 30000
+                       });
+   
+                       await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+   
+                       const tempDir = path.join(process.cwd(), "temp");
+                       if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+   
+                       const timestamp = Date.now();
+                       const safeName = selectedData.RequestorName.replace(/\s+/g, "_");
+                       // const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
+                       let pdfName = `Ticket_${payload.SupportTicketNo}_${safeName}_${timestamp}.pdf`
+                       const pdfPath = path.join(tempDir, pdfName);
+   
+   
+   
+                       await page.pdf({
+                           path: pdfPath,
+                           format: "A4",
+                           printBackground: true,
+                           margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" }
+                       });
+   
+                       await page.close();
+                       page = null;
+   
+                       const gcpResponse = await this.sendFileToGCP(pdfPath);
+                       const fetchedGCPInfo = gcpResponse?.responseDynamic?.[0];
+   
+                       const finalPayloadToSave = {
+                           SupportTicketID: selectedData?.SupportTicketID,
+                           SupportTicketNo: selectedData?.SupportTicketNo,
+                           TicketFileURl: fetchedGCPInfo?.gcsUrl,
+                           TicketHistoryID: selectedData?.TicketHistoryID || "",
+                           TicketStatusID: selectedData?.TicketStatusID || "",
+                           TicketStatus: selectedData?.TicketStatus || "",
+                           RequestorMobileNo: selectedData?.RequestorMobileNo || "",
+                           GCSFileName: fetchedGCPInfo?.filename || "",
+                           GCSId: fetchedGCPInfo?._id || "",
+                           InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
+                           UpdateDateTime: Date.now(),
+                           InsertedDateTime: selectedData?.Created || "",
+                           fileName:pdfName || ""
+                       };
+   
+                       if (
+                           !finalPayloadToSave.SupportTicketID ||
+                           !finalPayloadToSave.SupportTicketNo ||
+                           !finalPayloadToSave.TicketFileURl
+                       ) {
+                           throw new Error("Missing required fields");
+                       }
+   
+                       const savedInfo = await this.saveToDatabase(finalPayloadToSave);
+   
+                       if (savedInfo?._id) {
+                           this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+                               console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
+                           );
+                       }
+   
+                       try {
+                           fs.unlinkSync(pdfPath);
+                       } catch (e) {
+                           console.log(`Failed to delete temp file: ${pdfPath}`);
+                       }
+   
+                       const processingTime = Date.now() - startTime;
+                       console.log(`✓ Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
+   
+                       return {
+                           success: true,
+                           ticketNo: payload.SupportTicketNo,
+                           processingTime,
+                           gcsUrl: fetchedGCPInfo?.gcsUrl
+                       };
+   
+                   } catch (err) {
+                       console.log(`✗ Error processing ticket ${payload.SupportTicketNo}:`, err);
+   
+                       if (page) {
+                           await page.close().catch(() => { });
+                       }
+   
+                       // Return error object
+                       const errorResult = {
+                           success: false,
+                           ticketNo: payload.SupportTicketNo,
+                           processingTime: Date.now() - startTime,
+                           error: err.message
+                       };
+   
+                       return errorResult;
+   
+                   } finally {
+                       if (context) await context.close().catch(() => { });
+                       if (browser) await browser.close().catch(() => { });
+                   }
+               });
+           } catch (err) {
+               console.error('Queue error:', err);
+   
+               // If using this approach, you need to check result in runWorker
+               return {
+                   success: false,
+                   ticketNo: payload.SupportTicketNo,
+                   error: err.message || 'Unknown error'
+               };
+           }
+       } */
 
 
     async ProcessInformationForFarmer(payload: any): Promise<any> {
-        try {
+        try {selectedData
             return this.queue.add(async () => {
                 const startTime = Date.now();
                 let browser: any = null;
@@ -334,7 +508,33 @@ export class PDFGenerationWorkerService {
                     console.log(`Processing ticket: ${payload.SupportTicketNo}`);
 
                     selectedData = await this.fetchSelectedData(payload?.SupportTicketNo);
-                    const ticketListDetails: any = await this.FetchTicketInformation(payload);
+                    const ticketHeaderId = Number(selectedData?.TicketHeaderID);
+                    // if (selectedData?.TicketHeaderID !== 1) {
+                    //     console.log(`Ticket ${payload.SupportTicketNo} skipped. TicketHeaderID (${selectedData?.TicketHeaderID}) != 1`);
+
+                    //     return {
+                    //         success: false,
+                    //         ticketNo: payload.SupportTicketNo,
+                    //         reason: "Processing skipped because TicketHeaderID is not 1.",
+                    //         processingTime: Date.now() - startTime
+                    //     };
+                    // }
+
+                    if (!ticketHeaderId || ticketHeaderId !== 1) {
+                        console.log(
+                            `Ticket ${payload.SupportTicketNo} skipped. Invalid or unsupported TicketHeaderID (${selectedData?.TicketHeaderID}).`
+                        );
+
+                        return {
+                            success: false,
+                            ticketNo: payload.SupportTicketNo,
+                            reason: "Processing skipped because TicketHeaderID is missing, invalid, or not equal to 1.",
+                            processingTime: Date.now() - startTime
+                        };
+                    }
+
+                    const ticketListDetails: any = await this.FetchTicketInformation(payload, selectedData);
+
                     const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
 
                     browser = await chromium.launch({ headless: true });
@@ -353,11 +553,8 @@ export class PDFGenerationWorkerService {
 
                     const timestamp = Date.now();
                     const safeName = selectedData.RequestorName.replace(/\s+/g, "_");
-                    // const pdfPath = path.join(tempDir, `ticket_${payload.SupportTicketNo}.pdf`);
-                    let pdfName = `Ticket_${payload.SupportTicketNo}_${safeName}_${timestamp}.pdf`
+                    const pdfName = `Ticket_${payload.SupportTicketNo}_${safeName}_${timestamp}.pdf`;
                     const pdfPath = path.join(tempDir, pdfName);
-
-
 
                     await page.pdf({
                         path: pdfPath,
@@ -385,33 +582,29 @@ export class PDFGenerationWorkerService {
                         InsertedAtGCS: fetchedGCPInfo?.uploadedAt || "",
                         UpdateDateTime: Date.now(),
                         InsertedDateTime: selectedData?.Created || "",
-                        fileName:pdfName || ""
+                        fileName: pdfName || ""
                     };
 
-                    if (
-                        !finalPayloadToSave.SupportTicketID ||
+                    if (!finalPayloadToSave.SupportTicketID ||
                         !finalPayloadToSave.SupportTicketNo ||
-                        !finalPayloadToSave.TicketFileURl
-                    ) {
+                        !finalPayloadToSave.TicketFileURl) {
                         throw new Error("Missing required fields");
                     }
 
                     const savedInfo = await this.saveToDatabase(finalPayloadToSave);
 
                     if (savedInfo?._id) {
-                        this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+                        await this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
                             console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
                         );
                     }
 
                     try {
                         fs.unlinkSync(pdfPath);
-                    } catch (e) {
-                        console.log(`Failed to delete temp file: ${pdfPath}`);
-                    }
+                    } catch { }
 
                     const processingTime = Date.now() - startTime;
-                    console.log(`✓ Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
+                    console.log(`Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
 
                     return {
                         success: true,
@@ -420,32 +613,20 @@ export class PDFGenerationWorkerService {
                         gcsUrl: fetchedGCPInfo?.gcsUrl
                     };
 
-                } catch (err) {
-                    console.log(`✗ Error processing ticket ${payload.SupportTicketNo}:`, err);
-
-                    if (page) {
-                        await page.close().catch(() => { });
-                    }
-
-                    // Return error object
-                    const errorResult = {
+                } catch (err: any) {
+                    if (page) await page.close().catch(() => { });
+                    return {
                         success: false,
                         ticketNo: payload.SupportTicketNo,
                         processingTime: Date.now() - startTime,
                         error: err.message
                     };
-
-                    return errorResult;
-
                 } finally {
                     if (context) await context.close().catch(() => { });
                     if (browser) await browser.close().catch(() => { });
                 }
             });
-        } catch (err) {
-            console.error('Queue error:', err);
-
-            // If using this approach, you need to check result in runWorker
+        } catch (err: any) {
             return {
                 success: false,
                 ticketNo: payload.SupportTicketNo,
@@ -454,61 +635,60 @@ export class PDFGenerationWorkerService {
         }
     }
 
+    async processBatch(payloads: any[]): Promise<any[]> {
+        payloads = [payloads]
+        console.log(`Starting batch processing: ${payloads?.length} tickets`);
 
-  async processBatch(payloads: any[]): Promise<any[]> {
-    payloads = [payloads]
-    console.log(`Starting batch processing: ${payloads?.length} tickets`);
+        const startTime = Date.now();
 
-    const startTime = Date.now();
+        try {
+            const results = await Promise.allSettled(
+                payloads.map(payload => this.ProcessInformationForFarmer(payload))
+            );
 
-    try {
-        const results = await Promise.allSettled(
-            payloads.map(payload => this.ProcessInformationForFarmer(payload))
-        );
+            const processedResults = results.map((result, index) => {
+                const p = payloads[index] || {};
+                const ticketNo = p.SupportTicketNo || null;
+                const ticketId = p.SupportTicketID || null;
 
-        const processedResults = results.map((result, index) => {
-            const p = payloads[index] || {};
-            const ticketNo = p.SupportTicketNo || null;
-            const ticketId = p.SupportTicketID || null;
+                if (result.status === 'fulfilled') {
+                    return {
+                        ...result.value,
+                        ticketNo,
+                        ticketId
+                    };
+                }
 
-            if (result.status === 'fulfilled') {
                 return {
-                    ...result.value,
+                    success: false,
                     ticketNo,
-                    ticketId
+                    ticketId,
+                    processingTime: 0,
+                    error: result.reason?.message || 'Unknown error'
                 };
-            }
+            });
 
-            return {
-                success: false,
-                ticketNo,
-                ticketId,
-                processingTime: 0,
-                error: result.reason?.message || 'Unknown error'
-            };
-        });
+            const successful = processedResults.filter(r => r.success).length;
+            const failed = processedResults.filter(r => !r.success).length;
+            const totalTime = Date.now() - startTime;
 
-        const successful = processedResults.filter(r => r.success).length;
-        const failed = processedResults.filter(r => !r.success).length;
-        const totalTime = Date.now() - startTime;
+            console.log(`Batch processing completed:`);
+            console.log(`Successful: ${successful}`);
+            console.log(`Failed: ${failed}`);
+            console.log(`Total time: ${totalTime}ms`);
+            console.log(`Average time: ${(totalTime / payloads.length).toFixed(2)}ms per PDF`);
 
-        console.log(`Batch processing completed:`);
-        console.log(`Successful: ${successful}`);
-        console.log(`Failed: ${failed}`);
-        console.log(`Total time: ${totalTime}ms`);
-        console.log(`Average time: ${(totalTime / payloads.length).toFixed(2)}ms per PDF`);
+            return processedResults;
 
-        return processedResults;
-
-    } catch (err) {
-        console.log('Batch processing error:', err);
-        throw err;
+        } catch (err) {
+            console.log('Batch processing error:', err);
+            throw err;
+        }
     }
-}
 
 
 
-    async FetchTicketInformation(body: any): Promise<void> {
+    async FetchTicketInformation(body: any, selectedData:any): Promise<void> {
         if (!body) {
             throw new Error("Request body is required")
         }
@@ -532,7 +712,7 @@ export class PDFGenerationWorkerService {
 
             if (response?.data?.responseDynamic) {
                 const decodedResponse = await this.decompressResponse(response.data.responseDynamic)
-                TicketInfo = await this.TicketDetailsBuildUp(decodedResponse)
+                TicketInfo = await this.TicketDetailsBuildUp(decodedResponse, selectedData)
                 return TicketInfo
             } else {
                 logger.warn(`FetchTicketInformation: No responseDynamic found for ticket ${SupportTicketNo}`)
@@ -570,55 +750,131 @@ export class PDFGenerationWorkerService {
         }
     }
 
-    private async TicketDetailsBuildUp(data: any) {
-        if (!data || !data.masterdatabinding || !Array.isArray(data.masterdatabinding)) {
-            logger.warn("TicketDetailsBuildUp: No masterdatabinding found")
-            return []
-        }
+    // private async TicketDetailsBuildUp(data: any, selectedData:any) {
+    //     if (!data || !data.masterdatabinding || !Array.isArray(data.masterdatabinding)) {
+    //         logger.warn("TicketDetailsBuildUp: No masterdatabinding found")
+    //         return []
+    //     }
 
-        const [masterObj = {}, historyObj = {}, commentObj = {}] = data.masterdatabinding
+    //     const [masterObj = {}, historyObj = {}, commentObj = {}] = data.masterdatabinding
 
-        const masterTickets = Array.isArray(masterObj) ? masterObj : Object.values(masterObj || {})
-        const histories = Array.isArray(historyObj) ? historyObj : Object.values(historyObj || {})
-        const comments = Array.isArray(commentObj) ? commentObj : Object.values(commentObj || {})
+    //     const masterTickets = Array.isArray(masterObj) ? masterObj : Object.values(masterObj || {})
+    //     const histories = Array.isArray(historyObj) ? historyObj : Object.values(historyObj || {})
+    //     const comments = Array.isArray(commentObj) ? commentObj : Object.values(commentObj || {})
 
-        if (!masterTickets.length) {
-            logger.warn("TicketDetailsBuildUp: No master tickets found")
-            return []
-        }
+    //     if (!masterTickets.length) {
+    //         logger.warn("TicketDetailsBuildUp: No master tickets found")
+    //         return []
+    //     }
 
-        const historyMap = new Map<number, any[]>()
-        const commentMap = new Map<number, any[]>()
 
-        for (const h of histories) {
-            if (h && h.SupportTicketID != null) {
-                const arr = historyMap.get(h.SupportTicketID) || []
-                arr.push(h)
-                historyMap.set(h.SupportTicketID, arr)
-            }
-        }
 
-        for (const c of comments) {
-            if (c && c.SupportTicketID != null) {
-                const arr = commentMap.get(c.SupportTicketID) || []
-                arr.push(c)
-                commentMap.set(c.SupportTicketID, arr)
-            }
-        }
 
-        const combinedTickets = masterTickets.map((ticket) => {
-            if (!ticket || ticket.SupportTicketID == null) return ticket
-            return {
-                ...ticket,
-                Histories: historyMap.get(ticket.SupportTicketID) || [],
-                Comments: commentMap.get(ticket.SupportTicketID) || [],
-            }
-        })
+     
 
-        return combinedTickets
+
+    //     const historyMap = new Map<number, any[]>()
+    //     const commentMap = new Map<number, any[]>()
+
+    //     for (const h of histories) {
+    //         if (h && h.SupportTicketID != null) {
+    //             const arr = historyMap.get(h.SupportTicketID) || []
+    //             arr.push(h)
+    //             historyMap.set(h.SupportTicketID, arr)
+    //         }
+    //     }
+
+    //     for (const c of comments) {
+    //         if (c && c.SupportTicketID != null) {
+    //             const arr = commentMap.get(c.SupportTicketID) || []
+    //             arr.push(c)
+    //             commentMap.set(c.SupportTicketID, arr)
+    //         }
+    //     }
+
+    //     const combinedTickets = masterTickets.map((ticket) => {
+    //         if (!ticket || ticket.SupportTicketID == null) return ticket
+    //         return {
+    //             ...ticket,
+    //             Histories: historyMap.get(ticket.SupportTicketID) || [],
+    //             Comments: commentMap.get(ticket.SupportTicketID) || [],
+    //         }
+    //     })
+
+    //        logger.info(JSON.stringify(selectedData),"selecteddata")
+    //        in the selectedData i am getting SupportTicketID and that SupportTicketID should be come on top combinedTickets 
+
+    //        logger.info(JSON.stringify(masterTickets), "master ticket")
+    //     logger.info(JSON.stringify(combinedTickets), "combinedTickets")
+
+        
+
+    //     return combinedTickets
+    // }
+
+
+    private async TicketDetailsBuildUp(data: any, selectedData: any) {
+    if (!data || !data.masterdatabinding || !Array.isArray(data.masterdatabinding)) {
+        logger.warn("TicketDetailsBuildUp: No masterdatabinding found")
+        return []
     }
 
-    
+    const [masterObj = {}, historyObj = {}, commentObj = {}] = data.masterdatabinding
+
+    const masterTickets = Array.isArray(masterObj) ? masterObj : Object.values(masterObj || {})
+    const histories = Array.isArray(historyObj) ? historyObj : Object.values(historyObj || {})
+    const comments = Array.isArray(commentObj) ? commentObj : Object.values(commentObj || {})
+
+    if (!masterTickets.length) {
+        logger.warn("TicketDetailsBuildUp: No master tickets found")
+        return []
+    }
+
+    const historyMap = new Map<number, any[]>()
+    const commentMap = new Map<number, any[]>()
+
+    for (const h of histories) {
+        if (h && h.SupportTicketID != null) {
+            const arr = historyMap.get(h.SupportTicketID) || []
+            arr.push(h)
+            historyMap.set(h.SupportTicketID, arr)
+        }
+    }
+
+    for (const c of comments) {
+        if (c && c.SupportTicketID != null) {
+            const arr = commentMap.get(c.SupportTicketID) || []
+            arr.push(c)
+            commentMap.set(c.SupportTicketID, arr)
+        }
+    }
+
+    const combinedTickets = masterTickets.map((ticket) => {
+        if (!ticket || ticket.SupportTicketID == null) return ticket
+        return {
+            ...ticket,
+            Histories: historyMap.get(ticket.SupportTicketID) || [],
+            Comments: commentMap.get(ticket.SupportTicketID) || [],
+        }
+    })
+
+    if (selectedData?.SupportTicketID) {
+        const ticketID = selectedData.SupportTicketID
+        const index = combinedTickets.findIndex(t => t.SupportTicketID === ticketID)
+
+        if (index !== -1) {
+            const selectedTicket = combinedTickets.splice(index, 1)[0]
+            combinedTickets.unshift(selectedTicket)
+            logger.info(`SupportTicketID ${ticketID} moved on top`)
+        } else {
+            logger.warn(`SupportTicketID ${ticketID} not found in combinedTickets`)
+        }
+    }
+
+    return combinedTickets
+}
+
+
 
     private isAgeingMatch(range: string, ageingValue: number): boolean {
         if (!range) return false
@@ -1383,7 +1639,9 @@ export class PDFGenerationWorkerService {
                 '    <div id="pdf-last-section" class="CustomerBox">' +
                 '      <div class="Heading">' +
                 '        <div class="ReqInfo">' +
-                '          <img src="/img/customer-avatar.png" alt="Customer" />' +
+                // '          <img src="/img/customer-avatar.png" alt="Customer" />' +
+                '<span style="font-size: 34px;">👤</span>' +
+
                 "          <h3>" +
                 (data && data.RequestorName ? data.RequestorName : "") +
                 "</h3>" +
@@ -1455,7 +1713,17 @@ export class PDFGenerationWorkerService {
                 "          </div>" +
                 '          <div class="SubBox">' +
                 '            <p>Premium Amount : <span id="spnPremiumAmount">' +
-                (data && data.PolicyPremium ? data.PolicyPremium : "") +
+                (data && data.farmerShare !== undefined ? this.formatInRupees(data.farmerShare) : this.formatInRupees(0)) + 
+                "</span></p>" +
+                "          </div>" +
+
+
+
+                '          <div class="SubBox">' +
+                '            <p>Sum Insured : <span id="spnSumInsured">' +
+                // (data &&  this.formatInRupees(data.sumInsured) ?  this.formatInRupees(data.sumInsured) : "") +
+
+                 (data && data.sumInsured !== undefined ? this.formatInRupees(data.sumInsured) : this.formatInRupees(0)) + 
                 "</span></p>" +
                 "          </div>" +
                 '          <div class="SubBox">' +
@@ -1469,10 +1737,10 @@ export class PDFGenerationWorkerService {
                 "  </div>" +
                 "</div>" +
                 "<hr />" +
-                '<div id="case_history_ticket_details">' +
-                "  <h6>Case History</h6>" +
-                commentsHtml +
-                "</div>" +
+                // '<div id="case_history_ticket_details">' +
+                // "  <h6>Case History</h6>" +
+                // commentsHtml +
+                // "</div>" +
                 "<br />" +
                 "<br />" +
                 "<br />" +
@@ -1546,7 +1814,7 @@ export class PDFGenerationWorkerService {
             "  .summary-table.no-inner-border tr td:first-child { border-right: 1px solid transparent; }" +
             "  .currency { font-family: 'DejaVu Sans', Arial, sans-serif; }" +
             "  .h6Tag { font-weight: 600; font-size: 14px; }" +
-            "  .pTag { font-size: 12.5px; text-align: left; }" +
+            "  .pTag { font-size: 13.5px; text-align: left; }" +
             "  .hrTag { font-weight: bold; }" +
             "  .containerhistory { display: flex; flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%; font-size: 12px; }" +
             "  .left-panel { flex: 2.2; background: #fff; border-radius: 10px; padding: 0px; width: 550px; }" +
@@ -1595,6 +1863,7 @@ export class PDFGenerationWorkerService {
             "  .hover-cardSendPdf { position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%) scale(0.95); min-width: 300px; max-width: 220px; padding: 8px 10px; background: #fff; color: #333; border-radius: 8px; font-size: 11px; line-height: 1.4; text-align: justify; box-shadow: 0 4px 10px rgba(0,0,0,0.25); opacity: 0; visibility: hidden; transition: all 0.25s ease; z-index: 2000; }" +
             "  .card-tooltipSendPdf:hover .hover-cardSendPdf { opacity: 1; visibility: visible; transform: translateX(-50%) scale(1); }" +
             "  .hover-cardSendPdf::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px; border-width: 6px; border-style: solid; border-color: #fff transparent transparent transparent; }" +
+              "   .accordion{font-size: 16px !important;}" +
             "</style>" +
             "</head>" +
             "<body>" +
@@ -1714,21 +1983,11 @@ export class PDFGenerationWorkerService {
             "    <br />" +
             "    <div>" +
             '      <h6 class="h6Tag">Important Note: </h6>' +
-            '      <p class="pTag">The last page of this document contains verification points and general advisory related to the farmer\'s enrollment and insurance coverage. Applicants must adhere to the terms and conditions of the scheme.</p>' +
-            '      <h6 class="h6Tag">Disclaimer: </h6>' +
-            '      <p class="pTag">This document is only for payment of the insurance premium by the farmer. As per the operational guidelines of the Pradhan Mantri Fasal Bima Yojana (PMFBY), the farmer\'s participation in the scheme will be determined after verification of the required documents.</p>' +
-            '      <hr class="hrTag" />' +
-            '      <h6 class="h6Tag"> Important Points to Consider Before Participating in the Scheme:</h6>' +
-            '      <p class="pTag">(a) After receiving the registration receipt, the information entered by the Walker Agent / CSC-VLE / Bank / Intermediary should be cross-checked. Land details, bank account number, insured crop, insured area, and premium amount must be verified again at the time of enrollment.</p>' +
-            '      <p class="pTag">(b) The authenticity of this registration receipt can be verified by scanning the QR code printed on page 1 of the receipt. The applicant farmer should verify the land and related details obtained through the QR scan.</p>' +
-            '      <p class="pTag">(c) In case of any discrepancy in the registration details, the applicant farmer is advised to immediately report it to the Walker Agent / CSC Center / Bank / Intermediary for correction.</p>' +
-            '      <hr class="hrTag" />' +
-            '      <h6 class="h6Tag">General Instructions for Applicant Farmers: </h6>' +
-            '      <p class="pTag">(a) The applicant farmer is not required to pay any additional service or processing fee for enrollment through any mode. Only the farmer\'s premium amount is payable.</p>' +
-            '      <p class="pTag">(b) If any incorrect information is found in the portal data or the attached documents, the respective application may be rejected.</p>' +
-            '      <p class="pTag">(c) As per the scheme guidelines, in case of natural calamities (hailstorm, landslide, flood, cloudburst, lightning) or post-harvest losses (storm, unseasonal rain, etc.), the farmer must inform the bank or concerned department within 72 hours through the Crop Insurance App.</p>' +
-            '      <p class="pTag">(d) The claim amount under the scheme is determined based on the shortfall in average yield as assessed through CCEs (Crop Cutting Experiments) in the notified insurance area. Data declared by any other department or institution on drought or flood conditions will not be considered.</p>' +
-            '      <p class="pTag">(e) Farmers can track the status of their applications through the Aadhaar-based Crop Insurance App, available on the Google Play Store and at <a href="https://pmfby.gov.in/" target="_blank">www.pmfby.gov.in</a>.</p>' +
+                   '<p class="pTag"> 1 - This document contains general advisory related to claim payments, crop-loss intimation, and grievance resolution.</p>' +
+            '      <p class="pTag"> 2 - This document is system-generated and does not require any signature.</p>' +
+            '      <p class="pTag"> 3 - The authenticity of this document can be verified by scanning the QR code printed on page 1 of the receipt.</p>' +
+            '      <p class="pTag"> 4 - For additional details, please visit the  https://pmfby.gov.in/krph/FarmerLogin or call the Krishi Raksha Helpline at 14447. You can also chat through the WhatsApp Bot Number: 7065514447.</p>' +
+         
             "    </div>" +
             "  </div>" +
             "</body>" +
@@ -1750,5 +2009,9 @@ export class PDFGenerationWorkerService {
             .replace(/&#39;/g, "'")
             .replace(/\s+/g, " ")
             .trim()
+    }
+
+       formatInRupees(amount) {
+        return "₹" + " " + amount.toLocaleString('en-IN');
     }
 }

@@ -57,7 +57,6 @@ async fetchSupportTicketHistory(@Body() ticketPayload: any, @Req() req: Request,
     return { rcode: 0, rmessage: 'User Email is required' };
   }
 
-  // Send request to RabbitMQ queue
   await this.rabbitMQService.sendToQueue(ticketPayload);
 
   return jsonResponseHandler(
@@ -153,7 +152,7 @@ async FarmerSelectCallingHistoryRoute(
     let gzippedData = null;
     if (resultArray && resultArray.length > 0) {
       const stringifiedData: any = resultArray;
-      gzippedData = await this.utilService.GZip(stringifiedData); // ✅ Make sure this returns a Buffer
+      gzippedData = await this.utilService.GZip(stringifiedData); 
     }
 
     return jsonResponseHandlerReport(
@@ -179,9 +178,6 @@ async FarmerSelectCallingHistoryRoute(
 
 
 
-
-
-
   @Post('getSupportTicketHistory')
   async FarmerSelectCallingHistoryDownload(@Body() ticketPayload: any, @Req() req: Request,
     @Res({ passthrough: false }) res: Response) {
@@ -195,7 +191,6 @@ async FarmerSelectCallingHistoryRoute(
       };
     }
      await this.rabbitMQService.sendToQueue(ticketPayload);
-    // await this.dashboardService.getSupportTicketHistotReportDownload(ticketPayload);
     let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
     return jsonResponseHandler([], rmessage, req, res, () => { });
 
@@ -340,13 +335,11 @@ async UpdateNCIPDocket(
     @Res() res: Response,
   ) {
     try {
-      // ✅ Send response immediately
       res.status(202).json({
         success: true,
         message: 'Your file has been uploaded and will be processed in the background.',
       });
 
-      // ✅ Continue background processing
       setImmediate(async () => {
         try {
           console.log(`🚀 Background processing started for file: ${file?.filename}`);
@@ -394,7 +387,6 @@ async updateTicketStatus(
     });
 
   } catch (err) {
-    // Handle any immediate (synchronous) errors
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
@@ -452,7 +444,6 @@ async copyTicket(
       }
     });
   } catch (err) {
-    // Handle any immediate (synchronous) errors
     return jsonErrorHandler(err, req, res, () => {});
   }
 }
@@ -561,24 +552,58 @@ async testBrokerValue(
 }
 
 
-@Post('SyncAudioCSC')
-async KrphUpdateAudioURLByCSCCloud(
+@Post('SyncAudioInfo')
+async SyncAudioInfo(
   @Body() payload: any,
   @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
+  @Res() res: Response,
 ) {
   try {
-    res.status(200).json({ message: 'Request received successfully' });
+    res.status(202).json({
+      success: true,
+      message: 'Audio sync started. Processing in background.',
+    });
 
-     await this.dashboardService.KrphUpdateAudioURLByCSCCloudService(payload);
+    setImmediate(async () => {
+      try {
+        console.log('🚀 Background SyncAudioInfo started');
 
-    return;
+    
+          await this.dashboardService.syncAudioCall();
+
+      
+      } catch (bgErr) {
+        console.error('❌ Background SyncAudioInfo failed:', bgErr);
+      }
+    });
+
   } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
+    console.error('Immediate error in SyncAudioInfo:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to start audio sync',
+    });
   }
 }
 
 
+
+  @Post('insuranceWiseTicket')
+  async InsuranceWiseTickets(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      let { data, message } = await this.dashboardService.insuranceWiseTicketList(payload);
+
+      if (data) data = await this.utilService.GZip(data);
+
+      return jsonResponseHandler(data, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
 
 }
 
