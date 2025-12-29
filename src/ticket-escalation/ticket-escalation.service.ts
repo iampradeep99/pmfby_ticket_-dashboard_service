@@ -33,7 +33,7 @@ const Logger = require("../commonServices/logger");
 
 @Injectable()
 export class TicketEscalationService {
-    private logger: InstanceType<typeof Logger>;
+  private logger: InstanceType<typeof Logger>;
 
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
@@ -53,8 +53,8 @@ export class TicketEscalationService {
   ) {
     this.ticketCollection = this.db.collection('tickets');
     this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
-         this.logger = new Logger("Call_Quality_Assurance_Service.log");
-    
+    this.logger = new Logger("Call_Quality_Assurance_Service.log");
+
   }
 
 
@@ -210,130 +210,130 @@ export class TicketEscalationService {
 
 
 
-/* async getRolesForGovt(payload: any) {
-  try {
-    let token: string;
+  /* async getRolesForGovt(payload: any) {
     try {
-      token = await this.getToken();
-    } catch (tokenErr: any) {
+      let token: string;
+      try {
+        token = await this.getToken();
+      } catch (tokenErr: any) {
+        return {
+          data: null,
+          message: {
+            msg: "Failed to generate token",
+            code: 0,
+            errorType: "TOKEN_ERROR",
+            detail: tokenErr?.message
+          },
+        };
+      }
+  
+      const EnumRole: Record<string, number> = {
+        STATE_GOVT_ADMIN: 1,
+        STATE_GOVT_USER: 2,
+        DEPUTY_DIRECTOR: 3
+      };
+  
+      const roleMap: Record<number, string> = {
+        1: "STATE_GOVT_ADMIN",
+        2: "STATE_GOVT_USER",
+        3: "DEPUTY_DIRECTOR"
+      };
+  
+      const axiosPayload = {
+        roleName: roleMap[payload?.roleName],
+        stateID: payload?.stateID,
+      };
+  
+      if (!axiosPayload.roleName) {
+        return {
+          data: null,
+          message: {
+            msg: "Invalid roleName provided in payload",
+            code: 0,
+            errorType: "INPUT_VALIDATION_ERROR",
+            detail: { received: payload?.roleName }
+          },
+        };
+      }
+  
+      console.log("Calling External API With Payload:", axiosPayload);
+  
+      let apiResponse: any;
+      try {
+        apiResponse = await axios.get(this.RoleURL, {
+          params: axiosPayload,
+          timeout: 10000,
+          headers: { token },
+        });
+      } catch (axiosErr: any) {
+        const status = axiosErr?.response?.status;
+        const apiMsg = axiosErr?.response?.data?.message || axiosErr?.message;
+  
+        return {
+          data: null,
+          message: {
+            msg: "External API call failed",
+            code: 0,
+            errorType: "EXTERNAL_API_ERROR",
+            httpStatus: status,
+            detail: apiMsg,
+            url: this.RoleURL,
+          },
+        };
+      }
+  
+      const data = apiResponse?.data;
+  
+      if (!data?.data) {
+        return {
+          data: null,
+          message: {
+            msg: "No data received from external API",
+            code: 0,
+            errorType: "API_NO_DATA",
+          },
+        };
+      }
+  
+      let updatedData: any[] = [];
+      try {
+        updatedData = data.data
+          .map((item: any) => ({
+            ...item,
+            roleName: EnumRole[item.roleName] || item.roleName,
+          }))
+          .filter(
+            (item: any, index: number, self: any[]) =>
+              index === self.findIndex((t) => t.userID === item.userID)
+          );
+      } catch (processingErr: any) {
+        return {
+          data: null,
+          message: {
+            msg: "Error occurred while processing API data",
+            code: 0,
+            errorType: "DATA_PROCESSING_ERROR",
+            detail: processingErr.message,
+          },
+        };
+      }
+  
+      return {
+        data: updatedData,
+        message: { msg: "Success", code: 1 },
+      };
+    } catch (unexpectedErr: any) {
       return {
         data: null,
         message: {
-          msg: "Failed to generate token",
+          msg: "Unexpected internal server error",
           code: 0,
-          errorType: "TOKEN_ERROR",
-          detail: tokenErr?.message
+          errorType: "UNHANDLED_ERROR",
+          detail: unexpectedErr?.message,
         },
       };
     }
-
-    const EnumRole: Record<string, number> = {
-      STATE_GOVT_ADMIN: 1,
-      STATE_GOVT_USER: 2,
-      DEPUTY_DIRECTOR: 3
-    };
-
-    const roleMap: Record<number, string> = {
-      1: "STATE_GOVT_ADMIN",
-      2: "STATE_GOVT_USER",
-      3: "DEPUTY_DIRECTOR"
-    };
-
-    const axiosPayload = {
-      roleName: roleMap[payload?.roleName],
-      stateID: payload?.stateID,
-    };
-
-    if (!axiosPayload.roleName) {
-      return {
-        data: null,
-        message: {
-          msg: "Invalid roleName provided in payload",
-          code: 0,
-          errorType: "INPUT_VALIDATION_ERROR",
-          detail: { received: payload?.roleName }
-        },
-      };
-    }
-
-    console.log("Calling External API With Payload:", axiosPayload);
-
-    let apiResponse: any;
-    try {
-      apiResponse = await axios.get(this.RoleURL, {
-        params: axiosPayload,
-        timeout: 10000,
-        headers: { token },
-      });
-    } catch (axiosErr: any) {
-      const status = axiosErr?.response?.status;
-      const apiMsg = axiosErr?.response?.data?.message || axiosErr?.message;
-
-      return {
-        data: null,
-        message: {
-          msg: "External API call failed",
-          code: 0,
-          errorType: "EXTERNAL_API_ERROR",
-          httpStatus: status,
-          detail: apiMsg,
-          url: this.RoleURL,
-        },
-      };
-    }
-
-    const data = apiResponse?.data;
-
-    if (!data?.data) {
-      return {
-        data: null,
-        message: {
-          msg: "No data received from external API",
-          code: 0,
-          errorType: "API_NO_DATA",
-        },
-      };
-    }
-
-    let updatedData: any[] = [];
-    try {
-      updatedData = data.data
-        .map((item: any) => ({
-          ...item,
-          roleName: EnumRole[item.roleName] || item.roleName,
-        }))
-        .filter(
-          (item: any, index: number, self: any[]) =>
-            index === self.findIndex((t) => t.userID === item.userID)
-        );
-    } catch (processingErr: any) {
-      return {
-        data: null,
-        message: {
-          msg: "Error occurred while processing API data",
-          code: 0,
-          errorType: "DATA_PROCESSING_ERROR",
-          detail: processingErr.message,
-        },
-      };
-    }
-
-    return {
-      data: updatedData,
-      message: { msg: "Success", code: 1 },
-    };
-  } catch (unexpectedErr: any) {
-    return {
-      data: null,
-      message: {
-        msg: "Unexpected internal server error",
-        code: 0,
-        errorType: "UNHANDLED_ERROR",
-        detail: unexpectedErr?.message,
-      },
-    };
-  }
-} */
+  } */
 
 
 
@@ -761,7 +761,7 @@ export class TicketEscalationService {
       const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
       const item = (responseInfo.data as any)?.user?.[0];
 
-      if (!item) return { data:{}, message:{msg:"Not Found", code:"0"} };
+      if (!item) return { data: {}, message: { msg: "Not Found", code: "0" } };
 
       const userDetail = {
         InsuranceCompanyID: item.InsuranceCompanyID ? await new UtilService().convertStringToArray(item.InsuranceCompanyID) : [],
@@ -926,219 +926,219 @@ export class TicketEscalationService {
 
     } catch (err) {
       console.error("Top-level error:", err);
-      return { data: [], message: {msg:"Error", code:"0"} };
+      return { data: [], message: { msg: "Error", code: "0" } };
     }
   }
 
 
 
-async AssignTicketService(payload: any) {
-  const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo } = payload || {};
-  if (!ticketIds) {
-    return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
-  }
-  let roleId = roleName
+  async AssignTicketService(payload: any) {
+    const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo } = payload || {};
+    if (!ticketIds) {
+      return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
+    }
+    let roleId = roleName
 
-  const ticketIdArray = ticketIds.split(",").map(id => id.trim()).filter(Boolean);
-  if (!ticketIdArray.length) {
-    return { data: {}, message: { msg: "No valid ticket IDs provided.", code: 0 } };
-  }
+    const ticketIdArray = ticketIds.split(",").map(id => id.trim()).filter(Boolean);
+    if (!ticketIdArray.length) {
+      return { data: {}, message: { msg: "No valid ticket IDs provided.", code: 0 } };
+    }
 
-  const ticketCollection = this.db.collection("SLA_Ticket_listing");
-  const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
-  const now = new Date();
-  const results: any[] = [];
+    const ticketCollection = this.db.collection("SLA_Ticket_listing");
+    const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
+    const now = new Date();
+    const results: any[] = [];
 
-  
- 
-  let assignedRoleName:string;
-  if(roleId == 1){
+
+
+    let assignedRoleName: string;
+    if (roleId == 1) {
       assignedRoleName = "STATE_GOVT_ADMIN"
-  }
-if(roleId == 2){
+    }
+    if (roleId == 2) {
       assignedRoleName = "STATE_GOVT_USER"
-  }
-
-
-  for (const ticketIdStr of ticketIdArray) {
-    const ticketId = Number(ticketIdStr);
-    if (isNaN(ticketId)) {
-      results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
-      continue;
     }
 
-    try {
-      const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
-      if (!ticket) {
-        results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+
+    for (const ticketIdStr of ticketIdArray) {
+      const ticketId = Number(ticketIdStr);
+      if (isNaN(ticketId)) {
+        results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
         continue;
       }
 
-      const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketId });
-      if (alreadyAssigned) {
+      try {
+        const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
+        if (!ticket) {
+          results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+          continue;
+        }
+
+        const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketId });
+        if (alreadyAssigned) {
+          results.push({
+            ticketId,
+            ticketNo: ticket.SupportTicketNo,
+            status: "Failed",
+            reason: "Ticket already assigned"
+          });
+          continue;
+        }
+
+        const assignmentData = {
+          SupportTicketID: ticketId,
+          SupportTicketNo: ticket.SupportTicketNo,
+          TicketStatusID: ticket.TicketStatusID || null,
+          TicketStatus: ticket.TicketStatus || null,
+          assignedBy,
+          assignedTo,
+          AssignedDate: now,
+          AssigneeStateID: stateID,
+          AssigneeMobileNo: mobileNo,
+          AssigneRoleName: assignedRoleName,
+          AssigneeRoleID: roleId,
+          InsuranceCompanyId: ticket?.InsuranceCompanyID,
+          InsuranceCompanyName: ticket?.InsuranceCompany
+        };
+
+        const insertRes = await assignHistoryCollection.insertOne(assignmentData);
+        if (!insertRes.insertedId) {
+          results.push({
+            ticketId,
+            ticketNo: ticket.SupportTicketNo,
+            status: "Failed",
+            reason: "Failed to save assignment history"
+          });
+          continue;
+        }
+
         results.push({
           ticketId,
           ticketNo: ticket.SupportTicketNo,
-          status: "Failed",
-          reason: "Ticket already assigned"
+          status: "Success",
+          reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
         });
-        continue;
+
+      } catch (err: any) {
+        results.push({ ticketId, status: "Error", reason: err.message || "Unexpected error" });
       }
+    }
 
-      const assignmentData = {
-        SupportTicketID: ticketId,
-        SupportTicketNo: ticket.SupportTicketNo,
-        TicketStatusID: ticket.TicketStatusID || null,
-        TicketStatus: ticket.TicketStatus || null,
-        assignedBy,
-        assignedTo,
-        AssignedDate: now,
-        AssigneeStateID: stateID,
-        AssigneeMobileNo: mobileNo,
-        AssigneRoleName: assignedRoleName,
-        AssigneeRoleID: roleId,
-        InsuranceCompanyId:ticket?.InsuranceCompanyID,
-        InsuranceCompanyName:ticket?.InsuranceCompany
-      };
+    const successCount = results.filter(r => r.status === "Success").length;
+    const failedCount = results.length - successCount;
 
-      const insertRes = await assignHistoryCollection.insertOne(assignmentData);
-      if (!insertRes.insertedId) {
-        results.push({
-          ticketId,
-          ticketNo: ticket.SupportTicketNo,
-          status: "Failed",
-          reason: "Failed to save assignment history"
-        });
-        continue;
-      }
+    const summary = {
+      totalTickets: results.length,
+      successCount,
+      failedCount,
+      message:
+        successCount === results.length
+          ? "All tickets assigned successfully."
+          : successCount === 0
+            ? "All tickets failed."
+            : `${successCount} assigned, ${failedCount} failed.`
+    };
 
-      results.push({
-        ticketId,
-        ticketNo: ticket.SupportTicketNo,
-        status: "Success",
-        reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
-      });
 
-    } catch (err: any) {
-      results.push({ ticketId, status: "Error", reason: err.message || "Unexpected error" });
+
+
+    if (successCount === 0) {
+      return { data: summary, message: { msg: "All Failed", code: "0" } };
+    } else {
+      return { data: summary, message: { msg: "Success", code: "1" } };
     }
   }
 
-  const successCount = results.filter(r => r.status === "Success").length;
-   const failedCount = results.length - successCount;
 
-   const summary = {
-    totalTickets: results.length,
-    successCount,
-    failedCount,
-    message:
-      successCount === results.length
-        ? "All tickets assigned successfully."
-        : successCount === 0
-          ? "All tickets failed."
-          : `${successCount} assigned, ${failedCount} failed.`
-  };
-
-  
-
-  
-  if (successCount === 0) {
-    return { data: summary, message: { msg: "All Failed", code: "0" } };
-  } else {
-    return { data: summary, message: { msg: "Success", code: "1" } };
-  }
-}
-
-
-async UserWiseState(payload: any) {
-  try {
-    const db = this.db;
-    const utilService = new UtilService();
-
-    if (!payload || typeof payload !== "object") {
-      return { data: [], msg: "Invalid payload", code: "0" };
-    }
-
-    const userID = payload.userID;
-    if (!userID) {
-      return { data: [], msg: "User ID required", code: "0" };
-    }
-
-    let userDetail;
+  async UserWiseState(payload: any) {
     try {
-      userDetail = await utilService.getSupportTicketUserDetail(userID);
-    } catch {
-      return { data: [], msg: "Failed to fetch user details", code: "0" };
-    }
+      const db = this.db;
+      const utilService = new UtilService();
 
-    if (!userDetail?.responseDynamic) {
-      return { data: [], msg: "User not found", code: "0" };
-    }
+      if (!payload || typeof payload !== "object") {
+        return { data: [], msg: "Invalid payload", code: "0" };
+      }
 
-    let responseInfo;
-    try {
-      responseInfo = await utilService.unGZip(userDetail.responseDynamic);
-    } catch {
-      return { data: [], msg: "Failed to process user data", code: "0" };
-    }
+      const userID = payload.userID;
+      if (!userID) {
+        return { data: [], msg: "User ID required", code: "0" };
+      }
 
-    const item = responseInfo?.data?.user?.[0];
-    if (!item) {
-      return { data: [], msg: "User not found", code: "0" };
-    }
+      let userDetail;
+      try {
+        userDetail = await utilService.getSupportTicketUserDetail(userID);
+      } catch {
+        return { data: [], msg: "Failed to fetch user details", code: "0" };
+      }
 
-    let StateMasterID: number[] = [];
-    try {
-      const arr = await utilService.convertStringToArray(item.StateMasterID);
-      StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
-    } catch {
-      return { data: [], msg: "Invalid StateMasterID", code: "0" };
-    }
+      if (!userDetail?.responseDynamic) {
+        return { data: [], msg: "User not found", code: "0" };
+      }
 
-    if (!StateMasterID.length) {
-      return { data: [], msg: "No states assigned", code: "0" };
-    }
+      let responseInfo;
+      try {
+        responseInfo = await utilService.unGZip(userDetail.responseDynamic);
+      } catch {
+        return { data: [], msg: "Failed to process user data", code: "0" };
+      }
 
-    const pipeline = [
-      { $match: { StateMasterID: { $in: StateMasterID } } },
-      {
-        $group: {
-          _id: "$StateMasterID",
-          StateMasterName: { $first: "$StateMasterName" },
-          StateCodeAlpha: { $first: "$StateCodeAlpha" }
+      const item = responseInfo?.data?.user?.[0];
+      if (!item) {
+        return { data: [], msg: "User not found", code: "0" };
+      }
+
+      let StateMasterID: number[] = [];
+      try {
+        const arr = await utilService.convertStringToArray(item.StateMasterID);
+        StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
+      } catch {
+        return { data: [], msg: "Invalid StateMasterID", code: "0" };
+      }
+
+      if (!StateMasterID.length) {
+        return { data: [], msg: "No states assigned", code: "0" };
+      }
+
+      const pipeline = [
+        { $match: { StateMasterID: { $in: StateMasterID } } },
+        {
+          $group: {
+            _id: "$StateMasterID",
+            StateMasterName: { $first: "$StateMasterName" },
+            StateCodeAlpha: { $first: "$StateCodeAlpha" }
+          }
+        },
+        { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
+        { $sort: { order: 1 } },
+        {
+          $project: {
+            _id: 0,
+            StateMasterID: "$_id",
+            StateName: "$StateMasterName",
+            StateCodeAlpha: 1
+          }
         }
-      },
-      { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
-      { $sort: { order: 1 } },
-      {
-        $project: {
-          _id: 0,
-          StateMasterID: "$_id",
-          StateName: "$StateMasterName",
-          StateCodeAlpha: 1
-        }
+      ];
+
+      let extractedData;
+      try {
+        extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
+      } catch {
+        return { data: [], msg: "Failed to fetch state data", code: "0" };
       }
-    ];
 
-    let extractedData;
-    try {
-      extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
+      return { data: extractedData, msg: "Fetched successfully", code: "1" };
     } catch {
-      return { data: [], msg: "Failed to fetch state data", code: "0" };
+      return { data: [], msg: "Unexpected error", code: "0" };
     }
-
-    return { data: extractedData, msg: "Fetched successfully", code: "1" };
-  } catch {
-    return { data: [], msg: "Unexpected error", code: "0" };
   }
-}
 
 
 
 
-   async RoleWiseAssignedTickets(payload: any) {
+  async RoleWiseAssignedTickets(payload: any) {
     try {
-      if (!payload || !payload.loggedInUserId  || payload?.loggedInUserId == "") {
+      if (!payload || !payload.loggedInUserId || payload?.loggedInUserId == "") {
         return { data: [], message: { msg: "loggedInUserId is required", code: "0" } };
       }
 
@@ -1199,7 +1199,7 @@ async UserWiseState(payload: any) {
             TicketRecords: { $push: "$TicketRecords" },
           },
         },
-     
+
         {
           $project: {
             _id: 0,
@@ -1403,7 +1403,7 @@ async UserWiseState(payload: any) {
       return { data: null, message: { msg: error?.message || "Failed", code: "0" } };
     }
   }
- 
+
 
   async uploadTicketPDFService(payload: any) {
     try {
@@ -1599,83 +1599,83 @@ async UserWiseState(payload: any) {
 
 
 
-async syncAudioFiles(payload: any) {
-  try {
-    console.log("🔍 Starting Audio Sync Process...");
+  async syncAudioFiles(payload: any) {
+    try {
+      console.log("🔍 Starting Audio Sync Process...");
 
-    const db = this.db;
-    const sourceCollection = db.collection("KRPH_Calling_CDR_files_paths");
-    const targetCollection = db.collection("SLA_Ticket_listing");
-    const logCollection = db.collection("KRPH_Sync_Log");
+      const db = this.db;
+      const sourceCollection = db.collection("KRPH_Calling_CDR_files_paths");
+      const targetCollection = db.collection("SLA_Ticket_listing");
+      const logCollection = db.collection("KRPH_Sync_Log");
 
-    let syncedCount = 0;
-    let failedCount = 0;
+      let syncedCount = 0;
+      let failedCount = 0;
 
-    console.log("📡 Fetching records to sync...");
+      console.log("📡 Fetching records to sync...");
 
-    const sourceData = await sourceCollection.find({
-      $or: [{ isSynced: { $exists: false } }, { isSynced: false }]
-    }).project({ uniqueId: 1, path: 1 }).toArray();
+      const sourceData = await sourceCollection.find({
+        $or: [{ isSynced: { $exists: false } }, { isSynced: false }]
+      }).project({ uniqueId: 1, path: 1 }).toArray();
 
-    console.log(`📁 Total records found: ${sourceData.length}`);
+      console.log(`📁 Total records found: ${sourceData.length}`);
 
-    let processed = 0;
+      let processed = 0;
 
-    for (let item of sourceData) {
-      processed++;
+      for (let item of sourceData) {
+        processed++;
 
-      console.log(`🔧 Processing ${processed}/${sourceData.length} | UniqueID: ${item.uniqueId}`);
+        console.log(`🔧 Processing ${processed}/${sourceData.length} | UniqueID: ${item.uniqueId}`);
 
-      const result = await targetCollection.findOneAndUpdate(
-        { CallingUniqueID: item.uniqueId },
-        { $set: { CallingAudioFile: item.path } },
-        { returnDocument: "after" }
-      );
-
-      if (result?.value) {
-        syncedCount++;
-        console.log(`   ✅ Synced: ${item.uniqueId}`);
-
-        await sourceCollection.updateOne(
-          { _id: item._id },
-          {
-            $set: {
-              isSynced: true,
-              syncedAt: new Date(),
-              syncStatus: "success"
-            }
-          }
+        const result = await targetCollection.findOneAndUpdate(
+          { CallingUniqueID: item.uniqueId },
+          { $set: { CallingAudioFile: item.path } },
+          { returnDocument: "after" }
         );
-      } else {
-        failedCount++;
-        console.log(`   ❌ Failed: ${item.uniqueId} (No match found)`);
 
-        await sourceCollection.updateOne(
-          { _id: item._id },
-          {
-            $set: {
-              isSynced: false,
-              syncedAt: new Date(),
-              syncStatus: "failed",
-              error: "Matching entry not found in SLA_Ticket_listing"
+        if (result?.value) {
+          syncedCount++;
+          console.log(`   ✅ Synced: ${item.uniqueId}`);
+
+          await sourceCollection.updateOne(
+            { _id: item._id },
+            {
+              $set: {
+                isSynced: true,
+                syncedAt: new Date(),
+                syncStatus: "success"
+              }
             }
-          }
-        );
+          );
+        } else {
+          failedCount++;
+          console.log(`   ❌ Failed: ${item.uniqueId} (No match found)`);
+
+          await sourceCollection.updateOne(
+            { _id: item._id },
+            {
+              $set: {
+                isSynced: false,
+                syncedAt: new Date(),
+                syncStatus: "failed",
+                error: "Matching entry not found in SLA_Ticket_listing"
+              }
+            }
+          );
+        }
       }
-    }
 
-    console.log("📦 Saving Sync Summary Log...");
+      console.log("📦 Saving Sync Summary Log...");
 
-    await logCollection.insertOne({
-      executedAt: new Date(),
-      totalProcessed: sourceData.length,
-      synced: syncedCount,
-      failed: failedCount,
-      status: syncedCount > 0 && failedCount > 0 ? "PARTIAL" :
-              failedCount === 0 ? "SUCCESS" : "FAILED"
-    });
+      await logCollection.insertOne({
+        executedAt: new Date(),
+        totalProcessed: sourceData.length,
+        synced: syncedCount,
+        failed: failedCount,
+        status: syncedCount > 0 && failedCount > 0 ? "PARTIAL" :
+          failedCount === 0 ? "SUCCESS" : "FAILED"
+      });
 
-    console.log(`
+      console.log(`
 ================ SUMMARY ================
 Total Records    : ${sourceData.length}
 Synced Successfully : ${syncedCount}
@@ -1684,208 +1684,208 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 =========================================
     `);
 
-    return {
-      data: { total: sourceData.length, synced: syncedCount, failed: failedCount },
-      message: { msg: "Mongo Sync Completed & Logged", code: 1 }
-    };
+      return {
+        data: { total: sourceData.length, synced: syncedCount, failed: failedCount },
+        message: { msg: "Mongo Sync Completed & Logged", code: 1 }
+      };
 
-  } catch (err) {
-    console.error("❌ Error Occurred During Sync:", err);
+    } catch (err) {
+      console.error("❌ Error Occurred During Sync:", err);
 
-    return {
-      data: {},
-      message: { msg: "Sync failed", code: 0 }
-    };
-  }
-}
-
-
-
-
-
-
-async getPhotoServie(payload?: any) {
-  try {
-    const sourceFolder = "/home/pradeep/Desktop/DCIM/100D5600";
-    const destinationFolder = "/home/pradeep/Desktop/filteredPhoto";
-
-    const validNumbers = [
-      "0007","0011","0013","0018","0023","0041","0053","0073","0078","0105","0118","0129",
-      "0139","0148","0151","0205","0229","0236","0244","0260","0264","0269","0273","0276",
-      "0292","0302","0306","0313","0322","0323","0326","0332","0345","0354","0362","0365",
-      "0367","0380","0403","0407","0411","0416","0427","0443","0449","0463","0465","0469",
-      "0475","0478","0479","0482","0493","0496","0502","0506","0510","0513","0528","0537",
-      "0540","0542","0550","0552","0554","0560","0567","0570","0572","0575","0579","0583",
-      "0592","0597","0598","0601","0602","0608","0613","0615","0617","0618","0625","0627",
-      "0631","0637","0639","0642","0643","0650","0657","0665","0667","0680"
-    ];
-
-    if (!fs.existsSync(destinationFolder)) {
-      fs.mkdirSync(destinationFolder, { recursive: true });
+      return {
+        data: {},
+        message: { msg: "Sync failed", code: 0 }
+      };
     }
+  }
 
-    const files = fs.readdirSync(sourceFolder);
 
-    let copiedFiles: string[] = [];
-    let failedFiles: Array<{ file: string; error: string }> = [];
-    let foundNumbers = new Set<string>(); 
 
-    for (const file of files) {
-      const match = file.match(/(\d{4})/);
-      if (!match) continue;
 
-      const fileNumber = match[1];
 
-      if (validNumbers.includes(fileNumber)) {
-        foundNumbers.add(fileNumber);
 
-        const src = path.join(sourceFolder, file);
-        const dest = path.join(destinationFolder, file);
+  async getPhotoServie(payload?: any) {
+    try {
+      const sourceFolder = "/home/pradeep/Desktop/DCIM/100D5600";
+      const destinationFolder = "/home/pradeep/Desktop/filteredPhoto";
 
-        try {
-          if (!fs.existsSync(dest)) {
-            fs.copyFileSync(src, dest);
+      const validNumbers = [
+        "0007", "0011", "0013", "0018", "0023", "0041", "0053", "0073", "0078", "0105", "0118", "0129",
+        "0139", "0148", "0151", "0205", "0229", "0236", "0244", "0260", "0264", "0269", "0273", "0276",
+        "0292", "0302", "0306", "0313", "0322", "0323", "0326", "0332", "0345", "0354", "0362", "0365",
+        "0367", "0380", "0403", "0407", "0411", "0416", "0427", "0443", "0449", "0463", "0465", "0469",
+        "0475", "0478", "0479", "0482", "0493", "0496", "0502", "0506", "0510", "0513", "0528", "0537",
+        "0540", "0542", "0550", "0552", "0554", "0560", "0567", "0570", "0572", "0575", "0579", "0583",
+        "0592", "0597", "0598", "0601", "0602", "0608", "0613", "0615", "0617", "0618", "0625", "0627",
+        "0631", "0637", "0639", "0642", "0643", "0650", "0657", "0665", "0667", "0680"
+      ];
+
+      if (!fs.existsSync(destinationFolder)) {
+        fs.mkdirSync(destinationFolder, { recursive: true });
+      }
+
+      const files = fs.readdirSync(sourceFolder);
+
+      let copiedFiles: string[] = [];
+      let failedFiles: Array<{ file: string; error: string }> = [];
+      let foundNumbers = new Set<string>();
+
+      for (const file of files) {
+        const match = file.match(/(\d{4})/);
+        if (!match) continue;
+
+        const fileNumber = match[1];
+
+        if (validNumbers.includes(fileNumber)) {
+          foundNumbers.add(fileNumber);
+
+          const src = path.join(sourceFolder, file);
+          const dest = path.join(destinationFolder, file);
+
+          try {
+            if (!fs.existsSync(dest)) {
+              fs.copyFileSync(src, dest);
+            }
+
+            copiedFiles.push(file);
+
+          } catch (error: any) {
+            failedFiles.push({ file, error: error.message });
           }
-
-          copiedFiles.push(file);
-
-        } catch (error: any) {
-          failedFiles.push({ file, error: error.message });
         }
       }
+
+      // Numbers not found in ANY file
+      const missingNumbers = validNumbers.filter(num => !foundNumbers.has(num));
+
+      return {
+        data: {
+          totalCopied: copiedFiles.length,
+          copiedFiles,
+          missingNumbersCount: missingNumbers.length,
+          missingNumbers,
+          failedFilesCount: failedFiles.length,
+          failedFiles,
+        },
+        message: { msg: "Photo Sync Completed Successfully", code: 1 }
+      };
+
+    } catch (err) {
+      console.log(err);
+
+      return {
+        data: null,
+        message: { msg: "Error while syncing photos", code: 0 }
+      };
     }
-
-    // Numbers not found in ANY file
-    const missingNumbers = validNumbers.filter(num => !foundNumbers.has(num));
-
-    return {
-      data: {
-        totalCopied: copiedFiles.length,
-        copiedFiles,
-        missingNumbersCount: missingNumbers.length,
-        missingNumbers,
-        failedFilesCount: failedFiles.length,
-        failedFiles,
-      },
-      message: { msg: "Photo Sync Completed Successfully", code: 1 }
-    };
-
-  } catch (err) {
-    console.log(err);
-
-    return {
-      data: null,
-      message: { msg: "Error while syncing photos", code: 0 }
-    };
   }
-}
 
 
 
   async insuranceWiseTicketList(payload: any) {
-  let { month, year } = payload;
-  let message = { msg: "", code: "" };
+    let { month, year } = payload;
+    let message = { msg: "", code: "" };
 
-  if (!month) {
-    message.msg = "Month is required";
-    message.code = "1";
-    return { data: {}, message };
-  }
-
-  if (!year) {
-    message.msg = "Year is required";
-    message.code = "1";
-    return { data: {}, message };
-  }
-
-  const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
-  const endDate = new Date(year, month, 1, 0, 0, 0, 0);
-
-  const pipeline = [
-    {
-      $match: {
-        AssignedDate: {
-          $gte: startDate,
-          $lt: endDate
-        }
-      }
-    },
-    {
-      $lookup: {
-        from: "SLA_Ticket_listing",
-        let: { ticketId: "$SupportTicketID" },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ["$SupportTicketID", "$$ticketId"] }
-            }
-          },
-          { $limit: 1 }
-        ],
-        as: "TicketInfo"
-      }
-    },
-    {
-      $unwind: {
-        path: "$TicketInfo",
-        preserveNullAndEmptyArrays: false
-      }
-    },
-    {
-      $group: {
-        _id: "$TicketInfo.InsuranceCompany",
-        TicketCount: { $sum: 1 }
-      }
-    },
-    {
-      $project: {
-        _id: 0,
-        InsuranceCompany: "$_id",
-        TicketCount: 1
-      }
-    },
-    {
-      $sort: { TicketCount: -1 }
+    if (!month) {
+      message.msg = "Month is required";
+      message.code = "1";
+      return { data: {}, message };
     }
-  ];
 
-  const fetchedData = await this.db
-    .collection("Ticket_Assignment_History")
-    .aggregate(pipeline)
-    .toArray();
+    if (!year) {
+      message.msg = "Year is required";
+      message.code = "1";
+      return { data: {}, message };
+    }
 
-  const getInsuranceCompany = await this.db
-    .collection("KRPH_InsuranceMaster")
-    .find({})
-    .toArray();
+    const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const endDate = new Date(year, month, 1, 0, 0, 0, 0);
 
-  const insuranceCountMap: Record<string, number> = {};
+    const pipeline = [
+      {
+        $match: {
+          AssignedDate: {
+            $gte: startDate,
+            $lt: endDate
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "SLA_Ticket_listing",
+          let: { ticketId: "$SupportTicketID" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$SupportTicketID", "$$ticketId"] }
+              }
+            },
+            { $limit: 1 }
+          ],
+          as: "TicketInfo"
+        }
+      },
+      {
+        $unwind: {
+          path: "$TicketInfo",
+          preserveNullAndEmptyArrays: false
+        }
+      },
+      {
+        $group: {
+          _id: "$TicketInfo.InsuranceCompany",
+          TicketCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          InsuranceCompany: "$_id",
+          TicketCount: 1
+        }
+      },
+      {
+        $sort: { TicketCount: -1 }
+      }
+    ];
 
-  for (const fd of fetchedData) {
-    insuranceCountMap[this.normalize(fd.InsuranceCompany)] = fd.TicketCount;
-  }
+    const fetchedData = await this.db
+      .collection("Ticket_Assignment_History")
+      .aggregate(pipeline)
+      .toArray();
 
-  const conbinedData = getInsuranceCompany.map(item => {
-    const key = this.normalize(item.InsuranceMasterName);
+    const getInsuranceCompany = await this.db
+      .collection("KRPH_InsuranceMaster")
+      .find({})
+      .toArray();
+
+    const normalize = this.normalize.bind(this);
+
+    const insuranceCountMap = fetchedData.reduce((acc, fd) => {
+      acc[normalize(fd.InsuranceCompany)] = fd.TicketCount;
+      return acc;
+    }, {});
+
+    const conbinedData = getInsuranceCompany.map(item => {
+      const key = this.normalize(item.InsuranceMasterName);
+      return {
+        InsuranceCompanyId: item?.InsuranceMasterID,
+        InsuranceCompany: item.InsuranceMasterName,
+        AssignedTicketCount: insuranceCountMap[key] || 0
+      };
+    });
+
+    message.msg = "Success";
+    message.code = "1";
+    let obj = {
+      data: conbinedData
+    }
+
     return {
-      // ...item,
-      InsuranceCompanyId:item?.InsuranceMasterID,
-      InsuranceCompany: item.InsuranceMasterName,
-      TicketCount: insuranceCountMap[key] || 0
+      data: obj,
+      message
     };
-  });
-
-  message.msg = "Success";
-  message.code = "1";
-  let obj ={
-    data:conbinedData
   }
-
-  return {
-    data: obj,
-    message
-  };
-}
 
   normalize(str = "") {
     return str
