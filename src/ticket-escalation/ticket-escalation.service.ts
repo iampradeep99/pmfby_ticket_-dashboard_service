@@ -726,6 +726,7 @@ export class TicketEscalationService {
 
   async insuracneTicketListingService(payload: any) {
     try {
+
       const db = this.db;
 
       let {
@@ -761,6 +762,8 @@ export class TicketEscalationService {
       const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
       const item = (responseInfo.data as any)?.user?.[0];
 
+      console.log(item, "item")
+
       if (!item) return { data: {}, message: { msg: "Not Found", code: "0" } };
 
       const userDetail = {
@@ -773,6 +776,7 @@ export class TicketEscalationService {
         AppAccessID: item?.AppAccessID
       };
 
+      console.log(userDetail)
       const { InsuranceCompanyID, StateMasterID, LocationTypeID, AppAccessID } = userDetail;
       let locationFilter: any = {};
 
@@ -800,24 +804,33 @@ export class TicketEscalationService {
         const requestedInsuranceIDs = String(insuranceCompanyID).split(",").map(id => Number(id.trim()));
         const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
         const validInsuranceIDs = requestedInsuranceIDs.filter(id => allowedInsuranceIDs.includes(id));
-        if (validInsuranceIDs.length === 0) {
-          return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." };
-        }
+        // if (validInsuranceIDs.length === 0) {
+        //   // return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." };
+        //   return { data:[] ,message:{msg:"Unauthorized InsuranceCompanyID(s).", code:"0"}};
+
+        // }
         match.InsuranceCompanyID = { $in: validInsuranceIDs };
       } else if (InsuranceCompanyID?.length) {
         match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
       }
 
       if (stateID && Number(stateID) !== 0 && LocationTypeID !== 2) {
+        console.log(stateID)
         const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
         const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
-        if (validStateIDs.length === 0) {
-          return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
-        }
+        console.log(validStateIDs)
+
+        // if (validStateIDs.length === 0) {
+        //   return { data:[] ,message:{msg:"Un-Authorised State", code:"0"}};
+        // }
         match.StateMasterID = { $in: validStateIDs };
       } else if (StateMasterID.length && LocationTypeID !== 2) {
         match.FilterStateID = { $in: StateMasterID.map(Number) };
       }
+
+
+      console.log(JSON.stringify(match))
+
 
       if (fromdate && toDate) {
         match.Created = {
@@ -830,7 +843,7 @@ export class TicketEscalationService {
       if (supportTicketTypeID && supportTicketTypeID !== 0) match.SupportTicketTypeID = supportTicketTypeID;
       if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
 
-      const pipeline: any[] = [
+      const pipelineInfo: any[] = [
         { $match: { ...match, TicketStatusID: { $ne: 109303 } } },
         { $limit: pageSize * 2 },
         { $sort: { InsertDateTime: -1 } },
@@ -900,12 +913,13 @@ export class TicketEscalationService {
         }
       ];
 
-      const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
+      console.log(JSON.stringify(pipelineInfo))
+      const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipelineInfo, { allowDiskUse: true }).toArray();
       const result = aggResult[0] || { data: [], totalCount: [], ticketStatusSummary: [] };
 
       if (result.data.length === 0) {
         return {
-          data: [],
+          obj: [],
           message: { msg: "Record Not Found", code: "0" },
           totalCount: 0,
           totalPages: 0

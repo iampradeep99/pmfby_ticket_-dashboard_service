@@ -98,7 +98,7 @@ export class UtilService {
     const data = { userID };
     const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk'
 
-    const url = 'https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail'
+    const url = "https://pmfbydemo.amnex.co.in/krphapi/FGMS/GetSupportTicketUserDetail"
     return axios.post(url, data, {
       headers: {
         'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ export class UtilService {
 
   const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk';
 
-  const url = 'https://pmfby.gov.in/krphapi/FGMS/GetMasterDataBinding';
+  const url = 'https://pmfbydemo.amnex.co.in/krphapi/FGMS/GetMasterDataBinding';
 
   try {
     const response = await axios.post(url, data, {
