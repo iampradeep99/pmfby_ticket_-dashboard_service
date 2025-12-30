@@ -2722,7 +2722,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
 
       const [stateAssigned] = await Promise.all([
-        this.db.collection("Ticket_Assignment_History").aggregate(statePipeline).toArray(),
+        this.db.collection("Ticket_Assignment").aggregate(statePipeline).toArray(),
       ]);
 
       if (stateAssigned.length === 0) {
