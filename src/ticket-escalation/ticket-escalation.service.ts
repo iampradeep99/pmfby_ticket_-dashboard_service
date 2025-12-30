@@ -975,7 +975,7 @@ async getToken() {
 
 
 
-  async AssignTicketService(payload: any) {
+/*   async AssignTicketService(payload: any) {
     const {
       ticketIds,
       assignedBy,
@@ -1127,7 +1127,138 @@ async getToken() {
     return successCount === 0
       ? { data: summary, message: { msg: "All Failed", code: "0" } }
       : { data: summary, message: { msg: "Success", code: "1" } };
+  } */
+
+
+      async AssignTicketService(payload: any) {
+  const {
+    ticketIds,
+    assignedBy,
+    assignedByName,
+    assignedTo,
+    assignToName,
+    roleName,
+    stateID,
+    mobileNo,
+    districtID,
+    ticketDescription
+  } = payload || {};
+
+  if (!ticketIds) {
+    return { data: {}, message: { msg: "ticketIds is required.", code: "0" } };
   }
+
+  const ticketIdArray = ticketIds
+    .split(",")
+    .map(id => Number(id.trim()))
+    .filter(id => !isNaN(id));
+
+  if (!ticketIdArray.length) {
+    return { data: {}, message: { msg: "No valid ticket IDs provided.", code: "0" } };
+  }
+
+  const ticketCollection = this.db.collection("SLA_Ticket_listing");
+  const historyCol = this.db.collection("Ticket_Assignment_History");
+  const currentCol = this.db.collection("Ticket_Assignment");
+
+  const now = new Date();
+  const results: any[] = [];
+
+  const roleMap: any = {
+    1: "STATE_GOVT_ADMIN",
+    2: "STATE_GOVT_USER",
+    3: "DEPUTY_DIRECTOR"
+  };
+
+  for (const ticketId of ticketIdArray) {
+    try {
+      const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
+      if (!ticket) {
+        results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+        continue;
+      }
+
+      const currentAssignment = await currentCol.findOne({ SupportTicketID: ticketId });
+
+      // 🚫 Prevent assigning to same user again
+      if (currentAssignment?.assignedTo === assignedTo) {
+        results.push({
+          ticketId,
+          ticketNo: ticket.SupportTicketNo,
+          status: "Failed",
+          reason: "Ticket already assigned to this user"
+        });
+        continue;
+      }
+
+      const assignmentData = {
+        SupportTicketID: ticketId,
+        SupportTicketNo: ticket.SupportTicketNo,
+        TicketStatusID: ticket.TicketStatusID || null,
+        TicketStatus: ticket.TicketStatus || null,
+        assignedBy,
+        assignedByName,
+        assignedTo,
+        assignToName,
+        AssignedDate: now,
+        AssigneeStateID: stateID || "",
+        AssignedDistrictID: districtID || "",
+        AssigneeMobileNo: mobileNo || "",
+        AssigneRoleName: roleMap[roleName] || "",
+        AssigneeRoleID: roleName,
+        InsuranceCompanyId: ticket?.InsuranceCompanyID,
+        InsuranceCompanyName: ticket?.InsuranceCompany,
+        TicketComment: ticketDescription || ""
+      };
+
+      // 1️⃣ HISTORY (AUDIT)
+      await historyCol.insertOne({
+        ...assignmentData,
+        CreatedDate: now
+      });
+
+      // 2️⃣ CURRENT OWNER (SINGLE SOURCE OF TRUTH)
+      await currentCol.updateOne(
+        { SupportTicketID: ticketId },
+        {
+          $set: {
+            ...assignmentData,
+            UpdatedDate: now
+          }
+        },
+        { upsert: true }
+      );
+
+      results.push({
+        ticketId,
+        ticketNo: ticket.SupportTicketNo,
+        status: "Success",
+        reason: "Assigned successfully"
+      });
+
+    } catch (err: any) {
+      results.push({
+        ticketId,
+        status: "Error",
+        reason: err.message || "Unexpected error"
+      });
+    }
+  }
+
+  const successCount = results.filter(r => r.status === "Success").length;
+
+  return {
+    data: {
+      totalTickets: results.length,
+      successCount,
+      failedCount: results.length - successCount
+    },
+    message: {
+      msg: successCount ? "Success" : "All Failed",
+      code: successCount ? "1" : "0"
+    }
+  };
+}
 
 
 
@@ -1281,7 +1412,7 @@ async getToken() {
 
       TicketHeaderID = TicketHeaderID ? Number(TicketHeaderID) : null;
 
-      const collection = db.collection("Ticket_Assignment");
+      const collection = db.collection("Ticket_Assignment_History");
       if (!collection) {
         return { data: [], message: { msg: "Collection not found", code: "0" } };
       }
@@ -1290,7 +1421,8 @@ async getToken() {
       const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
 
       const pipeline: any[] = [
-        { $match: { assignedTo: loggedInUserId, AssignedDistrictID:{$eq:""} } },
+        
+        { $match: { assignedTo: loggedInUserId} },
         {
           $lookup: {
             from: "SLA_Ticket_listing",
