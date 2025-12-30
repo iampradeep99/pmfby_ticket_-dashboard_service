@@ -2379,7 +2379,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
           AssignedDate: 1,
           AssigneeStateID: 1,
           AssigneRoleName: 1,
-          TicketInformation: {
+         
             SupportTicketID: "$Ticket.SupportTicketID",
             CallerContactNumber: "$Ticket.CallerContactNumber",
             CallingAudioFile: "$Ticket.CallingAudioFile",
@@ -2561,7 +2561,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
                 timezone: "Asia/Kolkata"
               }
             }
-          }
+          
 
 
         }
