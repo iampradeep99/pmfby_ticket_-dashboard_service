@@ -169,17 +169,48 @@ export class TicketEscalationService {
   }
 
 
-async getToken() {
+async getTokenOld() {
   try {
     const payload = {
-      deviceType: process.env.PM_API_DEVICE_TYPE,
-      otp: process.env.PM_API_DEVICE_OTP,
-      password: process.env.PM_API_DEVICE_PASSWORD,
-      mobile: process.env.PM_API_DEVICE_MOBILE
+      deviceType: config.pmfbyConfig.deviceType,
+      otp: Number(config.pmfbyConfig.otp),
+      password: config.pmfbyConfig.password,
+      mobile: config.pmfbyConfig.mobile,
     };
 
     const response = await axios.post(
-      process.env.PM_API_FOR_LOGIN,
+      config.pmfbyConfig.login_api_url,
+      payload,
+      {
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      }
+    );
+
+    const token = response?.data?.data?.token;
+    console.log(token);
+
+    if (!token) {
+      throw new Error("Token not received from login API");
+    }
+
+    return token;
+  } catch (error) {
+    console.error("Error in getToken():", error);
+    throw error;
+  }
+}
+
+async getToken() {
+  try {
+    const payload = {
+      deviceType: "web",
+      otp: 123456,
+      password: "019096071e228ed6611599c83d96783ccf2dcc02790ffe165f7e11e70e5ee1b12ea864dc123eea1367d96ef240cda319180f58d23653890fe5d99e0f911dbb79",
+      mobile: "9013617746"
+    };
+
+    const response = await axios.post(
+      "https://pmfbydemo.amnex.co.in/api/v2/external/service/login",
       payload,
       {
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
