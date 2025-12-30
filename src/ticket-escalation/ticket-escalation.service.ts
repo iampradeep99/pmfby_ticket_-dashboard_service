@@ -2627,9 +2627,9 @@ async EscalationHistoryTrailService(payload: any) {
         }
       };
     }
-
+    let response = { data: historyInfo }
     return {
-      data: { data: historyInfo },
+      data: response,
       message: {
         msg: "Success",
         code: "1"

@@ -339,6 +339,26 @@ async syncAudio(
     }
   }
 
+
+
+  @Post('escalationHistoryTrail')
+  async EscalationHistoryTrail(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      let { data, message } = await this.dashboardService.EscalationHistoryTrailService(payload);
+
+      if (data) data = await this.utilService.GZip(data);
+
+      return jsonResponseHandler(data, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
+  
   
 
 
