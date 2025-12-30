@@ -1065,6 +1065,8 @@ async getToken() {
           TicketComment:ticketDescription
         };
 
+        await assignHistoryCollection.insertOne(assignmentData)
+
       
       
 
