@@ -171,11 +171,11 @@ export class TicketEscalationService {
 
   async getToken() {
     try {
-      const cachedToken = this.tokenCache.get("pmfby_token");
+      // const cachedToken = this.tokenCache.get("pmfby_token");
 
-      if (cachedToken) {
-        return cachedToken;
-      }
+      // if (cachedToken) {
+      //   return cachedToken;
+      // }
 
       const payload = {
         deviceType: config.pmfbyConfig.deviceType,
@@ -194,6 +194,7 @@ export class TicketEscalationService {
 
       const result = getData?.data?.data;
       const token = result?.token;
+      console.log(token)
 
       if (!token) {
         throw new Error("Token not received from login API");
