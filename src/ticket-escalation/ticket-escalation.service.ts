@@ -185,7 +185,7 @@ async getToken() {
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       }
     );
-console.log(JSON.stringify(response))
+console.log(response)
 return
     const token = response?.data?.data?.token;
     console.log(token);
