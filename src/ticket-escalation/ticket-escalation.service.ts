@@ -169,46 +169,37 @@ export class TicketEscalationService {
   }
 
 
-  async getToken() {
-    try {
-      // const cachedToken = this.tokenCache.get("pmfby_token");
+async getToken() {
+  try {
+    const payload = {
+      deviceType: config.pmfbyConfig.deviceType,
+      otp: Number(config.pmfbyConfig.otp),
+      password: config.pmfbyConfig.password,
+      mobile: config.pmfbyConfig.mobile,
+    };
 
-      // if (cachedToken) {
-      //   return cachedToken;
-      // }
-
-      const payload = {
-        deviceType: config.pmfbyConfig.deviceType,
-        otp: Number(config.pmfbyConfig.otp),
-        password: config.pmfbyConfig.password,
-        mobile: config.pmfbyConfig.mobile,
-      };
-
-      const getData = await axios.post(
-        config.pmfbyConfig.login_api_url,
-        payload,
-        {
-          httpsAgent: new https.Agent({ rejectUnauthorized: false })
-        }
-      );
-
-      const result = getData?.data?.data;
-      const token = result?.token;
-      console.log(token)
-
-      if (!token) {
-        throw new Error("Token not received from login API");
+    const response = await axios.post(
+      config.pmfbyConfig.login_api_url,
+      payload,
+      {
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       }
+    );
 
-      this.tokenCache.set("pmfby_token", token);
+    const token = response?.data?.data?.token;
+    console.log(token);
 
-      return token;
-
-    } catch (error) {
-      console.error("Error in getToken():", error);
-      throw error;
+    if (!token) {
+      throw new Error("Token not received from login API");
     }
+
+    return token;
+  } catch (error) {
+    console.error("Error in getToken():", error);
+    throw error;
   }
+}
+
 
 
 
