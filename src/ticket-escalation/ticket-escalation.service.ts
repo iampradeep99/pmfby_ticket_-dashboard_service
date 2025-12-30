@@ -476,6 +476,7 @@ export class TicketEscalationService {
 
 
       } catch (processingErr: any) {
+        console.log(processingErr)
         return {
           data: null,
           message: {
