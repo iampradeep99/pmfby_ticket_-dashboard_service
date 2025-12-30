@@ -877,8 +877,8 @@ export class TicketEscalationService {
                   TicketHeadName: 1,
                   StateMasterName: 1,
                   TicketDescription: 1,
-                  TicketStatusID:1,
-                  TicketStatus:1,
+                  TicketStatusID: 1,
+                  TicketStatus: 1,
                   Created: {
                     $dateToString: {
                       date: { $toDate: "$Created" },
@@ -948,158 +948,159 @@ export class TicketEscalationService {
 
 
 
-async AssignTicketService(payload: any) {
-  const {
-    ticketIds,
-    assignedBy,
-    assignedByName,
-    assignedTo,
-    assignToName,
-    roleName,
-    stateID,
-    mobileNo,
-    districtID
-  } = payload || {};
+  async AssignTicketService(payload: any) {
+    const {
+      ticketIds,
+      assignedBy,
+      assignedByName,
+      assignedTo,
+      assignToName,
+      roleName,
+      stateID,
+      mobileNo,
+      districtID
+    } = payload || {};
 
-  if (!ticketIds) {
-    return { data: {}, message: { msg: "ticketIds is required.", code: "0" } };
-  }
-
-  const roleId = roleName;
-
-  const ticketIdArray = ticketIds
-    .split(",")
-    .map(id => id.trim())
-    .filter(Boolean);
-
-  if (!ticketIdArray.length) {
-    return { data: {}, message: { msg: "No valid ticket IDs provided.", code: "0" } };
-  }
-
-  const ticketCollection = this.db.collection("SLA_Ticket_listing");
-  const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
-  const currentAssignCollection = this.db.collection("Ticket_Assignment");
-
-  const now = new Date();
-  const results: any[] = [];
-
-  let assignedRoleName = "";
-  if (roleId == 1) assignedRoleName = "STATE_GOVT_ADMIN";
-  if (roleId == 2) assignedRoleName = "STATE_GOVT_USER";
-  if (roleId == 3) assignedRoleName = "DEPUTY_DIRECTOR";
-
-  for (const ticketIdStr of ticketIdArray) {
-    const ticketId = Number(ticketIdStr);
-
-    if (isNaN(ticketId)) {
-      results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
-      continue;
+    if (!ticketIds) {
+      return { data: {}, message: { msg: "ticketIds is required.", code: "0" } };
     }
 
-    try {
-      const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
-      if (!ticket) {
-        results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+    const roleId = roleName;
+
+    const ticketIdArray = ticketIds
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean);
+
+    if (!ticketIdArray.length) {
+      return { data: {}, message: { msg: "No valid ticket IDs provided.", code: "0" } };
+    }
+
+    const ticketCollection = this.db.collection("SLA_Ticket_listing");
+    const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
+    const currentAssignCollection = this.db.collection("Ticket_Assignment");
+
+    const now = new Date();
+    const results: any[] = [];
+
+    let assignedRoleName = "";
+    if (roleId == 1) assignedRoleName = "STATE_GOVT_ADMIN";
+    if (roleId == 2) assignedRoleName = "STATE_GOVT_USER";
+    if (roleId == 3) assignedRoleName = "DEPUTY_DIRECTOR";
+
+    for (const ticketIdStr of ticketIdArray) {
+      const ticketId = Number(ticketIdStr);
+
+      if (isNaN(ticketId)) {
+        results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
         continue;
       }
 
-      const currentAssignment = await currentAssignCollection.findOne({
-        SupportTicketID: ticketId
-      });
+      try {
+        const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
+        if (!ticket) {
+          results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+          continue;
+        }
 
-      if (currentAssignment && currentAssignment.assignedTo === assignedTo) {
+        const currentAssignment = await currentAssignCollection.findOne({
+          SupportTicketID: ticketId
+        });
+
+        if (currentAssignment && currentAssignment.assignedTo === assignedTo) {
+          results.push({
+            ticketId,
+            ticketNo: ticket.SupportTicketNo,
+            status: "Failed",
+            reason: "Ticket already assigned to this user"
+          });
+          continue;
+        }
+
+        const assignmentData = {
+          SupportTicketID: ticketId,
+          SupportTicketNo: ticket.SupportTicketNo,
+          TicketStatusID: ticket.TicketStatusID || null,
+          TicketStatus: ticket.TicketStatus || null,
+          assignedBy,
+          assignedByName,
+          assignedTo,
+          assignToName,
+          AssignedDate: now,
+          AssigneeStateID: stateID,
+          AssignedDistrictID:districtID,
+          AssigneeMobileNo: mobileNo,
+          AssigneRoleName: assignedRoleName,
+          AssigneeRoleID: roleId,
+          InsuranceCompanyId: ticket?.InsuranceCompanyID,
+          InsuranceCompanyName: ticket?.InsuranceCompany
+        };
+
+        await assignHistoryCollection.insertOne({
+          ...assignmentData,
+          CreatedDate: now
+        });
+
+        await currentAssignCollection.updateOne(
+          { SupportTicketID: ticketId },
+          {
+            $set: {
+              ...assignmentData,
+              UpdatedDate: now
+            }
+          },
+          { upsert: true }
+        );
+
         results.push({
           ticketId,
           ticketNo: ticket.SupportTicketNo,
-          status: "Failed",
-          reason: "Ticket already assigned to this user"
+          status: "Success",
+          reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
         });
-        continue;
+
+      } catch (err: any) {
+        results.push({
+          ticketId,
+          status: "Error",
+          reason: err.message || "Unexpected error"
+        });
       }
-
-      const assignmentData = {
-        SupportTicketID: ticketId,
-        SupportTicketNo: ticket.SupportTicketNo,
-        TicketStatusID: ticket.TicketStatusID || null,
-        TicketStatus: ticket.TicketStatus || null,
-        assignedBy,
-        assignedByName,
-        assignedTo,
-        assignToName,
-        AssignedDate: now,
-        AssigneeStateID: stateID,
-        AssigneeMobileNo: mobileNo,
-        AssigneRoleName: assignedRoleName,
-        AssigneeRoleID: roleId,
-        InsuranceCompanyId: ticket?.InsuranceCompanyID,
-        InsuranceCompanyName: ticket?.InsuranceCompany
-      };
-
-      await assignHistoryCollection.insertOne({
-        ...assignmentData,
-        CreatedDate: now
-      });
-
-      await currentAssignCollection.updateOne(
-        { SupportTicketID: ticketId },
-        {
-          $set: {
-            ...assignmentData,
-            UpdatedDate: now
-          }
-        },
-        { upsert: true }
-      );
-
-      results.push({
-        ticketId,
-        ticketNo: ticket.SupportTicketNo,
-        status: "Success",
-        reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
-      });
-
-    } catch (err: any) {
-      results.push({
-        ticketId,
-        status: "Error",
-        reason: err.message || "Unexpected error"
-      });
     }
+
+    const successCount = results.filter(r => r.status === "Success").length;
+    const failedCount = results.length - successCount;
+
+    for (const item of results) {
+      if (item.status === "Success") {
+        await this.sendSMSToUser({
+          ticket: item.ticketNo,
+          mobileNO: "916386236314",
+          Name: assignToName
+        });
+      }
+    }
+
+    const summary = {
+      totalTickets: results.length,
+      successCount,
+      failedCount,
+      message:
+        successCount === results.length
+          ? "All tickets assigned successfully."
+          : successCount === 0
+            ? "All tickets failed."
+            : `${successCount} assigned, ${failedCount} failed.`
+    };
+
+    return successCount === 0
+      ? { data: summary, message: { msg: "All Failed", code: "0" } }
+      : { data: summary, message: { msg: "Success", code: "1" } };
   }
 
-  const successCount = results.filter(r => r.status === "Success").length;
-  const failedCount = results.length - successCount;
-
-  for (const item of results) {
-    if (item.status === "Success") {
-      await this.sendSMSToUser({
-        ticket: item.ticketNo,
-        mobileNO: "916386236314",
-        Name: assignToName
-      });
-    }
-  }
-
-  const summary = {
-    totalTickets: results.length,
-    successCount,
-    failedCount,
-    message:
-      successCount === results.length
-        ? "All tickets assigned successfully."
-        : successCount === 0
-        ? "All tickets failed."
-        : `${successCount} assigned, ${failedCount} failed.`
-  };
-
-  return successCount === 0
-    ? { data: summary, message: { msg: "All Failed", code: "0" } }
-    : { data: summary, message: { msg: "Success", code: "1" } };
-}
 
 
-
- async sendSMSToUser(payload) {
+  async sendSMSToUser(payload) {
     try {
 
       let templateID = "1707176646596240405";
@@ -1125,7 +1126,7 @@ async AssignTicketService(payload: any) {
           TemplateID: templateID,
           MobileNo: payload.mobileNO,
         }
-       await this.db.collection(collection).insertOne(payloadForSms)
+        await this.db.collection(collection).insertOne(payloadForSms)
 
       }
 
@@ -1135,7 +1136,7 @@ async AssignTicketService(payload: any) {
     }
   }
 
-    async GetSingleUnicodeHex(x) {
+  async GetSingleUnicodeHex(x) {
     let result = "", notation = "";
     for (let i = 0; i < x.length; i++)
       result += notation + ("000" + x[i].charCodeAt(0).toString(16)).substr(-4);
@@ -1903,27 +1904,27 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
           }
         }
       },
-    
-     {
-    $group: {
-      _id: "$InsuranceCompanyId",
-      InsuranceCompany: { $first: "$InsuranceCompanyName" },
-      TicketCount: { $sum: 1 }
-    }
-  },
-  {
-    $project: {
-      _id: 0,
-      InsuranceCompanyId: "$_id",
-      InsuranceCompany: 1,
-      TicketCount: 1
-    }
-  },
-  {
-    $sort: { TicketCount: -1 }
-  }
+
+      {
+        $group: {
+          _id: "$InsuranceCompanyId",
+          InsuranceCompany: { $first: "$InsuranceCompanyName" },
+          TicketCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          InsuranceCompanyId: "$_id",
+          InsuranceCompany: 1,
+          TicketCount: 1
+        }
+      },
+      {
+        $sort: { TicketCount: -1 }
+      }
     ];
-    
+
     console.log(JSON.stringify(pipeline))
     const fetchedData = await this.db
       .collection("Ticket_Assignment_History")
@@ -1972,7 +1973,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
   }
 
 
-    async getBucketTicketCount(payload: any) {
+  async getBucketTicketCount(payload: any) {
     try {
       const { loginId } = payload;
       let message = {
@@ -2033,8 +2034,8 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
             AssigneeRoleName: 1,
             AssigneeRoleID: 1,
             AssigneRoleName: 1,
-            assignToName:1,
-            assignedByName:1
+            assignToName: 1,
+            assignedByName: 1
 
           }
         },
@@ -2066,7 +2067,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
             preserveNullAndEmptyArrays: true
           }
         },
-    
+
 
         {
           $project: {
@@ -2086,7 +2087,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
             AssignedRoleID: "$AssigneeRoleID",
             AssigneRoleName: "$AssigneRoleName",
             AssignedUserName: "$assignToName",
-            AssignedByName:"$assignedByName",
+            AssignedByName: "$assignedByName",
 
             TicketInformation: {
               SupportTicketID: "$Ticket.SupportTicketID",
@@ -2298,6 +2299,80 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
     }
   }
+
+
+  async AssignedTicketByInsuranceService(payload: any) {
+    try {
+      let data;
+      let queryForStateAssigned;
+      let queryForDistrictAssigned;
+      let message = {
+        msg: "",
+        code: ""
+      }
+      let { insuranceCompanyId } = payload;
+
+      if (!insuranceCompanyId) {
+        const missingFields = [];
+
+        if (!insuranceCompanyId) missingFields.push("insuranceCompanyId");
+
+        data = [];
+        message.msg = `Failed - Missing required field(s): ${missingFields.join(", ")}`;
+        message.code = "0";
+
+        return { data, message };
+
+      }
+      
+
+      
+      queryForStateAssigned = [
+        {
+          $match:{
+            InsuranceCompanyId:parseInt(insuranceCompanyId),
+            AssigneeStateID:{$ne:""}
+            
+          }
+        }
+      ]
+
+      queryForDistrictAssigned = [
+         {
+          $match:{
+            InsuranceCompanyId:parseInt(insuranceCompanyId),
+            AssigneeStateID:{$ne:""}
+            
+          }
+        }
+      ]
+
+
+      let StateAssignedTickets = await this.db.collection("Ticket_Assignment_History").aggregate(queryForStateAssigned).toArray();
+      console.log(StateAssignedTickets)
+      if(StateAssignedTickets.length === 0){
+
+        data = [];
+        message.msg = `Failed - No Record Found`;
+        message.code = "0";
+
+        return { data, message };
+
+      }
+
+      let obj={
+        data:StateAssignedTickets,
+      }
+      
+
+
+
+      return { data: obj, message: { msg: "Success", code: "1" } }
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
 
 }
 
