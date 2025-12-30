@@ -1281,7 +1281,7 @@ async getToken() {
 
       TicketHeaderID = TicketHeaderID ? Number(TicketHeaderID) : null;
 
-      const collection = db.collection("Ticket_Assignment_History");
+      const collection = db.collection("Ticket_Assignment");
       if (!collection) {
         return { data: [], message: { msg: "Collection not found", code: "0" } };
       }
@@ -1290,7 +1290,7 @@ async getToken() {
       const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
 
       const pipeline: any[] = [
-        { $match: { assignedTo: loggedInUserId } },
+        { $match: { assignedTo: loggedInUserId, AssignedDistrictID:{$eq:""} } },
         {
           $lookup: {
             from: "SLA_Ticket_listing",
@@ -1515,7 +1515,7 @@ async getToken() {
           },
         },
       ];
-
+console.log(JSON.stringify(pipeline))
       const data = await collection.aggregate(pipeline).toArray();
 
       return {
