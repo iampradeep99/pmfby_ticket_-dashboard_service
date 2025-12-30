@@ -1217,6 +1217,7 @@ async getToken() {
         CreatedDate: now
       });
 
+      // 2️⃣ CURRENT OWNER (SINGLE SOURCE OF TRUTH)
       await currentCol.updateOne(
         { SupportTicketID: ticketId },
         {
@@ -2326,7 +2327,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
     console.log(JSON.stringify(pipeline))
     const fetchedData = await this.db
-      .collection("Ticket_Assignment_History")
+      .collection("Ticket_Assignment")
       .aggregate(pipeline)
       .toArray();
 
@@ -2721,7 +2722,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
 
       const [stateAssigned] = await Promise.all([
-        this.db.collection("Ticket_Assignment").aggregate(statePipeline).toArray(),
+        this.db.collection("Ticket_Assignment_History").aggregate(statePipeline).toArray(),
       ]);
 
       if (stateAssigned.length === 0) {
