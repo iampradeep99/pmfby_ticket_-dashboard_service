@@ -186,7 +186,7 @@ async getToken() {
       }
     );
 
-    const token = response?.data?.data?.token;
+    const token = "06aa0d6b3686ff45ac8a51ac96699af33e62150aef47a7dec89cb0ed4b31b5b7|94A1450A-3CBA-4E53-9A2B-335E720DEFE1";
     console.log(token);
 
     if (!token) {
