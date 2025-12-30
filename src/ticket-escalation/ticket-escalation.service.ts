@@ -172,21 +172,20 @@ export class TicketEscalationService {
 async getToken() {
   try {
     const payload = {
-      deviceType: config.pmfbyConfig.deviceType,
-      otp: Number(config.pmfbyConfig.otp),
-      password: config.pmfbyConfig.password,
-      mobile: config.pmfbyConfig.mobile,
+      deviceType: process.env.PM_API_DEVICE_TYPE,
+      otp: process.env.PM_API_DEVICE_OTP,
+      password: process.env.PM_API_DEVICE_PASSWORD,
+      mobile: process.env.PM_API_DEVICE_MOBILE
     };
 
     const response = await axios.post(
-      config.pmfbyConfig.login_api_url,
+      process.env.PM_API_FOR_LOGIN,
       payload,
       {
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       }
     );
-console.log(response)
-return
+
     const token = response?.data?.data?.token;
     console.log(token);
 
