@@ -393,6 +393,7 @@ export class TicketEscalationService {
           headers: { token },
         });
       } catch (axiosErr: any) {
+        console.log(axiosErr)
         return {
           data: null,
           message: {
