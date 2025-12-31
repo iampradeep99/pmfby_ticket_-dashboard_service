@@ -3004,6 +3004,9 @@ async EscalationHistoryTrailService(payload: any) {
           IsActive: 1,
           UpdatedDate: 1,
           CreatedDate: 1,
+          InsuranceCompanyName:1,
+          assignedByName:1,
+          assignToName:1,
           Comment: { $ifNull: ["$TicketComment", ""] }
         }
       }
