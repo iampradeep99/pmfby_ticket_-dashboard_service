@@ -1133,11 +1133,13 @@ async getToken() {
       async AssignTicketService(payload: any) {
   const {
     ticketIds,
+
     assignedBy,
     assignedByName,
     assignedTo,
     assignToName,
     roleName,
+    previousRoleName,
     stateID,
     mobileNo,
     districtID,
@@ -1165,9 +1167,10 @@ async getToken() {
   const results: any[] = [];
 
   const roleMap: any = {
+    0:"INSURANCE_COMPANY",
     1: "STATE_GOVT_ADMIN",
     2: "STATE_GOVT_USER",
-    3: "DEPUTY_DIRECTOR"
+    3: "DEPUTY_DIRECTOR",
   };
 
   for (const ticketId of ticketIdArray) {
@@ -1208,7 +1211,9 @@ async getToken() {
         AssigneeRoleID: roleName,
         InsuranceCompanyId: ticket?.InsuranceCompanyID,
         InsuranceCompanyName: ticket?.InsuranceCompany,
-        TicketComment: ticketDescription || ""
+        TicketComment: ticketDescription || "",
+        PreviousRoleId:previousRoleName,
+        PreviousRoleName: roleMap[previousRoleName]
       };
 
       // 1️⃣ HISTORY (AUDIT)
