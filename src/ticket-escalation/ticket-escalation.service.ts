@@ -3018,7 +3018,10 @@ async EscalationHistoryTrailService(payload: any) {
           InsuranceCompanyName:1,
           assignedByName:1,
           assignToName:1,
-          Comment: { $ifNull: ["$TicketComment", ""] }
+          Comment: { $ifNull: ["$TicketComment", ""] },
+          PreviousRoleName:1,
+          PreviousRoleId:1
+
         }
       }
     ];
