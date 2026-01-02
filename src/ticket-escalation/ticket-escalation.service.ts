@@ -2703,7 +2703,7 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
   async AssignedTicketByInsuranceService(payload: any) {
     try {
-      const { insuranceCompanyId } = payload;
+      const { insuranceCompanyId, year, month } = payload;
 
       if (!insuranceCompanyId) {
         return {
@@ -2713,10 +2713,16 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
       }
 
       const insuranceId = Number(insuranceCompanyId);
+      const startDate = new Date(year, month - 1, 1); // 2025-12-01
+      const endDate = new Date(year, month, 1);
 
       const statePipeline = this.buildAssignedTicketPipeline({
         InsuranceCompanyId: insuranceId,
-        AssigneeStateID: { $exists: true, $ne: "" }
+        AssigneeStateID: { $exists: true, $ne: "" },
+        AssignedDate:{
+              $gte: startDate,
+              $lt: endDate
+        }
       });
 
 
