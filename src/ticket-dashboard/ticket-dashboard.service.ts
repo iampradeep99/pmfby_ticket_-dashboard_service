@@ -1244,6 +1244,7 @@ export class TicketDashboardService {
       },
     ]
 
+    console.log(JSON.stringify(pipeline), "testpipeline")
     let results = await db
       .collection("SLA_KRPH_SupportTickets_Records")
       .aggregate(pipeline, { allowDiskUse: true })
@@ -7249,26 +7250,37 @@ export class TicketDashboardService {
         if (fromdate && toDate) {
           
 
+          
 
-                  const start = new Date(fromdate);
-        start.setHours(0, 0, 0, 0);
-        start.setMinutes(start.getMinutes() - 330);
+//                   const start = new Date(fromdate);
+//         start.setHours(0, 0, 0, 0);
+//         start.setMinutes(start.getMinutes() - 330);
                 
-        const end = new Date(toDate);
-        end.setHours(23, 59, 59, 999);
-        end.setMinutes(end.getMinutes() - 330);
+//         const end = new Date(toDate);
+//         end.setHours(23, 59, 59, 999);
+//         end.setMinutes(end.getMinutes() - 330);
 
 
-// console.log(start, end, "tie")
-          // match.Created = {
-          //   $gte: new Date(`${fromdate}T00:00:00.000Z`),
-          //   $lte: new Date(`${toDate}T23:59:59.999Z`)
-          // };
+// // console.log(start, end, "tie")
+//           // match.Created = {
+//           //   $gte: new Date(`${fromdate}T00:00:00.000Z`),
+//           //   $lte: new Date(`${toDate}T23:59:59.999Z`)
+//           // };
 
-            match.Created = {
-            $gte: start,
-            $lte: end
-          };
+//             match.Created = {
+//             $gte: start,
+//             $lte: end
+//           };
+
+ match.Created = {}; // or match.InsertDateTime if that's the correct field
+
+  // Start of fromdate in IST
+  const start = new Date(`${fromdate}T00:00:00+05:30`);
+  match.Created.$gte = start;
+
+  // End of toDate in IST
+  const end = new Date(`${toDate}T23:59:59.999+05:30`);
+  match.Created.$lte = end;
         }
         if (supportTicketID) match.SupportTicketID = supportTicketID;
         if (ticketCategoryID) match.TicketCategoryID = ticketCategoryID;
