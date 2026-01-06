@@ -7229,9 +7229,26 @@ export class TicketDashboardService {
 
       if (viewTYP === "FILTER") {
         if (fromdate && toDate) {
-          match.Created = {
-            $gte: new Date(`${fromdate}T00:00:00.000Z`),
-            $lte: new Date(`${toDate}T23:59:59.999Z`)
+
+
+                  const start = new Date(fromdate);
+        start.setHours(0, 0, 0, 0);
+        start.setMinutes(start.getMinutes() - 330);
+                
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        end.setMinutes(end.getMinutes() - 330);
+
+
+
+          // match.Created = {
+          //   $gte: new Date(`${fromdate}T00:00:00.000Z`),
+          //   $lte: new Date(`${toDate}T23:59:59.999Z`)
+          // };
+
+            match.Created = {
+            $gte: start,
+            $lte: end
           };
         }
         if (supportTicketID) match.SupportTicketID = supportTicketID;
