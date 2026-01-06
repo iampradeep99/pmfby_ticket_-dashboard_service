@@ -1061,11 +1061,30 @@ export class TicketDashboardService {
       match.FilterStateID = { $in: StateMasterID.map(Number) }
     }
 
+    // if (SPFROMDATE || SPTODATE) {
+    //   match.InsertDateTime = {}
+    //   if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
+    //   if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
+    // }
+
     if (SPFROMDATE || SPTODATE) {
-      match.InsertDateTime = {}
-      if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
-      if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
-    }
+  match.InsertDateTime = {};
+
+  if (SPFROMDATE) {
+    const start = new Date(SPFROMDATE);
+    start.setHours(0, 0, 0, 0);
+    start.setMinutes(start.getMinutes() - 330); // adjust for timezone
+    match.InsertDateTime.$gte = start;
+  }
+
+  if (SPTODATE) {
+    const end = new Date(SPTODATE);
+    end.setHours(23, 59, 59, 999);
+    end.setMinutes(end.getMinutes() - 330); // adjust for timezone
+    match.InsertDateTime.$lte = end;
+  }
+}
+
 
     const countPipeline: any[] = [
       { $match: match },
@@ -7229,6 +7248,7 @@ export class TicketDashboardService {
 
       if (viewTYP === "FILTER") {
         if (fromdate && toDate) {
+          
 
 
                   const start = new Date(fromdate);
