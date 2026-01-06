@@ -1081,7 +1081,7 @@ export class TicketDashboardService {
     const end = new Date(SPTODATE);
     end.setHours(23, 59, 59, 999);
     end.setMinutes(end.getMinutes() - 330); // adjust for timezone
-    match.InsertDateTime.$lte = end;
+    match.InsertDateTime.$lt = end;
   }
 }
 
