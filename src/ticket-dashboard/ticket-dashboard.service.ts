@@ -7229,10 +7229,14 @@ export class TicketDashboardService {
 
       if (viewTYP === "FILTER") {
         if (fromdate && toDate) {
+          // match.InsertDateTime = {
+          //   $gte: new Date(`${fromdate}T00:00:00.000Z`),
+          //   $lte: new Date(`${toDate}T23:59:59.999Z`)
+          // };
           match.InsertDateTime = {
-            $gte: new Date(`${fromdate}T00:00:00.000Z`),
-            $lte: new Date(`${toDate}T23:59:59.999Z`)
-          };
+  $gte: new Date(`${fromdate}T18:30:00.000Z`),
+  $lte: new Date(`${toDate}T18:29:59.999Z`)
+};
         }
         if (supportTicketID) match.SupportTicketID = supportTicketID;
         if (ticketCategoryID) match.TicketCategoryID = ticketCategoryID;
