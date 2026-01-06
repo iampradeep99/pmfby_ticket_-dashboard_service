@@ -871,7 +871,7 @@ async getToken() {
       if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
 
       const pipelineInfo: any[] = [
-        { $match: { ...match, TicketStatusID: { $ne: 109303 } } },
+        { $match: { ...match, TicketStatusID: { $eq: 109302 } } },
         { $limit: pageSize * 2 },
         { $sort: { InsertDateTime: -1 } },
         {
