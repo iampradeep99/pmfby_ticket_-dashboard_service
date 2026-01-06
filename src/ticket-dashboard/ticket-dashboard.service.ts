@@ -1078,7 +1078,7 @@ export class TicketDashboardService {
     ]
 
     // const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
-    const countResult = await db.collection("SLA_Ticket_listing").aggregate(countPipeline).toArray()
+    const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
 
     const totalCount = countResult?.[0]?.total || 0
     const totalPages = Math.ceil(totalCount / limit)
