@@ -996,7 +996,9 @@ if(roleId == 2){
         AssigneeStateID: stateID,
         AssigneeMobileNo: mobileNo,
         AssigneRoleName: assignedRoleName,
-        AssigneeRoleID: roleId
+        AssigneeRoleID: roleId,
+        InsuranceCompanyId:ticket?.InsuranceCompanyID,
+        InsuranceCompanyName:ticket?.InsuranceCompany
       };
 
       const insertRes = await assignHistoryCollection.insertOne(assignmentData);
