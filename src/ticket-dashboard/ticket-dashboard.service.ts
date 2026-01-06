@@ -7229,7 +7229,7 @@ export class TicketDashboardService {
 
       if (viewTYP === "FILTER") {
         if (fromdate && toDate) {
-          match.Created = {
+          match.InsertDateTime = {
             $gte: new Date(`${fromdate}T00:00:00.000Z`),
             $lte: new Date(`${toDate}T23:59:59.999Z`)
           };
