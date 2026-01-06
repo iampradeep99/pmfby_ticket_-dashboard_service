@@ -1071,15 +1071,16 @@ export class TicketDashboardService {
   match.InsertDateTime = {};
 
   if (SPFROMDATE) {
-    const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST
+    const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
     match.InsertDateTime.$gte = start;
   }
 
   if (SPTODATE) {
-    const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST
+    const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
     match.InsertDateTime.$lte = end;
   }
 }
+
 
 
 
