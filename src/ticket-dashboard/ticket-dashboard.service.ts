@@ -1067,19 +1067,20 @@ export class TicketDashboardService {
     //   if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
     // }
 
-   if (SPFROMDATE || SPTODATE) {
+  if (SPFROMDATE || SPTODATE) {
   match.InsertDateTime = {};
 
   if (SPFROMDATE) {
-    const start = new Date(SPFROMDATE + 'T00:00:00Z'); // UTC start
+    const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST
     match.InsertDateTime.$gte = start;
   }
 
   if (SPTODATE) {
-    const end = new Date(SPTODATE + 'T23:59:59.999Z'); // UTC end
+    const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST
     match.InsertDateTime.$lte = end;
   }
 }
+
 
 
 
