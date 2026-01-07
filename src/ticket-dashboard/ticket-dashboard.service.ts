@@ -1068,14 +1068,14 @@ export class TicketDashboardService {
     // }
 
     if (SPFROMDATE || SPTODATE) {
-      match.Created = {};
+      match.InsertDateTime = {};
 
       if (SPFROMDATE) {
         // const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
         // match.InsertDateTime.$gte = start;
 
         const start = new Date(`${SPFROMDATE}T00:00:00+05:30`);
-match.Created.$gte = start;
+match.InsertDateTime.$gte = start;
 
         
       }
@@ -1084,7 +1084,7 @@ match.Created.$gte = start;
         // const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
         // match.InsertDateTime.$lte = end;
         const end = new Date(`${SPTODATE}T23:59:59.999+05:30`);
-match.Created.$lte = end;
+match.InsertDateTime.$lte = end;
       }
     }
 
