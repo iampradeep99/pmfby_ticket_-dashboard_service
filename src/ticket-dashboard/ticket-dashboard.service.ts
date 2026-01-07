@@ -1061,32 +1061,32 @@ export class TicketDashboardService {
       match.FilterStateID = { $in: StateMasterID.map(Number) }
     }
 
-    // if (SPFROMDATE || SPTODATE) {
-    //   match.InsertDateTime = {}
-    //   if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
-    //   if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
-    // }
-
     if (SPFROMDATE || SPTODATE) {
-      match.InsertDateTime = {};
+      match.InsertDateTime = {}
+      if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
+      if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
+    }
 
-      if (SPFROMDATE) {
-        // const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
-        // match.InsertDateTime.$gte = start;
+//     if (SPFROMDATE || SPTODATE) {
+//       match.InsertDateTime = {};
 
-        const start = new Date(`${SPFROMDATE}T00:00:00+05:30`);
-match.InsertDateTime.$gte = start;
+//       if (SPFROMDATE) {
+//         // const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
+//         // match.InsertDateTime.$gte = start;
+
+//         const start = new Date(`${SPFROMDATE}T00:00:00+05:30`);
+// match.InsertDateTime.$gte = start;
 
         
-      }
+//       }
 
-      if (SPTODATE) {
-        // const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
-        // match.InsertDateTime.$lte = end;
-        const end = new Date(`${SPTODATE}T23:59:59.999+05:30`);
-match.InsertDateTime.$lte = end;
-      }
-    }
+//       if (SPTODATE) {
+//         // const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
+//         // match.InsertDateTime.$lte = end;
+//         const end = new Date(`${SPTODATE}T23:59:59.999+05:30`);
+// match.InsertDateTime.$lte = end;
+//       }
+//     }
 
 
 
@@ -7256,13 +7256,19 @@ match.InsertDateTime.$lte = end;
       if (viewTYP === "FILTER") {
         if (fromdate && toDate) {
 
+    //        if (SPFROMDATE || SPTODATE) {
+    //   match.InsertDateTime = {}
+    //   if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
+    //   if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
+    // }
+
 
           match.Created = {};
 
-          const start = new Date(`${fromdate}T00:00:00+05:30`);
+          const start = new Date(`${fromdate}T00:00:00.000Z`);
           match.Created.$gte = start;
 
-          const end = new Date(`${toDate}T23:59:59.999+05:30`);
+          const end = new Date(`${toDate}T23:59:59.999Z`);
           match.Created.$lte = end;
         }
         if (supportTicketID) match.SupportTicketID = supportTicketID;
