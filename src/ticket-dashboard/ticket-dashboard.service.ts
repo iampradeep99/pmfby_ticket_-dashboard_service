@@ -1067,19 +1067,26 @@ export class TicketDashboardService {
     //   if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
     // }
 
-  if (SPFROMDATE || SPTODATE) {
-  match.InsertDateTime = {};
+    if (SPFROMDATE || SPTODATE) {
+      match.Created = {};
 
-  if (SPFROMDATE) {
-    const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
-    match.InsertDateTime.$gte = start;
-  }
+      if (SPFROMDATE) {
+        // const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
+        // match.InsertDateTime.$gte = start;
 
-  if (SPTODATE) {
-    const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
-    match.InsertDateTime.$lte = end;
-  }
-}
+        const start = new Date(`${SPFROMDATE}T00:00:00+05:30`);
+match.Created.$gte = start;
+
+        
+      }
+
+      if (SPTODATE) {
+        // const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
+        // match.InsertDateTime.$lte = end;
+        const end = new Date(`${SPTODATE}T23:59:59.999+05:30`);
+match.Created.$lte = end;
+      }
+    }
 
 
 
@@ -7248,39 +7255,15 @@ export class TicketDashboardService {
 
       if (viewTYP === "FILTER") {
         if (fromdate && toDate) {
-          
-
-          
-
-//                   const start = new Date(fromdate);
-//         start.setHours(0, 0, 0, 0);
-//         start.setMinutes(start.getMinutes() - 330);
-                
-//         const end = new Date(toDate);
-//         end.setHours(23, 59, 59, 999);
-//         end.setMinutes(end.getMinutes() - 330);
 
 
-// // console.log(start, end, "tie")
-//           // match.Created = {
-//           //   $gte: new Date(`${fromdate}T00:00:00.000Z`),
-//           //   $lte: new Date(`${toDate}T23:59:59.999Z`)
-//           // };
+          match.Created = {};
 
-//             match.Created = {
-//             $gte: start,
-//             $lte: end
-//           };
+          const start = new Date(`${fromdate}T00:00:00+05:30`);
+          match.Created.$gte = start;
 
- match.Created = {}; // or match.InsertDateTime if that's the correct field
-
-  // Start of fromdate in IST
-  const start = new Date(`${fromdate}T00:00:00+05:30`);
-  match.Created.$gte = start;
-
-  // End of toDate in IST
-  const end = new Date(`${toDate}T23:59:59.999+05:30`);
-  match.Created.$lte = end;
+          const end = new Date(`${toDate}T23:59:59.999+05:30`);
+          match.Created.$lte = end;
         }
         if (supportTicketID) match.SupportTicketID = supportTicketID;
         if (ticketCategoryID) match.TicketCategoryID = ticketCategoryID;
@@ -9302,109 +9285,109 @@ Your Automation System
   }
 
   async insuranceWiseTicketList(payload: any) {
-  let { month, year } = payload;
-  let message = { msg: "", code: "" };
+    let { month, year } = payload;
+    let message = { msg: "", code: "" };
 
-  if (!month) {
-    message.msg = "Month is required";
-    message.code = "1";
-    return { data: {}, message };
-  }
-
-  if (!year) {
-    message.msg = "Year is required";
-    message.code = "1";
-    return { data: {}, message };
-  }
-
-  const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
-  const endDate = new Date(year, month, 1, 0, 0, 0, 0);
-
-  const pipeline = [
-    {
-      $match: {
-        AssignedDate: {
-          $gte: startDate,
-          $lt: endDate
-        }
-      }
-    },
-    {
-      $lookup: {
-        from: "SLA_Ticket_listing",
-        let: { ticketId: "$SupportTicketID" },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ["$SupportTicketID", "$$ticketId"] }
-            }
-          },
-          { $limit: 1 }
-        ],
-        as: "TicketInfo"
-      }
-    },
-    {
-      $unwind: {
-        path: "$TicketInfo",
-        preserveNullAndEmptyArrays: false
-      }
-    },
-    {
-      $group: {
-        _id: "$TicketInfo.InsuranceCompany",
-        TicketCount: { $sum: 1 }
-      }
-    },
-    {
-      $project: {
-        _id: 0,
-        InsuranceCompany: "$_id",
-        TicketCount: 1
-      }
-    },
-    {
-      $sort: { TicketCount: -1 }
+    if (!month) {
+      message.msg = "Month is required";
+      message.code = "1";
+      return { data: {}, message };
     }
-  ];
 
-  const fetchedData = await this.db
-    .collection("Ticket_Assignment_History")
-    .aggregate(pipeline)
-    .toArray();
+    if (!year) {
+      message.msg = "Year is required";
+      message.code = "1";
+      return { data: {}, message };
+    }
 
-  const getInsuranceCompany = await this.db
-    .collection("KRPH_InsuranceMaster")
-    .find({})
-    .toArray();
+    const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const endDate = new Date(year, month, 1, 0, 0, 0, 0);
 
-  const insuranceCountMap: Record<string, number> = {};
+    const pipeline = [
+      {
+        $match: {
+          AssignedDate: {
+            $gte: startDate,
+            $lt: endDate
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "SLA_Ticket_listing",
+          let: { ticketId: "$SupportTicketID" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$SupportTicketID", "$$ticketId"] }
+              }
+            },
+            { $limit: 1 }
+          ],
+          as: "TicketInfo"
+        }
+      },
+      {
+        $unwind: {
+          path: "$TicketInfo",
+          preserveNullAndEmptyArrays: false
+        }
+      },
+      {
+        $group: {
+          _id: "$TicketInfo.InsuranceCompany",
+          TicketCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          InsuranceCompany: "$_id",
+          TicketCount: 1
+        }
+      },
+      {
+        $sort: { TicketCount: -1 }
+      }
+    ];
 
-  for (const fd of fetchedData) {
-    insuranceCountMap[this.normalize(fd.InsuranceCompany)] = fd.TicketCount;
-  }
+    const fetchedData = await this.db
+      .collection("Ticket_Assignment_History")
+      .aggregate(pipeline)
+      .toArray();
 
-  const conbinedData = getInsuranceCompany.map(item => {
-    const key = this.normalize(item.InsuranceMasterName);
+    const getInsuranceCompany = await this.db
+      .collection("KRPH_InsuranceMaster")
+      .find({})
+      .toArray();
+
+    const insuranceCountMap: Record<string, number> = {};
+
+    for (const fd of fetchedData) {
+      insuranceCountMap[this.normalize(fd.InsuranceCompany)] = fd.TicketCount;
+    }
+
+    const conbinedData = getInsuranceCompany.map(item => {
+      const key = this.normalize(item.InsuranceMasterName);
+      return {
+        // ...item,
+        InsuranceCompanyId: item?.InsuranceMasterID,
+        InsuranceCompany: item.InsuranceMasterName,
+        TicketCount: insuranceCountMap[key] || 0
+      };
+    });
+
+    message.msg = "Success";
+    message.code = "1";
+    let obj = {
+      data: conbinedData
+    }
+
     return {
-      // ...item,
-      InsuranceCompanyId:item?.InsuranceMasterID,
-      InsuranceCompany: item.InsuranceMasterName,
-      TicketCount: insuranceCountMap[key] || 0
+      data: obj,
+      message
     };
-  });
-
-  message.msg = "Success";
-  message.code = "1";
-  let obj ={
-    data:conbinedData
   }
-
-  return {
-    data: obj,
-    message
-  };
-}
 
   normalize(str = "") {
     return str
