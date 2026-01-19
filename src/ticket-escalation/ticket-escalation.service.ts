@@ -203,14 +203,18 @@ async getTokenOld() {
 async getToken() {
   try {
     const payload = {
-      deviceType: "web",
+      deviceType: "android",
       otp: 123456,
-      password: "019096071e228ed6611599c83d96783ccf2dcc02790ffe165f7e11e70e5ee1b12ea864dc123eea1367d96ef240cda319180f58d23653890fe5d99e0f911dbb79",
-      mobile: "9013617746"
+      password: "af0ea0b9a3da1d35cae98df93385c49c0dc5185573b005041e973ee3683d20d91ec9a089f4647ab47287753278580adf3501828c5ef9047c1f168a707fa40f8c",
+      mobile: "9899499022"
     };
 
+
+
+
     const response = await axios.post(
-      "https://pmfbydemo.amnex.co.in/api/v2/external/service/login",
+      // "https://pmfbydemo.amnex.co.in/api/v2/external/service/login",
+      "https://pmfby.gov.in/krishirakshak/v1/user/user/login",
       payload,
       {
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
