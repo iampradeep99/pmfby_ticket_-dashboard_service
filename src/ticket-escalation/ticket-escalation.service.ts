@@ -33,14 +33,16 @@ const Logger = require("../commonServices/logger");
 
 @Injectable()
 export class TicketEscalationService {
-    private logger: InstanceType<typeof Logger>;
+  private logger: InstanceType<typeof Logger>;
 
   private ticketCollection: Collection;
   private ticketDbCollection: Collection;
   private tokenCache = new NodeCache({ stdTTL: 30 * 60 });
 
   private readonly PMFBY_ROLE_URL = config.pmfbyRoleURL
-  private readonly RoleURL = "https://pmfby.gov.in/krishirakshak/v1/user/user/roleWiseUserList"
+  // private readonly RoleURL = "https://pmfby.gov.in/krishirakshak/v1/user/user/roleWiseUserList"
+   private readonly RoleURL = "http://10.128.60.9:3011/krishirakshak/v1/user/user/roleWiseUserList"
+
   public gcp = new GCPServices();
   logDir = path.join(__dirname, '..', 'logs');
 
@@ -53,8 +55,8 @@ export class TicketEscalationService {
   ) {
     this.ticketCollection = this.db.collection('tickets');
     this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
-         this.logger = new Logger("Call_Quality_Assurance_Service.log");
-    
+    this.logger = new Logger("Call_Quality_Assurance_Service.log");
+
   }
 
 
@@ -167,173 +169,196 @@ export class TicketEscalationService {
   }
 
 
-  async getToken() {
-    try {
-      const cachedToken = this.tokenCache.get("pmfby_token");
-
-      if (cachedToken) {
-        return cachedToken;
-      }
-
-      const payload = {
-        deviceType: config.pmfbyConfig.deviceType,
-        otp: Number(config.pmfbyConfig.otp),
-        password: config.pmfbyConfig.password,
-        mobile: config.pmfbyConfig.mobile,
-      };
-
-      const getData = await axios.post(
-        config.pmfbyConfig.login_api_url,
-        payload,
-        {
-          httpsAgent: new https.Agent({ rejectUnauthorized: false })
-        }
-      );
-
-      const result = getData?.data?.data;
-      const token = result?.token;
-
-      if (!token) {
-        throw new Error("Token not received from login API");
-      }
-
-      this.tokenCache.set("pmfby_token", token);
-
-      return token;
-
-    } catch (error) {
-      console.error("Error in getToken():", error);
-      throw error;
-    }
-  }
-
-
-
-
-/* async getRolesForGovt(payload: any) {
+async getTokenOld() {
   try {
-    let token: string;
-    try {
-      token = await this.getToken();
-    } catch (tokenErr: any) {
-      return {
-        data: null,
-        message: {
-          msg: "Failed to generate token",
-          code: 0,
-          errorType: "TOKEN_ERROR",
-          detail: tokenErr?.message
-        },
-      };
-    }
-
-    const EnumRole: Record<string, number> = {
-      STATE_GOVT_ADMIN: 1,
-      STATE_GOVT_USER: 2,
-      DEPUTY_DIRECTOR: 3
+    const payload = {
+      deviceType: config.pmfbyConfig.deviceType,
+      otp: Number(config.pmfbyConfig.otp),
+      password: config.pmfbyConfig.password,
+      mobile: config.pmfbyConfig.mobile,
     };
 
-    const roleMap: Record<number, string> = {
-      1: "STATE_GOVT_ADMIN",
-      2: "STATE_GOVT_USER",
-      3: "DEPUTY_DIRECTOR"
-    };
+    const response = await axios.post(
+      config.pmfbyConfig.login_api_url,
+      payload,
+      {
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      }
+    );
 
-    const axiosPayload = {
-      roleName: roleMap[payload?.roleName],
-      stateID: payload?.stateID,
-    };
+    const token = response?.data?.data?.token;
+    console.log(token);
 
-    if (!axiosPayload.roleName) {
-      return {
-        data: null,
-        message: {
-          msg: "Invalid roleName provided in payload",
-          code: 0,
-          errorType: "INPUT_VALIDATION_ERROR",
-          detail: { received: payload?.roleName }
-        },
-      };
+    if (!token) {
+      throw new Error("Token not received from login API");
     }
 
-    console.log("Calling External API With Payload:", axiosPayload);
-
-    let apiResponse: any;
-    try {
-      apiResponse = await axios.get(this.RoleURL, {
-        params: axiosPayload,
-        timeout: 10000,
-        headers: { token },
-      });
-    } catch (axiosErr: any) {
-      const status = axiosErr?.response?.status;
-      const apiMsg = axiosErr?.response?.data?.message || axiosErr?.message;
-
-      return {
-        data: null,
-        message: {
-          msg: "External API call failed",
-          code: 0,
-          errorType: "EXTERNAL_API_ERROR",
-          httpStatus: status,
-          detail: apiMsg,
-          url: this.RoleURL,
-        },
-      };
-    }
-
-    const data = apiResponse?.data;
-
-    if (!data?.data) {
-      return {
-        data: null,
-        message: {
-          msg: "No data received from external API",
-          code: 0,
-          errorType: "API_NO_DATA",
-        },
-      };
-    }
-
-    let updatedData: any[] = [];
-    try {
-      updatedData = data.data
-        .map((item: any) => ({
-          ...item,
-          roleName: EnumRole[item.roleName] || item.roleName,
-        }))
-        .filter(
-          (item: any, index: number, self: any[]) =>
-            index === self.findIndex((t) => t.userID === item.userID)
-        );
-    } catch (processingErr: any) {
-      return {
-        data: null,
-        message: {
-          msg: "Error occurred while processing API data",
-          code: 0,
-          errorType: "DATA_PROCESSING_ERROR",
-          detail: processingErr.message,
-        },
-      };
-    }
-
-    return {
-      data: updatedData,
-      message: { msg: "Success", code: 1 },
-    };
-  } catch (unexpectedErr: any) {
-    return {
-      data: null,
-      message: {
-        msg: "Unexpected internal server error",
-        code: 0,
-        errorType: "UNHANDLED_ERROR",
-        detail: unexpectedErr?.message,
-      },
-    };
+    return token;
+  } catch (error) {
+    console.error("Error in getToken():", error);
+    throw error;
   }
-} */
+}
+
+async getToken() {
+  try {
+    const payload = {
+      deviceType: "web",
+      otp: 123456,
+      password: "019096071e228ed6611599c83d96783ccf2dcc02790ffe165f7e11e70e5ee1b12ea864dc123eea1367d96ef240cda319180f58d23653890fe5d99e0f911dbb79",
+      mobile: "9013617746"
+    };
+
+    const response = await axios.post(
+      "https://pmfbydemo.amnex.co.in/api/v2/external/service/login",
+      payload,
+      {
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      }
+    );
+
+    const token = response?.data?.data?.token;
+    console.log(token);
+
+    if (!token) {
+      throw new Error("Token not received from login API");
+    }
+
+    return token;
+  } catch (error) {
+    console.error("Error in getToken():", error);
+    throw error;
+  }
+}
+
+
+
+
+
+  /* async getRolesForGovt(payload: any) {
+    try {
+      let token: string;
+      try {
+        token = await this.getToken();
+      } catch (tokenErr: any) {
+        return {
+          data: null,
+          message: {
+            msg: "Failed to generate token",
+            code: 0,
+            errorType: "TOKEN_ERROR",
+            detail: tokenErr?.message
+          },
+        };
+      }
+  
+      const EnumRole: Record<string, number> = {
+        STATE_GOVT_ADMIN: 1,
+        STATE_GOVT_USER: 2,
+        DEPUTY_DIRECTOR: 3
+      };
+  
+      const roleMap: Record<number, string> = {
+        1: "STATE_GOVT_ADMIN",
+        2: "STATE_GOVT_USER",
+        3: "DEPUTY_DIRECTOR"
+      };
+  
+      const axiosPayload = {
+        roleName: roleMap[payload?.roleName],
+        stateID: payload?.stateID,
+      };
+  
+      if (!axiosPayload.roleName) {
+        return {
+          data: null,
+          message: {
+            msg: "Invalid roleName provided in payload",
+            code: 0,
+            errorType: "INPUT_VALIDATION_ERROR",
+            detail: { received: payload?.roleName }
+          },
+        };
+      }
+  
+      console.log("Calling External API With Payload:", axiosPayload);
+  
+      let apiResponse: any;
+      try {
+        apiResponse = await axios.get(this.RoleURL, {
+          params: axiosPayload,
+          timeout: 10000,
+          headers: { token },
+        });
+      } catch (axiosErr: any) {
+        const status = axiosErr?.response?.status;
+        const apiMsg = axiosErr?.response?.data?.message || axiosErr?.message;
+  
+        return {
+          data: null,
+          message: {
+            msg: "External API call failed",
+            code: 0,
+            errorType: "EXTERNAL_API_ERROR",
+            httpStatus: status,
+            detail: apiMsg,
+            url: this.RoleURL,
+          },
+        };
+      }
+  
+      const data = apiResponse?.data;
+  
+      if (!data?.data) {
+        return {
+          data: null,
+          message: {
+            msg: "No data received from external API",
+            code: 0,
+            errorType: "API_NO_DATA",
+          },
+        };
+      }
+  
+      let updatedData: any[] = [];
+      try {
+        updatedData = data.data
+          .map((item: any) => ({
+            ...item,
+            roleName: EnumRole[item.roleName] || item.roleName,
+          }))
+          .filter(
+            (item: any, index: number, self: any[]) =>
+              index === self.findIndex((t) => t.userID === item.userID)
+          );
+      } catch (processingErr: any) {
+        return {
+          data: null,
+          message: {
+            msg: "Error occurred while processing API data",
+            code: 0,
+            errorType: "DATA_PROCESSING_ERROR",
+            detail: processingErr.message,
+          },
+        };
+      }
+  
+      return {
+        data: updatedData,
+        message: { msg: "Success", code: 1 },
+      };
+    } catch (unexpectedErr: any) {
+      return {
+        data: null,
+        message: {
+          msg: "Unexpected internal server error",
+          code: 0,
+          errorType: "UNHANDLED_ERROR",
+          detail: unexpectedErr?.message,
+        },
+      };
+    }
+  } */
 
 
 
@@ -391,6 +416,7 @@ export class TicketEscalationService {
           headers: { token },
         });
       } catch (axiosErr: any) {
+        console.log(axiosErr)
         return {
           data: null,
           message: {
@@ -474,6 +500,7 @@ export class TicketEscalationService {
 
 
       } catch (processingErr: any) {
+        console.log(processingErr)
         return {
           data: null,
           message: {
@@ -726,6 +753,7 @@ export class TicketEscalationService {
 
   async insuracneTicketListingService(payload: any) {
     try {
+
       const db = this.db;
 
       let {
@@ -761,7 +789,9 @@ export class TicketEscalationService {
       const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
       const item = (responseInfo.data as any)?.user?.[0];
 
-      if (!item) return { data:{}, message:{msg:"Not Found", code:"0"} };
+      console.log(item, "item")
+
+      if (!item) return { data: {}, message: { msg: "Not Found", code: "0" } };
 
       const userDetail = {
         InsuranceCompanyID: item.InsuranceCompanyID ? await new UtilService().convertStringToArray(item.InsuranceCompanyID) : [],
@@ -773,6 +803,7 @@ export class TicketEscalationService {
         AppAccessID: item?.AppAccessID
       };
 
+      console.log(userDetail)
       const { InsuranceCompanyID, StateMasterID, LocationTypeID, AppAccessID } = userDetail;
       let locationFilter: any = {};
 
@@ -800,24 +831,33 @@ export class TicketEscalationService {
         const requestedInsuranceIDs = String(insuranceCompanyID).split(",").map(id => Number(id.trim()));
         const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
         const validInsuranceIDs = requestedInsuranceIDs.filter(id => allowedInsuranceIDs.includes(id));
-        if (validInsuranceIDs.length === 0) {
-          return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." };
-        }
+        // if (validInsuranceIDs.length === 0) {
+        //   // return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." };
+        //   return { data:[] ,message:{msg:"Unauthorized InsuranceCompanyID(s).", code:"0"}};
+
+        // }
         match.InsuranceCompanyID = { $in: validInsuranceIDs };
       } else if (InsuranceCompanyID?.length) {
         match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
       }
 
       if (stateID && Number(stateID) !== 0 && LocationTypeID !== 2) {
+        console.log(stateID)
         const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
         const validStateIDs = requestedStateIDs.filter(id => StateMasterID.map(Number).includes(id));
-        if (validStateIDs.length === 0) {
-          return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
-        }
+        console.log(validStateIDs)
+
+        // if (validStateIDs.length === 0) {
+        //   return { data:[] ,message:{msg:"Un-Authorised State", code:"0"}};
+        // }
         match.StateMasterID = { $in: validStateIDs };
       } else if (StateMasterID.length && LocationTypeID !== 2) {
         match.FilterStateID = { $in: StateMasterID.map(Number) };
       }
+
+
+      console.log(JSON.stringify(match))
+
 
       if (fromdate && toDate) {
         match.Created = {
@@ -830,8 +870,8 @@ export class TicketEscalationService {
       if (supportTicketTypeID && supportTicketTypeID !== 0) match.SupportTicketTypeID = supportTicketTypeID;
       if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
 
-      const pipeline: any[] = [
-        { $match: { ...match, TicketStatusID: { $ne: 109303 } } },
+      const pipelineInfo: any[] = [
+        { $match: { ...match, TicketStatusID: { $eq: 109302 } } },
         { $limit: pageSize * 2 },
         { $sort: { InsertDateTime: -1 } },
         {
@@ -864,6 +904,8 @@ export class TicketEscalationService {
                   TicketHeadName: 1,
                   StateMasterName: 1,
                   TicketDescription: 1,
+                  TicketStatusID: 1,
+                  TicketStatus: 1,
                   Created: {
                     $dateToString: {
                       date: { $toDate: "$Created" },
@@ -900,12 +942,13 @@ export class TicketEscalationService {
         }
       ];
 
-      const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
+      console.log(JSON.stringify(pipelineInfo))
+      const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipelineInfo, { allowDiskUse: true }).toArray();
       const result = aggResult[0] || { data: [], totalCount: [], ticketStatusSummary: [] };
 
       if (result.data.length === 0) {
         return {
-          data: [],
+          obj: [],
           message: { msg: "Record Not Found", code: "0" },
           totalCount: 0,
           totalPages: 0
@@ -926,47 +969,211 @@ export class TicketEscalationService {
 
     } catch (err) {
       console.error("Top-level error:", err);
-      return { data: [], message: {msg:"Error", code:"0"} };
+      return { data: [], message: { msg: "Error", code: "0" } };
     }
   }
 
 
 
-async AssignTicketService(payload: any) {
-  const { ticketIds, assignedBy, assignedTo, roleName, stateID, mobileNo } = payload || {};
-  if (!ticketIds) {
-    return { data: {}, message: { msg: "ticketIds is required.", code: 0 } };
-  }
-  let roleId = roleName
+/*   async AssignTicketService(payload: any) {
+    const {
+      ticketIds,
+      assignedBy,
+      assignedByName,
+      assignedTo,
+      assignToName,
+      roleName,
+      stateID,
+      mobileNo,
+      districtID,
+      ticketDescription
+    } = payload || {};
 
-  const ticketIdArray = ticketIds.split(",").map(id => id.trim()).filter(Boolean);
+    if (!ticketIds) {
+      return { data: {}, message: { msg: "ticketIds is required.", code: "0" } };
+    }
+
+    const roleId = roleName;
+
+    const ticketIdArray = ticketIds
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean);
+
+    if (!ticketIdArray.length) {
+      return { data: {}, message: { msg: "No valid ticket IDs provided.", code: "0" } };
+    }
+
+    const ticketCollection = this.db.collection("SLA_Ticket_listing");
+    const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
+    const currentAssignCollection = this.db.collection("Ticket_Assignment");
+
+    const now = new Date();
+    const results: any[] = [];
+
+    let assignedRoleName = "";
+    if (roleId == 1) assignedRoleName = "STATE_GOVT_ADMIN";
+    if (roleId == 2) assignedRoleName = "STATE_GOVT_USER";
+    if (roleId == 3) assignedRoleName = "DEPUTY_DIRECTOR";
+
+    for (const ticketIdStr of ticketIdArray) {
+      const ticketId = Number(ticketIdStr);
+
+      if (isNaN(ticketId)) {
+        results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
+        continue;
+      }
+
+      try {
+        const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
+        if (!ticket) {
+          results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+          continue;
+        }
+
+        const currentAssignment = await currentAssignCollection.findOne({
+          SupportTicketID: ticketId
+        });
+
+        if (currentAssignment && currentAssignment.assignedTo === assignedTo) {
+          results.push({
+            ticketId,
+            ticketNo: ticket.SupportTicketNo,
+            status: "Failed",
+            reason: "Ticket already assigned to this user"
+          });
+          continue;
+        }
+
+        const assignmentData = {
+          SupportTicketID: ticketId,
+          SupportTicketNo: ticket.SupportTicketNo,
+          TicketStatusID: ticket.TicketStatusID || null,
+          TicketStatus: ticket.TicketStatus || null,
+          assignedBy,
+          assignedByName,
+          assignedTo,
+          assignToName,
+          AssignedDate: now,
+          AssigneeStateID: stateID,
+          AssignedDistrictID: districtID,
+          AssigneeMobileNo: mobileNo,
+          AssigneRoleName: assignedRoleName,
+          AssigneeRoleID: roleId,
+          InsuranceCompanyId: ticket?.InsuranceCompanyID,
+          InsuranceCompanyName: ticket?.InsuranceCompany,
+          TicketComment:ticketDescription
+
+        };
+
+       let insertedRecords =  await assignHistoryCollection.insertOne({
+          ...assignmentData,
+          CreatedDate: now
+        });
+      
+
+        await currentAssignCollection.updateOne(
+          { SupportTicketID: ticketId },
+          {
+            $set: {
+              ...assignmentData,
+              UpdatedDate: now
+            }
+          },
+          { upsert: true }
+        );
+
+        results.push({
+          ticketId,
+          ticketNo: ticket.SupportTicketNo,
+          status: "Success",
+          reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
+        });
+
+      } catch (err: any) {
+        results.push({
+          ticketId,
+          status: "Error",
+          reason: err.message || "Unexpected error"
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.status === "Success").length;
+    const failedCount = results.length - successCount;
+
+    for (const item of results) {
+      if (item.status === "Success") {
+        await this.sendSMSToUser({
+          ticket: item.ticketNo,
+          mobileNO: "916386236314",
+          Name: assignToName
+        });
+      }
+    }
+
+    const summary = {
+      totalTickets: results.length,
+      successCount,
+      failedCount,
+      message:
+        successCount === results.length
+          ? "All tickets assigned successfully."
+          : successCount === 0
+            ? "All tickets failed."
+            : `${successCount} assigned, ${failedCount} failed.`
+    };
+
+    return successCount === 0
+      ? { data: summary, message: { msg: "All Failed", code: "0" } }
+      : { data: summary, message: { msg: "Success", code: "1" } };
+  } */
+
+
+      async AssignTicketService(payload: any) {
+  const {
+    ticketIds,
+
+    assignedBy,
+    assignedByName,
+    assignedTo,
+    assignToName,
+    roleName,
+    previousRoleName,
+    stateID,
+    mobileNo,
+    districtID,
+    ticketDescription
+  } = payload || {};
+
+  if (!ticketIds) {
+    return { data: {}, message: { msg: "ticketIds is required.", code: "0" } };
+  }
+
+  const ticketIdArray = ticketIds
+    .split(",")
+    .map(id => Number(id.trim()))
+    .filter(id => !isNaN(id));
+
   if (!ticketIdArray.length) {
-    return { data: {}, message: { msg: "No valid ticket IDs provided.", code: 0 } };
+    return { data: {}, message: { msg: "No valid ticket IDs provided.", code: "0" } };
   }
 
   const ticketCollection = this.db.collection("SLA_Ticket_listing");
-  const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
+  const historyCol = this.db.collection("Ticket_Assignment_History");
+  const currentCol = this.db.collection("Ticket_Assignment");
+
   const now = new Date();
   const results: any[] = [];
 
-  
- 
-  let assignedRoleName:string;
-  if(roleId == 1){
-      assignedRoleName = "STATE_GOVT_ADMIN"
-  }
-if(roleId == 2){
-      assignedRoleName = "STATE_GOVT_USER"
-  }
+  const roleMap: any = {
+    0:"INSURANCE_COMPANY",
+    1: "STATE_GOVT_ADMIN",
+    2: "STATE_GOVT_USER",
+    3: "DEPUTY_DIRECTOR",
+  };
 
-
-  for (const ticketIdStr of ticketIdArray) {
-    const ticketId = Number(ticketIdStr);
-    if (isNaN(ticketId)) {
-      results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
-      continue;
-    }
-
+  for (const ticketId of ticketIdArray) {
     try {
       const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
       if (!ticket) {
@@ -974,13 +1181,15 @@ if(roleId == 2){
         continue;
       }
 
-      const alreadyAssigned = await assignHistoryCollection.findOne({ SupportTicketID: ticketId });
-      if (alreadyAssigned) {
+      const currentAssignment = await currentCol.findOne({ SupportTicketID: ticketId });
+
+      // 🚫 Prevent assigning to same user again
+      if (currentAssignment?.assignedTo === assignedTo) {
         results.push({
           ticketId,
           ticketNo: ticket.SupportTicketNo,
           status: "Failed",
-          reason: "Ticket already assigned"
+          reason: "Ticket already assigned to this user"
         });
         continue;
       }
@@ -991,154 +1200,206 @@ if(roleId == 2){
         TicketStatusID: ticket.TicketStatusID || null,
         TicketStatus: ticket.TicketStatus || null,
         assignedBy,
+        assignedByName,
         assignedTo,
+        assignToName,
         AssignedDate: now,
-        AssigneeStateID: stateID,
-        AssigneeMobileNo: mobileNo,
-        AssigneRoleName: assignedRoleName,
-        AssigneeRoleID: roleId,
-        InsuranceCompanyId:ticket?.InsuranceCompanyID,
-        InsuranceCompanyName:ticket?.InsuranceCompany
+        AssigneeStateID: stateID || "",
+        AssignedDistrictID: districtID || "",
+        AssigneeMobileNo: mobileNo || "",
+        AssigneRoleName: roleMap[roleName] || "",
+        AssigneeRoleID: roleName,
+        InsuranceCompanyId: ticket?.InsuranceCompanyID,
+        InsuranceCompanyName: ticket?.InsuranceCompany,
+        TicketComment: ticketDescription || "",
+        PreviousRoleId:previousRoleName,
+        PreviousRoleName: roleMap[previousRoleName]
       };
 
-      const insertRes = await assignHistoryCollection.insertOne(assignmentData);
-      if (!insertRes.insertedId) {
-        results.push({
-          ticketId,
-          ticketNo: ticket.SupportTicketNo,
-          status: "Failed",
-          reason: "Failed to save assignment history"
-        });
-        continue;
-      }
+      // 1️⃣ HISTORY (AUDIT)
+      await historyCol.insertOne({
+        ...assignmentData,
+        CreatedDate: now
+      });
+
+      // 2️⃣ CURRENT OWNER (SINGLE SOURCE OF TRUTH)
+      await currentCol.updateOne(
+        { SupportTicketID: ticketId },
+        {
+          $set: {
+            ...assignmentData,
+            UpdatedDate: now
+          }
+        },
+        { upsert: true }
+      );
 
       results.push({
         ticketId,
         ticketNo: ticket.SupportTicketNo,
         status: "Success",
-        reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
+        reason: "Assigned successfully"
       });
 
     } catch (err: any) {
-      results.push({ ticketId, status: "Error", reason: err.message || "Unexpected error" });
+      results.push({
+        ticketId,
+        status: "Error",
+        reason: err.message || "Unexpected error"
+      });
     }
   }
 
   const successCount = results.filter(r => r.status === "Success").length;
-   const failedCount = results.length - successCount;
 
-   const summary = {
-    totalTickets: results.length,
-    successCount,
-    failedCount,
-    message:
-      successCount === results.length
-        ? "All tickets assigned successfully."
-        : successCount === 0
-          ? "All tickets failed."
-          : `${successCount} assigned, ${failedCount} failed.`
+  return {
+    data: {
+      totalTickets: results.length,
+      successCount,
+      failedCount: results.length - successCount
+    },
+    message: {
+      msg: successCount ? "Success" : "All Failed",
+      code: successCount ? "1" : "0"
+    }
   };
-
-  
-
-  
-  if (successCount === 0) {
-    return { data: summary, message: { msg: "All Failed", code: "0" } };
-  } else {
-    return { data: summary, message: { msg: "Success", code: "1" } };
-  }
 }
 
 
-async UserWiseState(payload: any) {
-  try {
-    const db = this.db;
-    const utilService = new UtilService();
 
-    if (!payload || typeof payload !== "object") {
-      return { data: [], msg: "Invalid payload", code: "0" };
-    }
-
-    const userID = payload.userID;
-    if (!userID) {
-      return { data: [], msg: "User ID required", code: "0" };
-    }
-
-    let userDetail;
+  async sendSMSToUser(payload) {
     try {
-      userDetail = await utilService.getSupportTicketUserDetail(userID);
-    } catch {
-      return { data: [], msg: "Failed to fetch user details", code: "0" };
-    }
 
-    if (!userDetail?.responseDynamic) {
-      return { data: [], msg: "User not found", code: "0" };
-    }
+      let templateID = "1707176646596240405";
 
-    let responseInfo;
-    try {
-      responseInfo = await utilService.unGZip(userDetail.responseDynamic);
-    } catch {
-      return { data: [], msg: "Failed to process user data", code: "0" };
-    }
+      let customTemplate = `Dear ${payload?.Name}, Grievance Ticket Number ${payload?.ticket} has been assigned to you for review and action. Please log in to the system and proceed as per the prescribed timelines. Portal: https://pmfby.gov.in/krph Regards CSC SPV/Ministry of Agriculture & Farmers Welfare Government of India`;
+      let definedTemplate = await this.GetSingleUnicodeHex(customTemplate)
+      payload["mobileNO"] = "916386236314"
 
-    const item = responseInfo?.data?.user?.[0];
-    if (!item) {
-      return { data: [], msg: "User not found", code: "0" };
-    }
+      const response = await axios.post(`https://bulksmsapi.vispl.in/?username=cscetrnapi3&password=csce_123&messageType=unicode&mobile=${payload.mobileNO}&senderId=CSCSPV&ContentID=${templateID}&EntityID=1301157363501533886&message=${definedTemplate}`);
 
-    let StateMasterID: number[] = [];
-    try {
-      const arr = await utilService.convertStringToArray(item.StateMasterID);
-      StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
-    } catch {
-      return { data: [], msg: "Invalid StateMasterID", code: "0" };
-    }
-
-    if (!StateMasterID.length) {
-      return { data: [], msg: "No states assigned", code: "0" };
-    }
-
-    const pipeline = [
-      { $match: { StateMasterID: { $in: StateMasterID } } },
-      {
-        $group: {
-          _id: "$StateMasterID",
-          StateMasterName: { $first: "$StateMasterName" },
-          StateCodeAlpha: { $first: "$StateCodeAlpha" }
+      if (response.status === 200) {
+        const val = response.data.split('#');
+        if (val.length === 0) {
+          throw new Error('Could not send Message');
         }
-      },
-      { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
-      { $sort: { order: 1 } },
-      {
-        $project: {
-          _id: 0,
-          StateMasterID: "$_id",
-          StateName: "$StateMasterName",
-          StateCodeAlpha: 1
+        console.log("SMS Sent")
+
+        let collection = "SMS_Send_History_Records";
+        let payloadForSms = {
+          SupportTicketNo: payload?.ticket,
+          SMSReferenceNo: val[2] || '',
+          WhatsAppReferenceNo: '',
+          TemplateID: templateID,
+          MobileNo: payload.mobileNO,
         }
+        await this.db.collection(collection).insertOne(payloadForSms)
+
       }
-    ];
 
-    let extractedData;
-    try {
-      extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
-    } catch {
-      return { data: [], msg: "Failed to fetch state data", code: "0" };
+
+    } catch (err) {
+      console.log(err);
     }
-
-    return { data: extractedData, msg: "Fetched successfully", code: "1" };
-  } catch {
-    return { data: [], msg: "Unexpected error", code: "0" };
   }
-}
+
+  async GetSingleUnicodeHex(x) {
+    let result = "", notation = "";
+    for (let i = 0; i < x.length; i++)
+      result += notation + ("000" + x[i].charCodeAt(0).toString(16)).substr(-4);
+    return result;
+  }
 
 
-
-
-   async RoleWiseAssignedTickets(payload: any) {
+  async UserWiseState(payload: any) {
     try {
-      if (!payload || !payload.loggedInUserId  || payload?.loggedInUserId == "") {
+      const db = this.db;
+      const utilService = new UtilService();
+
+      if (!payload || typeof payload !== "object") {
+        return { data: [], msg: "Invalid payload", code: "0" };
+      }
+
+      const userID = payload.userID;
+      if (!userID) {
+        return { data: [], msg: "User ID required", code: "0" };
+      }
+
+      let userDetail;
+      try {
+        userDetail = await utilService.getSupportTicketUserDetail(userID);
+      } catch {
+        return { data: [], msg: "Failed to fetch user details", code: "0" };
+      }
+
+      if (!userDetail?.responseDynamic) {
+        return { data: [], msg: "User not found", code: "0" };
+      }
+
+      let responseInfo;
+      try {
+        responseInfo = await utilService.unGZip(userDetail.responseDynamic);
+      } catch {
+        return { data: [], msg: "Failed to process user data", code: "0" };
+      }
+
+      const item = responseInfo?.data?.user?.[0];
+      if (!item) {
+        return { data: [], msg: "User not found", code: "0" };
+      }
+
+      let StateMasterID: number[] = [];
+      try {
+        const arr = await utilService.convertStringToArray(item.StateMasterID);
+        StateMasterID = Array.isArray(arr) ? arr.map(Number).filter(n => !isNaN(n)) : [];
+      } catch {
+        return { data: [], msg: "Invalid StateMasterID", code: "0" };
+      }
+
+      if (!StateMasterID.length) {
+        return { data: [], msg: "No states assigned", code: "0" };
+      }
+
+      const pipeline = [
+        { $match: { StateMasterID: { $in: StateMasterID } } },
+        {
+          $group: {
+            _id: "$StateMasterID",
+            StateMasterName: { $first: "$StateMasterName" },
+            StateCodeAlpha: { $first: "$StateCodeAlpha" }
+          }
+        },
+        { $addFields: { order: { $indexOfArray: [StateMasterID, "$_id"] } } },
+        { $sort: { order: 1 } },
+        {
+          $project: {
+            _id: 0,
+            StateMasterID: "$_id",
+            StateName: "$StateMasterName",
+            StateCodeAlpha: 1
+          }
+        }
+      ];
+
+      let extractedData;
+      try {
+        extractedData = await db.collection("STATEMASTERSQL").aggregate(pipeline).toArray();
+      } catch {
+        return { data: [], msg: "Failed to fetch state data", code: "0" };
+      }
+
+      return { data: extractedData, msg: "Fetched successfully", code: "1" };
+    } catch {
+      return { data: [], msg: "Unexpected error", code: "0" };
+    }
+  }
+
+
+
+
+/*   async RoleWiseAssignedTickets(payload: any) {
+    try {
+      if (!payload || !payload.loggedInUserId || payload?.loggedInUserId == "") {
         return { data: [], message: { msg: "loggedInUserId is required", code: "0" } };
       }
 
@@ -1165,7 +1426,8 @@ async UserWiseState(payload: any) {
       const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
 
       const pipeline: any[] = [
-        { $match: { assignedTo: loggedInUserId } },
+        
+        { $match: { assignedTo: loggedInUserId} },
         {
           $lookup: {
             from: "SLA_Ticket_listing",
@@ -1199,7 +1461,7 @@ async UserWiseState(payload: any) {
             TicketRecords: { $push: "$TicketRecords" },
           },
         },
-     
+
         {
           $project: {
             _id: 0,
@@ -1390,7 +1652,7 @@ async UserWiseState(payload: any) {
           },
         },
       ];
-
+console.log(JSON.stringify(pipeline))
       const data = await collection.aggregate(pipeline).toArray();
 
       return {
@@ -1402,8 +1664,245 @@ async UserWiseState(payload: any) {
     } catch (error) {
       return { data: null, message: { msg: error?.message || "Failed", code: "0" } };
     }
+  } */
+
+    async RoleWiseAssignedTickets(payload: any) {
+  try {
+    if (!payload || !payload.loggedInUserId || payload?.loggedInUserId == "") {
+      return { data: [], message: { msg: "loggedInUserId is required", code: "0" } };
+    }
+
+    const db = this.db;
+    let {
+      loggedInUserId,
+      SupportTicketNo,
+      ApplicationNo,
+      TicketHeaderID,
+      fromDate,
+      toDate,
+      page = 1,
+      limit = 20
+    } = payload;
+
+    TicketHeaderID = TicketHeaderID ? Number(TicketHeaderID) : null;
+
+    const collection = db.collection("Ticket_Assignment_History");
+    if (!collection) {
+      return { data: [], message: { msg: "Collection not found", code: "0" } };
+    }
+
+    const fromDateISO = fromDate ? moment(fromDate, "YYYY-MM-DD").startOf("day").toDate() : null;
+    const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
+
+    const pipeline: any[] = [
+
+      // 🔑 1. Always resolve LATEST assignment first
+      {
+        $sort: { AssignedDate: -1, _id: -1 }
+      },
+      {
+        $group: {
+          _id: "$SupportTicketID",
+          latestAssignment: { $first: "$$ROOT" }
+        }
+      },
+      {
+        $replaceRoot: { newRoot: "$latestAssignment" }
+      },
+
+      // 🔑 2. Now filter by logged-in user
+      {
+        $match: { assignedTo: loggedInUserId }
+      },
+
+      {
+        $lookup: {
+          from: "SLA_Ticket_listing",
+          localField: "SupportTicketID",
+          foreignField: "SupportTicketID",
+          as: "TicketRecords",
+        },
+      },
+
+      {
+        $addFields: {
+          TicketRecords: {
+            $filter: {
+              input: "$TicketRecords",
+              as: "ticket",
+              cond: {
+                $and: [
+                  SupportTicketNo ? { $eq: ["$$ticket.SupportTicketNo", SupportTicketNo] } : {},
+                  ApplicationNo ? { $eq: ["$$ticket.ApplicationNo", ApplicationNo] } : {},
+                  TicketHeaderID ? { $eq: ["$$ticket.TicketHeaderID", TicketHeaderID] } : {},
+                  fromDateISO ? { $gte: ["$$ticket.Created", fromDateISO] } : {},
+                  toDateISO ? { $lte: ["$$ticket.Created", toDateISO] } : {},
+                ],
+              },
+            },
+          },
+        },
+      },
+
+      {
+        $group: {
+          _id: "$assignedTo",
+          TicketRecords: { $push: "$TicketRecords" },
+        },
+      },
+
+      {
+        $project: {
+          _id: 0,
+          userID: "$_id",
+          TicketRecords: {
+            $map: {
+              input: {
+                $reduce: {
+                  input: "$TicketRecords",
+                  initialValue: [],
+                  in: { $concatArrays: ["$$value", { $ifNull: ["$$this", []] }] },
+                },
+              },
+              as: "record",
+              in: {
+                SupportTicketID: "$$record.SupportTicketID",
+                CallerContactNumber: "$$record.CallerContactNumber",
+                CallingAudioFile: "$$record.CallingAudioFile",
+                TicketRequestorID: "$$record.TicketRequestorID",
+                StateCodeAlpha: "$$record.StateCodeAlpha",
+                StateMasterID: "$$record.StateMasterID",
+                DistrictMasterID: "$$record.DistrictMasterID",
+                VillageRequestorID: "$$record.VillageRequestorID",
+                NyayPanchayatID: "$$record.NyayPanchayatID",
+                NyayPanchayat: "$$record.NyayPanchayat",
+                GramPanchayatID: "$$record.GramPanchayatID",
+                GramPanchayat: "$$record.GramPanchayat",
+                CallerID: "$$record.CallerID",
+                CreationMode: "$$record.CreationMode",
+                SupportTicketNo: "$$record.SupportTicketNo",
+                RequestorUniqueNo: "$$record.RequestorUniqueNo",
+                RequestorName: "$$record.RequestorName",
+                RequestorMobileNo: "$$record.RequestorMobileNo",
+                RequestorAccountNo: "$$record.RequestorAccountNo",
+                RequestorAadharNo: "$$record.RequestorAadharNo",
+                TicketCategoryID: "$$record.TicketCategoryID",
+                CropCategoryOthers: "$$record.CropCategoryOthers",
+                CropStageMaster: "$$record.CropStageMaster",
+                CropStageMasterID: "$$record.CropStageMasterID",
+                TicketHeaderID: "$$record.TicketHeaderID",
+                SupportTicketTypeID: "$$record.SupportTicketTypeID",
+                RequestYear: "$$record.RequestYear",
+                RequestSeason: "$$record.RequestSeason",
+                TicketSourceID: "$$record.TicketSourceID",
+                TicketDescription: "$$record.TicketDescription",
+                LossDate: "$$record.LossDate",
+                LossTime: "$$record.LossTime",
+                OnTimeIntimationFlag: "$$record.OnTimeIntimationFlag",
+                VillageName: "$$record.VillageName",
+                ApplicationCropName: "$$record.ApplicationCropName",
+                CropName: "$$record.CropName",
+                AREA: "$$record.AREA",
+                DistrictRequestorID: "$$record.DistrictRequestorID",
+                PostHarvestDate: "$$record.PostHarvestDate",
+                TicketStatusID: "$$record.TicketStatusID",
+                StatusUpdateTime: "$$record.StatusUpdateTime",
+                StatusUpdateUserID: "$$record.StatusUpdateUserID",
+                ApplicationNo: "$$record.ApplicationNo",
+                InsuranceCompanyCode: "$$record.InsuranceCompanyCode",
+                InsuranceCompanyID: "$$record.InsuranceCompanyID",
+                InsurancePolicyNo: "$$record.InsurancePolicyNo",
+                InsurancePolicyDate: "$$record.InsurancePolicyDate",
+                InsuranceExpiryDate: "$$record.InsuranceExpiryDate",
+                BankMasterID: "$$record.BankMasterID",
+                AgentUserID: "$$record.AgentUserID",
+                SchemeID: "$$record.SchemeID",
+                AttachmentPath: "$$record.AttachmentPath",
+                HasDocument: "$$record.HasDocument",
+                Relation: "$$record.Relation",
+                RelativeName: "$$record.RelativeName",
+                SubDistrictID: "$$record.SubDistrictID",
+                SubDistrictName: "$$record.SubDistrictName",
+                PolicyPremium: "$$record.PolicyPremium",
+                PolicyArea: "$$record.PolicyArea",
+                PolicyType: "$$record.PolicyType",
+                LandSurveyNumber: "$$record.LandSurveyNumber",
+                LandDivisionNumber: "$$record.LandDivisionNumber",
+                PlotVillageName: "$$record.PlotVillageName",
+                PlotDistrictName: "$$record.PlotDistrictName",
+                PlotStateName: "$$record.PlotStateName",
+                ApplicationSource: "$$record.ApplicationSource",
+                CropShare: "$$record.CropShare",
+                IFSCCode: "$$record.IFSCCode",
+                FarmerShare: "$$record.FarmerShare",
+                CropSeasonName: "$$record.CropSeasonName",
+                TicketSourceName: "$$record.TicketSourceName",
+                TicketCategoryName: "$$record.TicketCategoryName",
+                TicketStatus: "$$record.TicketStatus",
+                InsuranceCompany: "$$record.InsuranceCompany",
+                TicketTypeName: "$$record.TicketTypeName",
+                StateMasterName: "$$record.StateMasterName",
+                DistrictMasterName: "$$record.DistrictMasterName",
+                TicketHeadName: "$$record.TicketHeadName",
+                BMCGCode: "$$record.BMCGCode",
+                BusinessRelationName: "$$record.BusinessRelationName",
+                CropLossDetailID: "$$record.CropLossDetailID",
+                CallingUniqueID: "$$record.CallingUniqueID",
+                CallingInsertUserID: "$$record.CallingInsertUserID",
+                CropStage: "$$record.CropStage",
+                CategoryHeadID: "$$record.CategoryHeadID",
+                Sos: "$$record.Sos",
+                IsSos: "$$record.IsSos",
+                TicketNCIPDocketNo: "$$record.TicketNCIPDocketNo",
+                FilterDistrictRequestorID: "$$record.FilterDistrictRequestorID",
+                FilterStateID: "$$record.FilterStateID",
+                SchemeName: "$$record.SchemeName",
+                InsertUserID: "$$record.InsertUserID",
+                InsertIPAddress: "$$record.InsertIPAddress",
+                UpdateUserID: "$$record.UpdateUserID",
+                AgentName: "$$record.AgentName",
+                CreatedBY: "$$record.CreatedBY",
+                CallingUserID: "$$record.CallingUserID",
+                CreatedAt: {
+                  $dateToString: {
+                    date: { $toDate: "$$record.Created" },
+                    format: "%Y-%m-%dT%H:%M:%S",
+                    timezone: "Asia/Kolkata",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+
+      {
+        $addFields: {
+          TicketCount: { $size: { $ifNull: ["$TicketRecords", []] } },
+        },
+      },
+      {
+        $addFields: {
+          TicketRecords: {
+            $slice: ["$TicketRecords", (Number(page) - 1) * Number(limit), Number(limit)],
+          },
+        },
+      },
+    ];
+
+    const data = await collection.aggregate(pipeline).toArray();
+
+    return {
+      data: Array.isArray(data) && data.length ? data : [],
+      message: Array.isArray(data) && data.length
+        ? { msg: "Success", code: "1" }
+        : { msg: "No Record Found", code: "0" },
+    };
+  } catch (error: any) {
+    return { data: null, message: { msg: error?.message || "Failed", code: "0" } };
   }
- 
+}
+
 
   async uploadTicketPDFService(payload: any) {
     try {
@@ -1599,83 +2098,83 @@ async UserWiseState(payload: any) {
 
 
 
-async syncAudioFiles(payload: any) {
-  try {
-    console.log("🔍 Starting Audio Sync Process...");
+  async syncAudioFiles(payload: any) {
+    try {
+      console.log("🔍 Starting Audio Sync Process...");
 
-    const db = this.db;
-    const sourceCollection = db.collection("KRPH_Calling_CDR_files_paths");
-    const targetCollection = db.collection("SLA_Ticket_listing");
-    const logCollection = db.collection("KRPH_Sync_Log");
+      const db = this.db;
+      const sourceCollection = db.collection("KRPH_Calling_CDR_files_paths");
+      const targetCollection = db.collection("SLA_Ticket_listing");
+      const logCollection = db.collection("KRPH_Sync_Log");
 
-    let syncedCount = 0;
-    let failedCount = 0;
+      let syncedCount = 0;
+      let failedCount = 0;
 
-    console.log("📡 Fetching records to sync...");
+      console.log("📡 Fetching records to sync...");
 
-    const sourceData = await sourceCollection.find({
-      $or: [{ isSynced: { $exists: false } }, { isSynced: false }]
-    }).project({ uniqueId: 1, path: 1 }).toArray();
+      const sourceData = await sourceCollection.find({
+        $or: [{ isSynced: { $exists: false } }, { isSynced: false }]
+      }).project({ uniqueId: 1, path: 1 }).toArray();
 
-    console.log(`📁 Total records found: ${sourceData.length}`);
+      console.log(`📁 Total records found: ${sourceData.length}`);
 
-    let processed = 0;
+      let processed = 0;
 
-    for (let item of sourceData) {
-      processed++;
+      for (let item of sourceData) {
+        processed++;
 
-      console.log(`🔧 Processing ${processed}/${sourceData.length} | UniqueID: ${item.uniqueId}`);
+        console.log(`🔧 Processing ${processed}/${sourceData.length} | UniqueID: ${item.uniqueId}`);
 
-      const result = await targetCollection.findOneAndUpdate(
-        { CallingUniqueID: item.uniqueId },
-        { $set: { CallingAudioFile: item.path } },
-        { returnDocument: "after" }
-      );
-
-      if (result?.value) {
-        syncedCount++;
-        console.log(`   ✅ Synced: ${item.uniqueId}`);
-
-        await sourceCollection.updateOne(
-          { _id: item._id },
-          {
-            $set: {
-              isSynced: true,
-              syncedAt: new Date(),
-              syncStatus: "success"
-            }
-          }
+        const result = await targetCollection.findOneAndUpdate(
+          { CallingUniqueID: item.uniqueId },
+          { $set: { CallingAudioFile: item.path } },
+          { returnDocument: "after" }
         );
-      } else {
-        failedCount++;
-        console.log(`   ❌ Failed: ${item.uniqueId} (No match found)`);
 
-        await sourceCollection.updateOne(
-          { _id: item._id },
-          {
-            $set: {
-              isSynced: false,
-              syncedAt: new Date(),
-              syncStatus: "failed",
-              error: "Matching entry not found in SLA_Ticket_listing"
+        if (result?.value) {
+          syncedCount++;
+          console.log(`   ✅ Synced: ${item.uniqueId}`);
+
+          await sourceCollection.updateOne(
+            { _id: item._id },
+            {
+              $set: {
+                isSynced: true,
+                syncedAt: new Date(),
+                syncStatus: "success"
+              }
             }
-          }
-        );
+          );
+        } else {
+          failedCount++;
+          console.log(`   ❌ Failed: ${item.uniqueId} (No match found)`);
+
+          await sourceCollection.updateOne(
+            { _id: item._id },
+            {
+              $set: {
+                isSynced: false,
+                syncedAt: new Date(),
+                syncStatus: "failed",
+                error: "Matching entry not found in SLA_Ticket_listing"
+              }
+            }
+          );
+        }
       }
-    }
 
-    console.log("📦 Saving Sync Summary Log...");
+      console.log("📦 Saving Sync Summary Log...");
 
-    await logCollection.insertOne({
-      executedAt: new Date(),
-      totalProcessed: sourceData.length,
-      synced: syncedCount,
-      failed: failedCount,
-      status: syncedCount > 0 && failedCount > 0 ? "PARTIAL" :
-              failedCount === 0 ? "SUCCESS" : "FAILED"
-    });
+      await logCollection.insertOne({
+        executedAt: new Date(),
+        totalProcessed: sourceData.length,
+        synced: syncedCount,
+        failed: failedCount,
+        status: syncedCount > 0 && failedCount > 0 ? "PARTIAL" :
+          failedCount === 0 ? "SUCCESS" : "FAILED"
+      });
 
-    console.log(`
+      console.log(`
 ================ SUMMARY ================
 Total Records    : ${sourceData.length}
 Synced Successfully : ${syncedCount}
@@ -1684,101 +2183,883 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 =========================================
     `);
 
-    return {
-      data: { total: sourceData.length, synced: syncedCount, failed: failedCount },
-      message: { msg: "Mongo Sync Completed & Logged", code: 1 }
-    };
+      return {
+        data: { total: sourceData.length, synced: syncedCount, failed: failedCount },
+        message: { msg: "Mongo Sync Completed & Logged", code: 1 }
+      };
 
-  } catch (err) {
-    console.error("❌ Error Occurred During Sync:", err);
+    } catch (err) {
+      console.error("❌ Error Occurred During Sync:", err);
 
-    return {
-      data: {},
-      message: { msg: "Sync failed", code: 0 }
-    };
-  }
-}
-
-
-
-
-
-
-async getPhotoServie(payload?: any) {
-  try {
-    const sourceFolder = "/home/pradeep/Desktop/DCIM/100D5600";
-    const destinationFolder = "/home/pradeep/Desktop/filteredPhoto";
-
-    const validNumbers = [
-      "0007","0011","0013","0018","0023","0041","0053","0073","0078","0105","0118","0129",
-      "0139","0148","0151","0205","0229","0236","0244","0260","0264","0269","0273","0276",
-      "0292","0302","0306","0313","0322","0323","0326","0332","0345","0354","0362","0365",
-      "0367","0380","0403","0407","0411","0416","0427","0443","0449","0463","0465","0469",
-      "0475","0478","0479","0482","0493","0496","0502","0506","0510","0513","0528","0537",
-      "0540","0542","0550","0552","0554","0560","0567","0570","0572","0575","0579","0583",
-      "0592","0597","0598","0601","0602","0608","0613","0615","0617","0618","0625","0627",
-      "0631","0637","0639","0642","0643","0650","0657","0665","0667","0680"
-    ];
-
-    if (!fs.existsSync(destinationFolder)) {
-      fs.mkdirSync(destinationFolder, { recursive: true });
+      return {
+        data: {},
+        message: { msg: "Sync failed", code: 0 }
+      };
     }
+  }
 
-    const files = fs.readdirSync(sourceFolder);
 
-    let copiedFiles: string[] = [];
-    let failedFiles: Array<{ file: string; error: string }> = [];
-    let foundNumbers = new Set<string>(); 
 
-    for (const file of files) {
-      const match = file.match(/(\d{4})/);
-      if (!match) continue;
 
-      const fileNumber = match[1];
 
-      if (validNumbers.includes(fileNumber)) {
-        foundNumbers.add(fileNumber);
 
-        const src = path.join(sourceFolder, file);
-        const dest = path.join(destinationFolder, file);
+  async getPhotoServie(payload?: any) {
+    try {
+      const sourceFolder = "/home/pradeep/Desktop/DCIM/100D5600";
+      const destinationFolder = "/home/pradeep/Desktop/filteredPhoto";
 
-        try {
-          if (!fs.existsSync(dest)) {
-            fs.copyFileSync(src, dest);
+      const validNumbers = [
+        "0007", "0011", "0013", "0018", "0023", "0041", "0053", "0073", "0078", "0105", "0118", "0129",
+        "0139", "0148", "0151", "0205", "0229", "0236", "0244", "0260", "0264", "0269", "0273", "0276",
+        "0292", "0302", "0306", "0313", "0322", "0323", "0326", "0332", "0345", "0354", "0362", "0365",
+        "0367", "0380", "0403", "0407", "0411", "0416", "0427", "0443", "0449", "0463", "0465", "0469",
+        "0475", "0478", "0479", "0482", "0493", "0496", "0502", "0506", "0510", "0513", "0528", "0537",
+        "0540", "0542", "0550", "0552", "0554", "0560", "0567", "0570", "0572", "0575", "0579", "0583",
+        "0592", "0597", "0598", "0601", "0602", "0608", "0613", "0615", "0617", "0618", "0625", "0627",
+        "0631", "0637", "0639", "0642", "0643", "0650", "0657", "0665", "0667", "0680"
+      ];
+
+      if (!fs.existsSync(destinationFolder)) {
+        fs.mkdirSync(destinationFolder, { recursive: true });
+      }
+
+      const files = fs.readdirSync(sourceFolder);
+
+      let copiedFiles: string[] = [];
+      let failedFiles: Array<{ file: string; error: string }> = [];
+      let foundNumbers = new Set<string>();
+
+      for (const file of files) {
+        const match = file.match(/(\d{4})/);
+        if (!match) continue;
+
+        const fileNumber = match[1];
+
+        if (validNumbers.includes(fileNumber)) {
+          foundNumbers.add(fileNumber);
+
+          const src = path.join(sourceFolder, file);
+          const dest = path.join(destinationFolder, file);
+
+          try {
+            if (!fs.existsSync(dest)) {
+              fs.copyFileSync(src, dest);
+            }
+
+            copiedFiles.push(file);
+
+          } catch (error: any) {
+            failedFiles.push({ file, error: error.message });
           }
-
-          copiedFiles.push(file);
-
-        } catch (error: any) {
-          failedFiles.push({ file, error: error.message });
         }
       }
+
+      // Numbers not found in ANY file
+      const missingNumbers = validNumbers.filter(num => !foundNumbers.has(num));
+
+      return {
+        data: {
+          totalCopied: copiedFiles.length,
+          copiedFiles,
+          missingNumbersCount: missingNumbers.length,
+          missingNumbers,
+          failedFilesCount: failedFiles.length,
+          failedFiles,
+        },
+        message: { msg: "Photo Sync Completed Successfully", code: 1 }
+      };
+
+    } catch (err) {
+      console.log(err);
+
+      return {
+        data: null,
+        message: { msg: "Error while syncing photos", code: 0 }
+      };
+    }
+  }
+
+
+
+  async insuranceWiseTicketList(payload: any) {
+    let { month, year } = payload;
+    let message = { msg: "", code: "" };
+
+    if (!month) {
+      message.msg = "Month is required";
+      message.code = "1";
+      return { data: {}, message };
     }
 
-    // Numbers not found in ANY file
-    const missingNumbers = validNumbers.filter(num => !foundNumbers.has(num));
+    if (!year) {
+      message.msg = "Year is required";
+      message.code = "1";
+      return { data: {}, message };
+    }
 
-    return {
-      data: {
-        totalCopied: copiedFiles.length,
-        copiedFiles,
-        missingNumbersCount: missingNumbers.length,
-        missingNumbers,
-        failedFilesCount: failedFiles.length,
-        failedFiles,
+    const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const endDate = new Date(year, month, 1, 0, 0, 0, 0);
+
+    const pipeline = [
+      {
+        $match: {
+          AssignedDate: {
+            $gte: startDate,
+            $lt: endDate
+          }
+        }
       },
-      message: { msg: "Photo Sync Completed Successfully", code: 1 }
-    };
 
-  } catch (err) {
-    console.log(err);
+      {
+        $group: {
+          _id: "$InsuranceCompanyId",
+          InsuranceCompany: { $first: "$InsuranceCompanyName" },
+          TicketCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          InsuranceCompanyId: "$_id",
+          InsuranceCompany: 1,
+          TicketCount: 1
+        }
+      },
+      {
+        $sort: { TicketCount: -1 }
+      }
+    ];
+
+    console.log(JSON.stringify(pipeline))
+    const fetchedData = await this.db
+      .collection("Ticket_Assignment")
+      .aggregate(pipeline)
+      .toArray();
+
+    const getInsuranceCompany = await this.db
+      .collection("KRPH_InsuranceMaster")
+      .find({})
+      .toArray();
+
+    const normalize = this.normalize.bind(this);
+
+    const insuranceCountMap = fetchedData.reduce((acc, fd) => {
+      acc[normalize(fd.InsuranceCompany)] = fd.TicketCount;
+      return acc;
+    }, {});
+
+    const conbinedData = getInsuranceCompany.map(item => {
+      const key = this.normalize(item.InsuranceMasterName);
+      return {
+        InsuranceCompanyId: item?.InsuranceMasterID,
+        InsuranceCompany: item.InsuranceMasterName,
+        AssignedTicketCount: insuranceCountMap[key] || 0
+      };
+    });
+
+    message.msg = "Success";
+    message.code = "1";
+    let obj = {
+      data: conbinedData
+    }
 
     return {
-      data: null,
-      message: { msg: "Error while syncing photos", code: 0 }
+      data: obj,
+      message
+    };
+  }
+
+  normalize(str = "") {
+    return str
+      .toUpperCase()
+      .replace(/,/g, "")     // remove commas
+      .replace(/\s+/g, " ")  // normalize spaces
+      .trim();
+  }
+
+
+  async getBucketTicketCount(payload: any) {
+    try {
+      const { loginId } = payload;
+      let message = {
+        msg: "",
+        code: "",
+      };
+      let count;
+
+      const ticketCount = await this.db.collection('Ticket_Assignment_History')
+        .find({ assignedBy: loginId.toString() })
+        .count();
+
+      if (ticketCount === 0) {
+        message["msg"] = "Success";
+        message["code"] = "0";
+        count = ticketCount
+      } else {
+        message["msg"] = "Success";
+        message["code"] = "1";
+        count = ticketCount
+      }
+
+
+      return { data: count, message: message };
+
+    } catch (err) {
+      console.log("Error while fetching bucket ticket count:", err);
+      return { data: "", message: { msg: "Error", code: "0" } };
+    }
+  }
+
+
+  async getBucketTicket(payload: any) {
+    try {
+
+      let { loginId } = payload;
+      let ticketData;
+      let message = {
+        msg: "",
+        code: ""
+      }
+      let pipeline = [
+        {
+          $match: {
+            assignedBy: loginId.toString()
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            SupportTicketID: 1,
+            SupportTicketNo: 1,
+            assignedBy: 1,
+            assignedTo: 1,
+            AssignedDate: 1,
+            AssigneeStateID: 1,
+            AssigneeMobileNo: 1,
+            AssigneeRoleName: 1,
+            AssigneeRoleID: 1,
+            AssigneRoleName: 1,
+            assignToName: 1,
+            assignedByName: 1
+
+          }
+        },
+        {
+          $lookup: {
+            from: "SLA_Ticket_listing",
+            localField: "SupportTicketID",
+            foreignField: "SupportTicketID",
+            as: "Ticket"
+          }
+        },
+        {
+          $unwind: {
+            path: "$Ticket",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $lookup: {
+            from: "STATEMASTERDATA",
+            localField: "AssigneeStateID",
+            foreignField: "StateCodeAlpha",
+            as: "State"
+          }
+        },
+        {
+          $unwind: {
+            path: "$State",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+
+
+        {
+          $project: {
+            _id: 0,
+            SupportTicketID: 1,
+            SupportTicketNo: 1,
+            TicketStatusID: "$Ticket.TicketStatusID",
+            TicketStatus: "$Ticket.TicketStatus",
+            AssignedFrom: "$assignedBy",
+            AssignedTo: "$assignedTo",
+            AssignedDate: "$AssignedDate",
+            AssignedStateID: "$AssigneeStateID",
+            AssignedStateName: "$State.StateMasterName",
+            AssignedStateCode: "$State.StateCodeAlpha",
+            AssignedMobile: "$AssigneeMobileNo",
+            AssignedRoleName: "$AssigneeRoleName",
+            AssignedRoleID: "$AssigneeRoleID",
+            AssigneRoleName: "$AssigneRoleName",
+            AssignedUserName: "$assignToName",
+            AssignedByName: "$assignedByName",
+
+            TicketInformation: {
+              SupportTicketID: "$Ticket.SupportTicketID",
+              CallerContactNumber: "$Ticket.CallerContactNumber",
+              CallingAudioFile: "$Ticket.CallingAudioFile",
+              TicketRequestorID: "$Ticket.TicketRequestorID",
+              StateCodeAlpha: "$Ticket.StateCodeAlpha",
+              StateMasterID: "$Ticket.StateMasterID",
+              DistrictMasterID: "$Ticket.DistrictMasterID",
+              VillageRequestorID: "$Ticket.VillageRequestorID",
+              NyayPanchayatID: "$Ticket.NyayPanchayatID",
+              NyayPanchayat: "$Ticket.NyayPanchayat",
+              GramPanchayatID: "$Ticket.GramPanchayatID",
+              GramPanchayat: "$Ticket.GramPanchayat",
+              CallerID: "$Ticket.CallerID",
+              CreationMode: "$Ticket.CreationMode",
+              SupportTicketNo: "$Ticket.SupportTicketNo",
+              RequestorUniqueNo: "$Ticket.RequestorUniqueNo",
+              RequestorName: "$Ticket.RequestorName",
+              RequestorMobileNo: "$Ticket.RequestorMobileNo",
+              RequestorAccountNo: "$Ticket.RequestorAccountNo",
+              RequestorAadharNo: "$Ticket.RequestorAadharNo",
+              TicketCategoryID: "$Ticket.TicketCategoryID",
+              CropCategoryOthers: "$Ticket.CropCategoryOthers",
+              CropStageMaster: "$Ticket.CropStageMaster",
+              CropStageMasterID: "$Ticket.CropStageMasterID",
+              TicketHeaderID: "$Ticket.TicketHeaderID",
+              SupportTicketTypeID: "$Ticket.SupportTicketTypeID",
+              RequestYear: "$Ticket.RequestYear",
+              RequestSeason: "$Ticket.RequestSeason",
+              TicketSourceID: "$Ticket.TicketSourceID",
+              TicketDescription: "$Ticket.TicketDescription",
+              LossDate: "$Ticket.LossDate",
+              LossTime: "$Ticket.LossTime",
+              OnTimeIntimationFlag: "$Ticket.OnTimeIntimationFlag",
+              VillageName: "$Ticket.VillageName",
+              ApplicationCropName: "$Ticket.ApplicationCropName",
+              CropName: "$Ticket.CropName",
+              AREA: "$Ticket.AREA",
+              DistrictRequestorID: "$Ticket.DistrictRequestorID",
+              PostHarvestDate: "$Ticket.PostHarvestDate",
+              TicketStatusID: "$Ticket.TicketStatusID",
+              StatusUpdateTime: "$Ticket.StatusUpdateTime",
+              StatusUpdateUserID: "$Ticket.StatusUpdateUserID",
+              ApplicationNo: "$Ticket.ApplicationNo",
+              InsuranceCompanyCode: "$Ticket.InsuranceCompanyCode",
+              InsuranceCompanyID: "$Ticket.InsuranceCompanyID",
+              InsurancePolicyNo: "$Ticket.InsurancePolicyNo",
+              InsurancePolicyDate: "$Ticket.InsurancePolicyDate",
+              InsuranceExpiryDate: "$Ticket.InsuranceExpiryDate",
+              BankMasterID: "$Ticket.BankMasterID",
+              AgentUserID: "$Ticket.AgentUserID",
+              SchemeID: "$Ticket.SchemeID",
+              AttachmentPath: "$Ticket.AttachmentPath",
+              HasDocument: "$Ticket.HasDocument",
+              Relation: "$Ticket.Relation",
+              RelativeName: "$Ticket.RelativeName",
+              SubDistrictID: "$Ticket.SubDistrictID",
+              SubDistrictName: "$Ticket.SubDistrictName",
+              PolicyPremium: "$Ticket.PolicyPremium",
+              PolicyArea: "$Ticket.PolicyArea",
+              PolicyType: "$Ticket.PolicyType",
+              LandSurveyNumber: "$Ticket.LandSurveyNumber",
+              LandDivisionNumber: "$Ticket.LandDivisionNumber",
+              PlotVillageName: "$Ticket.PlotVillageName",
+              PlotDistrictName: "$Ticket.PlotDistrictName",
+              PlotStateName: "$Ticket.PlotStateName",
+              ApplicationSource: "$Ticket.ApplicationSource",
+              CropShare: "$Ticket.CropShare",
+              IFSCCode: "$Ticket.IFSCCode",
+              FarmerShare: "$Ticket.FarmerShare",
+              CropSeasonName: "$Ticket.CropSeasonName",
+              TicketSourceName: "$Ticket.TicketSourceName",
+              TicketCategoryName: "$Ticket.TicketCategoryName",
+              TicketStatus: "$Ticket.TicketStatus",
+              InsuranceCompany: "$Ticket.InsuranceCompany",
+              TicketTypeName: "$Ticket.TicketTypeName",
+              StateMasterName: "$Ticket.StateMasterName",
+              DistrictMasterName: "$Ticket.DistrictMasterName",
+              TicketHeadName: "$Ticket.TicketHeadName",
+              BMCGCode: "$Ticket.BMCGCode",
+              BusinessRelationName: "$Ticket.BusinessRelationName",
+              CropLossDetailID: "$Ticket.CropLossDetailID",
+              CallingUniqueID: "$Ticket.CallingUniqueID",
+              CallingInsertUserID: "$Ticket.CallingInsertUserID",
+              CropStage: "$Ticket.CropStage",
+              CategoryHeadID: "$Ticket.CategoryHeadID",
+              Sos: "$Ticket.Sos",
+              IsSos: "$Ticket.IsSos",
+              TicketNCIPDocketNo: "$Ticket.TicketNCIPDocketNo",
+              FilterDistrictRequestorID: "$Ticket.FilterDistrictRequestorID",
+              FilterStateID: "$Ticket.FilterStateID",
+              SchemeName: "$Ticket.SchemeName",
+              InsertUserID: "$Ticket.InsertUserID",
+              InsertIPAddress: "$Ticket.InsertIPAddress",
+              UpdateUserID: "$Ticket.UpdateUserID",
+              AgentName: "$Ticket.AgentName",
+              CreatedBY: "$Ticket.CreatedBY",
+              CallingUserID: "$Ticket.CallingUserID",
+
+              TicketReOpenDate: {
+                $cond: {
+                  if: {
+                    $or: [
+                      { $eq: ["$Ticket.TicketReOpenDate", null] },
+                      { $eq: ["$Ticket.TicketReOpenDate", ""] }
+                    ]
+                  },
+                  then: null,
+                  else: {
+                    $dateToString: {
+                      date: { $toDate: "$Ticket.TicketReOpenDate" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              },
+
+              InsertDateTime: {
+                $cond: {
+                  if: {
+                    $or: [
+                      { $eq: ["$Ticket.InsertDateTime", null] },
+                      { $eq: ["$Ticket.InsertDateTime", ""] }
+                    ]
+                  },
+                  then: null,
+                  else: {
+                    $dateToString: {
+                      date: { $toDate: "$Ticket.InsertDateTime" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              },
+
+              UpdateDateTime: {
+                $cond: {
+                  if: {
+                    $or: [
+                      { $eq: ["$Ticket.UpdateDateTime", null] },
+                      { $eq: ["$Ticket.UpdateDateTime", ""] }
+                    ]
+                  },
+                  then: null,
+                  else: {
+                    $dateToString: {
+                      date: { $toDate: "$Ticket.UpdateDateTime" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              },
+
+              SowingDate: {
+                $cond: {
+                  if: {
+                    $or: [
+                      { $eq: ["$Ticket.SowingDate", null] },
+                      { $eq: ["$Ticket.SowingDate", ""] }
+                    ]
+                  },
+                  then: null,
+                  else: {
+                    $dateToString: {
+                      date: { $toDate: "$Ticket.SowingDate" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              },
+
+              CreatedAt: {
+                $dateToString: {
+                  date: { $toDate: "$Ticket.Created" },
+                  format: "%Y-%m-%dT%H:%M:%S",
+                  timezone: "Asia/Kolkata"
+                }
+              }
+            }
+
+
+
+
+
+
+          }
+        }
+      ]
+      let getBucketData = await this.db.collection('Ticket_Assignment_History').aggregate(pipeline).toArray()
+      if (getBucketData.length > 0) {
+        ticketData = getBucketData
+        message["msg"] = "Success";
+        message["code"] = "1"
+      } else {
+        ticketData = [];
+        message["msg"] = "Success";
+        message["code"] = "0"
+      }
+
+      return { data: ticketData, message: message }
+
+    } catch (err) {
+      console.log(err)
+
+    }
+  }
+
+
+  async AssignedTicketByInsuranceService(payload: any) {
+    try {
+      const { insuranceCompanyId, year, month } = payload;
+
+      if (!insuranceCompanyId) {
+        return {
+          data: {},
+          message: { msg: "Failed - Missing required field(s): insuranceCompanyId", code: "0" }
+        };
+      }
+
+      const insuranceId = Number(insuranceCompanyId);
+      const startDate = new Date(year, month - 1, 1); // 2025-12-01
+      const endDate = new Date(year, month, 1);
+
+      const statePipeline = this.buildAssignedTicketPipeline({
+        InsuranceCompanyId: insuranceId,
+        AssigneeStateID: { $exists: true, $ne: "" },
+        AssignedDate:{
+              $gte: startDate,
+              $lt: endDate
+        }
+      });
+
+
+
+      const [stateAssigned] = await Promise.all([
+        this.db.collection("Ticket_Assignment").aggregate(statePipeline).toArray(),
+      ]);
+
+      if (stateAssigned.length === 0) {
+        return {
+          data: {},
+          message: { msg: "Failed - No Record Found", code: "0" }
+        };
+      }
+      let obj = {
+        stateAssigned,
+      }
+      return {
+        data: obj,
+        message: { msg: "Success", code: "1" }
+      };
+
+    } catch (err) {
+      console.error(err);
+      return {
+        data: {},
+        message: { msg: "Internal Server Error", code: "0" }
+      };
+    }
+  }
+
+
+  private buildAssignedTicketPipeline(matchCondition: any) {
+    return [
+      { $match: matchCondition },
+
+      {
+        $lookup: {
+          from: "SLA_Ticket_listing",
+          localField: "SupportTicketID",
+          foreignField: "SupportTicketID",
+          as: "Ticket"
+        }
+      },
+      {
+        $unwind: {
+          path: "$Ticket",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          assignedBy: 1,
+          assignedTo: 1,
+          assignToName: 1,
+          AssignedDate: 1,
+          AssigneeStateID: 1,
+          AssigneRoleName: 1,
+         
+            SupportTicketID: "$Ticket.SupportTicketID",
+            CallerContactNumber: "$Ticket.CallerContactNumber",
+            CallingAudioFile: "$Ticket.CallingAudioFile",
+            TicketRequestorID: "$Ticket.TicketRequestorID",
+            StateCodeAlpha: "$Ticket.StateCodeAlpha",
+            StateMasterID: "$Ticket.StateMasterID",
+            DistrictMasterID: "$Ticket.DistrictMasterID",
+            VillageRequestorID: "$Ticket.VillageRequestorID",
+            NyayPanchayatID: "$Ticket.NyayPanchayatID",
+            NyayPanchayat: "$Ticket.NyayPanchayat",
+            GramPanchayatID: "$Ticket.GramPanchayatID",
+            GramPanchayat: "$Ticket.GramPanchayat",
+            CallerID: "$Ticket.CallerID",
+            CreationMode: "$Ticket.CreationMode",
+            SupportTicketNo: "$Ticket.SupportTicketNo",
+            RequestorUniqueNo: "$Ticket.RequestorUniqueNo",
+            RequestorName: "$Ticket.RequestorName",
+            RequestorMobileNo: "$Ticket.RequestorMobileNo",
+            RequestorAccountNo: "$Ticket.RequestorAccountNo",
+            RequestorAadharNo: "$Ticket.RequestorAadharNo",
+            TicketCategoryID: "$Ticket.TicketCategoryID",
+            CropCategoryOthers: "$Ticket.CropCategoryOthers",
+            CropStageMaster: "$Ticket.CropStageMaster",
+            CropStageMasterID: "$Ticket.CropStageMasterID",
+            TicketHeaderID: "$Ticket.TicketHeaderID",
+            SupportTicketTypeID: "$Ticket.SupportTicketTypeID",
+            RequestYear: "$Ticket.RequestYear",
+            RequestSeason: "$Ticket.RequestSeason",
+            TicketSourceID: "$Ticket.TicketSourceID",
+            TicketDescription: "$Ticket.TicketDescription",
+            LossDate: "$Ticket.LossDate",
+            LossTime: "$Ticket.LossTime",
+            OnTimeIntimationFlag: "$Ticket.OnTimeIntimationFlag",
+            VillageName: "$Ticket.VillageName",
+            ApplicationCropName: "$Ticket.ApplicationCropName",
+            CropName: "$Ticket.CropName",
+            AREA: "$Ticket.AREA",
+            DistrictRequestorID: "$Ticket.DistrictRequestorID",
+            PostHarvestDate: "$Ticket.PostHarvestDate",
+            TicketStatusID: "$Ticket.TicketStatusID",
+            StatusUpdateTime: "$Ticket.StatusUpdateTime",
+            StatusUpdateUserID: "$Ticket.StatusUpdateUserID",
+            ApplicationNo: "$Ticket.ApplicationNo",
+            InsuranceCompanyCode: "$Ticket.InsuranceCompanyCode",
+            InsuranceCompanyID: "$Ticket.InsuranceCompanyID",
+            InsurancePolicyNo: "$Ticket.InsurancePolicyNo",
+            InsurancePolicyDate: "$Ticket.InsurancePolicyDate",
+            InsuranceExpiryDate: "$Ticket.InsuranceExpiryDate",
+            BankMasterID: "$Ticket.BankMasterID",
+            AgentUserID: "$Ticket.AgentUserID",
+            SchemeID: "$Ticket.SchemeID",
+            AttachmentPath: "$Ticket.AttachmentPath",
+            HasDocument: "$Ticket.HasDocument",
+            Relation: "$Ticket.Relation",
+            RelativeName: "$Ticket.RelativeName",
+            SubDistrictID: "$Ticket.SubDistrictID",
+            SubDistrictName: "$Ticket.SubDistrictName",
+            PolicyPremium: "$Ticket.PolicyPremium",
+            PolicyArea: "$Ticket.PolicyArea",
+            PolicyType: "$Ticket.PolicyType",
+            LandSurveyNumber: "$Ticket.LandSurveyNumber",
+            LandDivisionNumber: "$Ticket.LandDivisionNumber",
+            PlotVillageName: "$Ticket.PlotVillageName",
+            PlotDistrictName: "$Ticket.PlotDistrictName",
+            PlotStateName: "$Ticket.PlotStateName",
+            ApplicationSource: "$Ticket.ApplicationSource",
+            CropShare: "$Ticket.CropShare",
+            IFSCCode: "$Ticket.IFSCCode",
+            FarmerShare: "$Ticket.FarmerShare",
+            CropSeasonName: "$Ticket.CropSeasonName",
+            TicketSourceName: "$Ticket.TicketSourceName",
+            TicketCategoryName: "$Ticket.TicketCategoryName",
+            TicketStatus: "$Ticket.TicketStatus",
+            InsuranceCompany: "$Ticket.InsuranceCompany",
+            TicketTypeName: "$Ticket.TicketTypeName",
+            StateMasterName: "$Ticket.StateMasterName",
+            DistrictMasterName: "$Ticket.DistrictMasterName",
+            TicketHeadName: "$Ticket.TicketHeadName",
+            BMCGCode: "$Ticket.BMCGCode",
+            BusinessRelationName: "$Ticket.BusinessRelationName",
+            CropLossDetailID: "$Ticket.CropLossDetailID",
+            CallingUniqueID: "$Ticket.CallingUniqueID",
+            CallingInsertUserID: "$Ticket.CallingInsertUserID",
+            CropStage: "$Ticket.CropStage",
+            CategoryHeadID: "$Ticket.CategoryHeadID",
+            Sos: "$Ticket.Sos",
+            IsSos: "$Ticket.IsSos",
+            TicketNCIPDocketNo: "$Ticket.TicketNCIPDocketNo",
+            FilterDistrictRequestorID: "$Ticket.FilterDistrictRequestorID",
+            FilterStateID: "$Ticket.FilterStateID",
+            SchemeName: "$Ticket.SchemeName",
+            InsertUserID: "$Ticket.InsertUserID",
+            InsertIPAddress: "$Ticket.InsertIPAddress",
+            UpdateUserID: "$Ticket.UpdateUserID",
+            AgentName: "$Ticket.AgentName",
+            CreatedBY: "$Ticket.CreatedBY",
+            CallingUserID: "$Ticket.CallingUserID",
+
+            TicketReOpenDate: {
+              $cond: {
+                if: {
+                  $or: [
+                    { $eq: ["$Ticket.TicketReOpenDate", null] },
+                    { $eq: ["$Ticket.TicketReOpenDate", ""] }
+                  ]
+                },
+                then: null,
+                else: {
+                  $dateToString: {
+                    date: { $toDate: "$Ticket.TicketReOpenDate" },
+                    format: "%Y-%m-%dT%H:%M:%S",
+                    timezone: "Asia/Kolkata"
+                  }
+                }
+              }
+            },
+
+            InsertDateTime: {
+              $cond: {
+                if: {
+                  $or: [
+                    { $eq: ["$Ticket.InsertDateTime", null] },
+                    { $eq: ["$Ticket.InsertDateTime", ""] }
+                  ]
+                },
+                then: null,
+                else: {
+                  $dateToString: {
+                    date: { $toDate: "$Ticket.InsertDateTime" },
+                    format: "%Y-%m-%dT%H:%M:%S",
+                    timezone: "Asia/Kolkata"
+                  }
+                }
+              }
+            },
+
+            UpdateDateTime: {
+              $cond: {
+                if: {
+                  $or: [
+                    { $eq: ["$Ticket.UpdateDateTime", null] },
+                    { $eq: ["$Ticket.UpdateDateTime", ""] }
+                  ]
+                },
+                then: null,
+                else: {
+                  $dateToString: {
+                    date: { $toDate: "$Ticket.UpdateDateTime" },
+                    format: "%Y-%m-%dT%H:%M:%S",
+                    timezone: "Asia/Kolkata"
+                  }
+                }
+              }
+            },
+
+            SowingDate: {
+              $cond: {
+                if: {
+                  $or: [
+                    { $eq: ["$Ticket.SowingDate", null] },
+                    { $eq: ["$Ticket.SowingDate", ""] }
+                  ]
+                },
+                then: null,
+                else: {
+                  $dateToString: {
+                    date: { $toDate: "$Ticket.SowingDate" },
+                    format: "%Y-%m-%dT%H:%M:%S",
+                    timezone: "Asia/Kolkata"
+                  }
+                }
+              }
+            },
+
+            CreatedAt: {
+              $dateToString: {
+                date: { $toDate: "$Ticket.Created" },
+                format: "%Y-%m-%dT%H:%M:%S",
+                timezone: "Asia/Kolkata"
+              }
+            }
+          
+
+
+        }
+      }
+    ];
+  }
+
+
+async EscalationHistoryTrailService(payload: any) {
+  try {
+    const SupportTicketID = Number(payload?.SupportTicketID);
+
+    if (!SupportTicketID || Number.isNaN(SupportTicketID)) {
+      return {
+        data: {},
+        message: {
+          msg: "Failed - Missing required field(s): SupportTicketID",
+          code: "0"
+        }
+      };
+    }
+
+    const pipeline = [
+      {
+        $match: {
+          SupportTicketID
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          SupportTicketID: 1,
+          SupportTicketNo: 1,
+          TicketStatusID: 1,
+          TicketStatus: 1,
+          assignedBy: 1,
+          assignedTo: 1,
+          AssignedDate: 1,
+          AssigneeStateID: 1,
+          AssigneeMobileNo: 1,
+          AssigneRoleName: 1,
+          AssigneeRoleID: 1,
+          DistrictID: 1,
+          IsActive: 1,
+          UpdatedDate: 1,
+          CreatedDate: 1,
+          InsuranceCompanyName:1,
+          assignedByName:1,
+          assignToName:1,
+          Comment: { $ifNull: ["$TicketComment", ""] },
+          PreviousRoleName:1,
+          PreviousRoleId:1
+
+        }
+      }
+    ];
+
+    const historyInfo = await this.db
+      .collection("Ticket_Assignment_History")
+      .aggregate(pipeline, { allowDiskUse: true })
+      .toArray();
+
+    if (!Array.isArray(historyInfo) || historyInfo.length === 0) {
+      return {
+        data: {},
+        message: {
+          msg: "Failed - No Record Found For History",
+          code: "0"
+        }
+      };
+    }
+    let response = { data: historyInfo }
+    return {
+      data: response,
+      message: {
+        msg: "Success",
+        code: "1"
+      }
+    };
+  } catch (err) {
+    console.error("EscalationHistoryTrailService Error:", err);
+    return {
+      data: {},
+      message: {
+        msg: "Internal Server Error",
+        code: "0"
+      }
     };
   }
 }
+
 
 
 
