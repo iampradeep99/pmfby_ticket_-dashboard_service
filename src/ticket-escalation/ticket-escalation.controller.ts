@@ -19,6 +19,7 @@ import {
   jsonResponseHandler, jsonResponseHandlerCopy,jsonResponseHandlerReport
 } from '../commonServices/responseHandler';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { DocketUpdateCron } from 'src/cron/docketUpdateCron';
 
 
 @Controller('ticket-escalation')
@@ -27,6 +28,8 @@ export class TicketEscalationController {
 
   constructor(
     private readonly dashboardService: TicketEscalationService,
+// private readonly docketUpdateCron: DocketUpdateCron,
+
     private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService
 
   ) { 
@@ -357,6 +360,24 @@ async syncAudio(
       return jsonErrorHandler(err, req, res, () => { });
     }
   }
+
+  // @Post('updateDocketMissing')
+  // async updateDocket(
+  //   @Body() payload: any,
+  //   @Req() req: Request,
+  //   @Res({ passthrough: false }) res: Response
+  // ) {
+  //   try {
+  //     await this.docketUpdateCron.docketUpdateTickets();
+  //     let data = {};
+  //     let message = {}
+  //     if (data) data = await this.utilService.GZip(data);
+
+  //     return jsonResponseHandler(data, message, req, res, () => { });
+  //   } catch (err) {
+  //     return jsonErrorHandler(err, req, res, () => { });
+  //   }
+  // }
 
   
   

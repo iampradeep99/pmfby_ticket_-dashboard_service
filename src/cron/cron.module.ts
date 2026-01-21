@@ -4,6 +4,7 @@
     import { MysqlModule } from 'src/database/mysql.module';
     import { DatabaseModule } from 'src/database/database.module'; 
 import { MailModule } from 'src/mail/mail.module';
+import { DocketUpdateCron } from './docketUpdateCron';
 
     @Module({
         imports: [
@@ -12,6 +13,7 @@ import { MailModule } from 'src/mail/mail.module';
         DatabaseModule,
         MailModule
     ],
-    providers: [CronService]
+    providers: [CronService,DocketUpdateCron],
+    //  exports: [DocketUpdateCron]
     })
     export class CronModule {}

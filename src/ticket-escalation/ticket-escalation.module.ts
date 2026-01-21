@@ -8,6 +8,7 @@ import { UtilModule } from 'src/commonServices/util.module';
 import { MailModule } from 'src/mail/mail.module';
 import { RabbitMQModule } from 'src/commonServices/rabbitMQ/rabbitmq.module';
 import { MysqlModule } from 'src/database/mysql.module';
+import { CronModule } from 'src/cron/cron.module';
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { MysqlModule } from 'src/database/mysql.module';
         UtilModule,
         MailModule,
         forwardRef(() => RabbitMQModule), 
-        MysqlModule // Use forwardRef here
+        MysqlModule, // Use forwardRef here
+        // CronModule
   ],
   controllers: [TicketEscalationController],
   providers: [TicketEscalationService],
