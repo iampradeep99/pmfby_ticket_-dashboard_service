@@ -273,4 +273,48 @@ getNationalHolidays(year: number, month: number) {
 };
 
 
+
+ async sendSMSToUser(db,payload) {
+    try {
+
+      let templateID = "1707176646596240405";
+
+      let customTemplate = `Dear ${payload?.Name}, Grievance Ticket Number ${payload?.ticket} has been assigned to you for review and action. Please log in to the system and proceed as per the prescribed timelines. Portal: https://pmfby.gov.in/krph Regards CSC SPV/Ministry of Agriculture & Farmers Welfare Government of India`;
+      let definedTemplate = await this.GetSingleUnicodeHexForSMS(customTemplate)
+      payload["mobileNO"] = "916386236314"
+
+      const response = await axios.post(`https://bulksmsapi.vispl.in/?username=cscetrnapi3&password=csce_123&messageType=unicode&mobile=${payload.mobileNO}&senderId=CSCSPV&ContentID=${templateID}&EntityID=1301157363501533886&message=${definedTemplate}`);
+
+      if (response.status === 200) {
+        const val = response.data.split('#');
+        if (val.length === 0) {
+          throw new Error('Could not send Message');
+        }
+        console.log("SMS Sent")
+
+        let collection = "SMS_Send_History_Records";
+        let payloadForSms = {
+          SupportTicketNo: payload?.ticket,
+          SMSReferenceNo: val[2] || '',
+          WhatsAppReferenceNo: '',
+          TemplateID: templateID,
+          MobileNo: payload.mobileNO,
+        }
+        await db.collection(collection).insertOne(payloadForSms)
+
+      }
+
+
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  async GetSingleUnicodeHexForSMS(x) {
+    let result = "", notation = "";
+    for (let i = 0; i < x.length; i++)
+      result += notation + ("000" + x[i].charCodeAt(0).toString(16)).substr(-4);
+    return result;
+  }
+
 }
