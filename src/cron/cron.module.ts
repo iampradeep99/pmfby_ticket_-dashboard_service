@@ -4,16 +4,19 @@
     import { MysqlModule } from 'src/database/mysql.module';
     import { DatabaseModule } from 'src/database/database.module'; 
 import { MailModule } from 'src/mail/mail.module';
-import { DocketUpdateCron } from './docketUpdateCron';
+import { TicketEscalationCron } from './ticketEscalationCron';
+import { UtilModule } from 'src/commonServices/util.module';
+
 
     @Module({
         imports: [
         ScheduleModule.forRoot(),
         MysqlModule, 
         DatabaseModule,
-        MailModule
+        MailModule,
+        UtilModule
     ],
-    providers: [CronService,DocketUpdateCron],
-    //  exports: [DocketUpdateCron]
+    providers: [CronService,TicketEscalationCron],
+     exports: [TicketEscalationCron,TicketEscalationCron]
     })
     export class CronModule {}
