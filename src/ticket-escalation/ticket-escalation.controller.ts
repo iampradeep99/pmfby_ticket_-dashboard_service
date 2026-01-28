@@ -28,7 +28,7 @@ export class TicketEscalationController {
 
   constructor(
     private readonly dashboardService: TicketEscalationService,
-// private readonly docketUpdateCron: DocketUpdateCron,
+private readonly docketUpdateCron: DocketUpdateCron,
 
     private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService
 
@@ -361,23 +361,23 @@ async syncAudio(
     }
   }
 
-  // @Post('updateDocketMissing')
-  // async updateDocket(
-  //   @Body() payload: any,
-  //   @Req() req: Request,
-  //   @Res({ passthrough: false }) res: Response
-  // ) {
-  //   try {
-  //     await this.docketUpdateCron.docketUpdateTickets();
-  //     let data = {};
-  //     let message = {}
-  //     if (data) data = await this.utilService.GZip(data);
+  @Post('updateDocketMissing')
+  async updateDocket(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      await this.docketUpdateCron.docketUpdateTickets();
+      let data = {};
+      let message = {}
+      if (data) data = await this.utilService.GZip(data);
 
-  //     return jsonResponseHandler(data, message, req, res, () => { });
-  //   } catch (err) {
-  //     return jsonErrorHandler(err, req, res, () => { });
-  //   }
-  // }
+      return jsonResponseHandler(data, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
 
 
 
