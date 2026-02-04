@@ -1256,6 +1256,16 @@ async getToken() {
 
   const successCount = results.filter(r => r.status === "Success").length;
 
+     for (const item of results) {
+      if (item.status === "Success") {
+        await this.sendSMSToUser({
+          ticket: item.ticketNo,
+          mobileNO: "916386236314",
+          Name: assignToName
+        });
+      }
+    }
+
   return {
     data: {
       totalTickets: results.length,
