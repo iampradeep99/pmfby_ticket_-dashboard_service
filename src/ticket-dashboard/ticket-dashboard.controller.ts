@@ -15,7 +15,7 @@ import { UtilService } from '../commonServices/utilService';
 import { RabbitMQService } from '../commonServices/rabbitMQ/rabbitmq.service';
 import {
   jsonErrorHandler,
-  jsonResponseHandler, jsonResponseHandlerCopy,jsonResponseHandlerReport
+  jsonResponseHandler, jsonResponseHandlerCopy, jsonResponseHandlerReport
 } from '../commonServices/responseHandler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { NewTestBroker } from 'src/commonServices/rabbitMQ/NewTestBroker';
@@ -24,7 +24,7 @@ import { NewTestBroker } from 'src/commonServices/rabbitMQ/NewTestBroker';
 export class TicketDashboardController {
   constructor(
     private readonly dashboardService: TicketDashboardService,
-    private readonly utilService: UtilService,private readonly rabbitMQService: RabbitMQService, private readonly testBroker:NewTestBroker
+    private readonly utilService: UtilService, private readonly rabbitMQService: RabbitMQService, private readonly testBroker: NewTestBroker
 
   ) { }
 
@@ -50,23 +50,23 @@ export class TicketDashboardController {
     }
   }
 
- @Post('getSupportTicketHistory')
-async fetchSupportTicketHistory(@Body() ticketPayload: any, @Req() req: Request, @Res() res: Response) {
-  const userEmail = ticketPayload?.userEmail?.trim();
-  if (!userEmail) {
-    return { rcode: 0, rmessage: 'User Email is required' };
+  @Post('getSupportTicketHistory')
+  async fetchSupportTicketHistory(@Body() ticketPayload: any, @Req() req: Request, @Res() res: Response) {
+    const userEmail = ticketPayload?.userEmail?.trim();
+    if (!userEmail) {
+      return { rcode: 0, rmessage: 'User Email is required' };
+    }
+
+    await this.rabbitMQService.sendToQueue(ticketPayload);
+
+    return jsonResponseHandler(
+      [],
+      'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.',
+      req,
+      res,
+      () => { }
+    );
   }
-
-  await this.rabbitMQService.sendToQueue(ticketPayload);
-
-  return jsonResponseHandler(
-    [],
-    'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.',
-    req,
-    res,
-    () => {}
-  );
-}
 
 
 
@@ -138,43 +138,43 @@ async fetchSupportTicketHistory(@Body() ticketPayload: any, @Req() req: Request,
   }
 
 
-@Post('FarmerSelectCallingHistory')
-async FarmerSelectCallingHistoryRoute(
-  @Body() payload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response,
-) {
-  try {
-    const responsePayload = await this.dashboardService.FarmerSelectCallingHistoryService(payload);
+  @Post('FarmerSelectCallingHistory')
+  async FarmerSelectCallingHistoryRoute(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    try {
+      const responsePayload = await this.dashboardService.FarmerSelectCallingHistoryService(payload);
 
-    const { data: resultArray, pagination, message } = responsePayload;
+      const { data: resultArray, pagination, message } = responsePayload;
 
-    let gzippedData = null;
-    if (resultArray && resultArray.length > 0) {
-      const stringifiedData: any = resultArray;
-      gzippedData = await this.utilService.GZip(stringifiedData); 
+      let gzippedData = null;
+      if (resultArray && resultArray.length > 0) {
+        const stringifiedData: any = resultArray;
+        gzippedData = await this.utilService.GZip(stringifiedData);
+      }
+
+      return jsonResponseHandlerReport(
+        gzippedData,
+        message,
+        pagination,
+        req,
+        res,
+        () => { }
+      );
+
+    } catch (err) {
+      console.error(err);
+      return jsonResponseHandler(
+        null,
+        { msg: '❌ Internal Server Error', code: 0 },
+        req,
+        res,
+        () => { }
+      );
     }
-
-    return jsonResponseHandlerReport(
-      gzippedData,
-      message,
-      pagination,
-      req,
-      res,
-      () => {}
-    );
-
-  } catch (err) {
-    console.error(err);
-    return jsonResponseHandler(
-      null,
-      { msg: '❌ Internal Server Error', code: 0 },
-      req,
-      res,
-      () => {}
-    );
   }
-}
 
 
 
@@ -190,13 +190,13 @@ async FarmerSelectCallingHistoryRoute(
         rmessage: 'User Email is required',
       };
     }
-     await this.rabbitMQService.sendToQueue(ticketPayload);
+    await this.rabbitMQService.sendToQueue(ticketPayload);
     let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
     return jsonResponseHandler([], rmessage, req, res, () => { });
 
   }
 
- @Post('FarmerSelectCallingHistoryDownload')
+  @Post('FarmerSelectCallingHistoryDownload')
   async downloadFarmerCallingReport(
     @Body() ticketPayload: any,
     @Req() req: Request,
@@ -205,20 +205,20 @@ async FarmerSelectCallingHistoryRoute(
     try {
       const userEmail = ticketPayload?.userEmail?.trim();
 
-     
-
-    await this.dashboardService.downloadFarmerCallingReportService(ticketPayload);
 
 
-    let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
-    return jsonResponseHandler([], rmessage, req, res, () => { });
+      await this.dashboardService.downloadFarmerCallingReportService(ticketPayload);
+
+
+      let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
+      return jsonResponseHandler([], rmessage, req, res, () => { });
     } catch (err) {
       return jsonErrorHandler(err, req, res, () => { });
     }
   }
 
 
- @Post('assignAllIndexed')
+  @Post('assignAllIndexed')
   async createIndexesAll(@Body() ticketPayload: any, @Req() req: Request,
     @Res({ passthrough: false }) res: Response) {
 
@@ -230,94 +230,94 @@ async FarmerSelectCallingHistoryRoute(
   }
 
 
-@Post('SupportTicketListing')
-async supportTicketListing(
-  @Body() payload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    const { obj, message }: any = await this.dashboardService.fetchTicketListing(payload);
+  @Post('SupportTicketListing')
+  async supportTicketListing(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const { obj, message }: any = await this.dashboardService.fetchTicketListing(payload);
 
-    const compressedData = obj ? await this.utilService.GZip(obj) : null;
-    console.log("test")
-    return jsonResponseHandler(compressedData, message, req, res, () => {});
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
+      const compressedData = obj ? await this.utilService.GZip(obj) : null;
+      console.log("test")
+      return jsonResponseHandler(compressedData, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
   }
-}
 
-@Post('GrievanceTicketDashboard')
-async GrievanceTicketDashboard(
-  @Body() payload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    const { obj, message }: any = await this.dashboardService.GrievanceTicketDashboard(payload);
+  @Post('GrievanceTicketDashboard')
+  async GrievanceTicketDashboard(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const { obj, message }: any = await this.dashboardService.GrievanceTicketDashboard(payload);
 
-    const compressedData = obj ? await this.utilService.GZip(obj) : null;
-    console.log("test")
-    return jsonResponseHandler(compressedData, message, req, res, () => {});
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
+      const compressedData = obj ? await this.utilService.GZip(obj) : null;
+      console.log("test")
+      return jsonResponseHandler(compressedData, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
   }
-}
 
 
 
 
-@Post('SupportTicketListingDownload')
-async supportTicketListingDownload(
-  @Body() payload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    const { obj, message }: any = await this.dashboardService.fetchTicketListingDownload(payload);
+  @Post('SupportTicketListingDownload')
+  async supportTicketListingDownload(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const { obj, message }: any = await this.dashboardService.fetchTicketListingDownload(payload);
 
-    const compressedData = obj ? await this.utilService.GZip(obj) : null;
-    console.log("test")
-    return jsonResponseHandler(compressedData, message, req, res, () => {});
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
+      const compressedData = obj ? await this.utilService.GZip(obj) : null;
+      console.log("test")
+      return jsonResponseHandler(compressedData, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
   }
-}
 
-@Post('UpdateNCIPDocket')
-async UpdateNCIPDocket(
-  @Body() ticketPayload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    const userEmail = ticketPayload?.userEmail?.trim();
+  @Post('UpdateNCIPDocket')
+  async UpdateNCIPDocket(
+    @Body() ticketPayload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const userEmail = ticketPayload?.userEmail?.trim();
 
-    const rmessage =
-      'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
+      const rmessage =
+        'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
 
-    res.status(200).json({
-      success: true,
-      message: rmessage,
-      data: [],
-    });
+      res.status(200).json({
+        success: true,
+        message: rmessage,
+        data: [],
+      });
 
-    setImmediate(async () => {
-      try {
-        await this.dashboardService.supportTicketSyncingUpdateForDocketNumberForTicketHistory();
-        console.log('✅ Docket update background process completed successfully.');
-      } catch (backgroundErr) {
-        console.error('❌ Background docket update failed:', backgroundErr);
-      }
-    });
+      setImmediate(async () => {
+        try {
+          await this.dashboardService.supportTicketSyncingUpdateForDocketNumberForTicketHistory();
+          console.log('✅ Docket update background process completed successfully.');
+        } catch (backgroundErr) {
+          console.error('❌ Background docket update failed:', backgroundErr);
+        }
+      });
 
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
   }
-}
- 
 
- @Post('UpdateCallingRecords')
+
+  @Post('UpdateCallingRecords')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -351,7 +351,7 @@ async UpdateNCIPDocket(
       });
     } catch (err) {
       console.error('Immediate error in UpdateCallingRecords:', err);
-      return jsonErrorHandler(err, req, res, () => {});
+      return jsonErrorHandler(err, req, res, () => { });
     }
   }
 
@@ -360,231 +360,231 @@ async UpdateNCIPDocket(
 
 
   @Post('UpdateTicketStatus')
-async updateTicketStatus(
-  @Body() ticketPayload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
+  async updateTicketStatus(
+    @Body() ticketPayload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const userEmail = ticketPayload?.userEmail?.trim();
+
+      const rmessage =
+        'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
+
+      res.status(200).json({
+        success: true,
+        message: rmessage,
+        data: [],
+      });
+
+      setImmediate(async () => {
+        try {
+          await this.dashboardService.updateStatusOfAllTickets(ticketPayload?.fromDate, ticketPayload?.toDate);
+          console.log('✅ UpdateTicketStatus background process completed successfully.');
+        } catch (backgroundErr) {
+          console.error('❌ UpdateTicketStatus update failed:', backgroundErr);
+        }
+      });
+
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
+  @Post('copyTicket')
+  async copyTicket(
+    @Body() ticketPayload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const userEmail = ticketPayload?.userEmail?.trim();
+      const prodCollectionName = ticketPayload?.prodCollectionName?.trim();
+      const uatCollectionName = ticketPayload?.uatCollectionName?.trim();
+      const fromDate = ticketPayload?.fromDate?.trim();
+      const toDate = ticketPayload?.toDate?.trim();
+      const chunkSize = Number(ticketPayload?.chunkSize) || 1000;
+
+      if (!prodCollectionName || !uatCollectionName || !fromDate || !toDate) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Missing required fields. Please provide prodCollectionName, uatCollectionName, fromDate, and toDate.",
+        });
+      }
+
+      const rmessage =
+        "Your request has been accepted and is being processed in the background. You will soon see the result logs in the system.";
+
+      res.status(200).json({
+        success: true,
+        message: rmessage,
+        data: [],
+      });
+
+      setImmediate(async () => {
+        try {
+          console.log("🚀 Background Job: Copying from Prod to UAT...");
+          console.log("📁 Source:", prodCollectionName);
+          console.log("📁 Destination:", uatCollectionName);
+          console.log("📅 Date Range:", fromDate, "→", toDate);
+          console.log("⚙️ Chunk Size:", chunkSize);
+
+          const resultMessage = await this.dashboardService.copyTicketListingFromProdToUAT(
+            prodCollectionName,
+            uatCollectionName,
+            fromDate,
+            toDate,
+            chunkSize
+          );
+
+          console.log("✅ Copy operation completed successfully:", resultMessage);
+        } catch (backgroundErr) {
+          console.error("❌ CopyTicket background process failed:", backgroundErr);
+        }
+      });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
+
+
+  @Post('SaveCDRFilePath')
+  async CDRFilePath(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const { obj, message }: any = await this.dashboardService.saveCDRFilesPaths(payload);
+
+      const compressedData = obj ? await this.utilService.GZip(obj) : null;
+      console.log("test")
+      return jsonResponseHandler(compressedData, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
+  @Post('GetNCIPUserRole')
+  async GetNCIPUserRole(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      const { obj, message }: any = await this.dashboardService.GetNCIPUserRole(payload);
+
+      const compressedData = obj ? await this.utilService.GZip(obj) : null;
+      console.log("test")
+      return jsonResponseHandler(compressedData, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
+
+  @Post('excelImport')
+  @UseInterceptors(FileInterceptor('file'))
+  async excelImport(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    try {
+      if (!file) return jsonErrorHandler({ message: "No file uploaded" }, req, res, () => { });
+
+      const payload = {
+        file: file.buffer,
+        collectionName: body.collectionName,
+        insertedBy: body.insertedBy || 'system',
+      };
+
+      jsonResponseHandler(
+        { message: 'Excel import started' },
+        'File received successfully',
+        req,
+        res,
+        () => { },
+      );
+
+      this.dashboardService.csvImportService(payload)
+        .then((result) => {
+          console.log('✅ Excel import completed:', result.message);
+        })
+        .catch((err) => {
+          console.error('❌ Excel import failed:', err?.message || err);
+        });
+
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
+
+  @Post('testBroker')
+  async testBrokerValue(
+    @Body() ticketPayload: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    console.log("🔥 Endpoint hit, payload:", ticketPayload);
+
     const userEmail = ticketPayload?.userEmail?.trim();
+
+    if (!userEmail) {
+      return {
+        rcode: 0,
+        rmessage: 'User Email is required',
+      };
+    }
+
+    console.log("📨 Sending to RabbitMQ...");
+    await this.testBroker.sendToQueueInfo(ticketPayload);
+    console.log("✅ Message sent to RabbitMQ");
 
     const rmessage =
       'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
 
-    res.status(200).json({
-      success: true,
-      message: rmessage,
-      data: [],
-    });
-
-    setImmediate(async () => {
-      try {
-        await this.dashboardService.updateStatusOfAllTickets(ticketPayload?.fromDate, ticketPayload?.toDate);
-        console.log('✅ UpdateTicketStatus background process completed successfully.');
-      } catch (backgroundErr) {
-        console.error('❌ UpdateTicketStatus update failed:', backgroundErr);
-      }
-    });
-
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
+    return jsonResponseHandler([], rmessage, req, res, () => { });
   }
-}
-
-@Post('copyTicket')
-async copyTicket(
-  @Body() ticketPayload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    const userEmail = ticketPayload?.userEmail?.trim();
-    const prodCollectionName = ticketPayload?.prodCollectionName?.trim();
-    const uatCollectionName = ticketPayload?.uatCollectionName?.trim();
-    const fromDate = ticketPayload?.fromDate?.trim();
-    const toDate = ticketPayload?.toDate?.trim();
-    const chunkSize = Number(ticketPayload?.chunkSize) || 1000;
-
-    if (!prodCollectionName || !uatCollectionName || !fromDate || !toDate) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Missing required fields. Please provide prodCollectionName, uatCollectionName, fromDate, and toDate.",
-      });
-    }
-
-    const rmessage =
-      "Your request has been accepted and is being processed in the background. You will soon see the result logs in the system.";
-
-    res.status(200).json({
-      success: true,
-      message: rmessage,
-      data: [],
-    });
-
-    setImmediate(async () => {
-      try {
-        console.log("🚀 Background Job: Copying from Prod to UAT...");
-        console.log("📁 Source:", prodCollectionName);
-        console.log("📁 Destination:", uatCollectionName);
-        console.log("📅 Date Range:", fromDate, "→", toDate);
-        console.log("⚙️ Chunk Size:", chunkSize);
-
-        const resultMessage = await this.dashboardService.copyTicketListingFromProdToUAT(
-          prodCollectionName,
-          uatCollectionName,
-          fromDate,
-          toDate,
-          chunkSize
-        );
-
-        console.log("✅ Copy operation completed successfully:", resultMessage);
-      } catch (backgroundErr) {
-        console.error("❌ CopyTicket background process failed:", backgroundErr);
-      }
-    });
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
-  }
-}
 
 
-
-@Post('SaveCDRFilePath')
-async CDRFilePath(
-  @Body() payload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    const { obj, message }: any = await this.dashboardService.saveCDRFilesPaths(payload);
-
-    const compressedData = obj ? await this.utilService.GZip(obj) : null;
-    console.log("test")
-    return jsonResponseHandler(compressedData, message, req, res, () => {});
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
-  }
-}
-
-@Post('GetNCIPUserRole')
-async GetNCIPUserRole(
-  @Body() payload: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response
-) {
-  try {
-    const { obj, message }: any = await this.dashboardService.GetNCIPUserRole(payload);
-
-    const compressedData = obj ? await this.utilService.GZip(obj) : null;
-    console.log("test")
-    return jsonResponseHandler(compressedData, message, req, res, () => {});
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
-  }
-}
-
-
- @Post('excelImport')
-@UseInterceptors(FileInterceptor('file')) 
-async excelImport(
-  @UploadedFile() file: Express.Multer.File,
-  @Body() body: any,
-  @Req() req: Request,
-  @Res({ passthrough: false }) res: Response,
-) {
-  try {
-    if (!file) return jsonErrorHandler({ message: "No file uploaded" }, req, res, () => {});
-
-    const payload = {
-      file: file.buffer,                 
-      collectionName: body.collectionName,
-      insertedBy: body.insertedBy || 'system',
-    };
-
-    jsonResponseHandler(
-      { message: 'Excel import started' },
-      'File received successfully',
-      req,
-      res,
-      () => {},
-    );
-
-    this.dashboardService.csvImportService(payload)
-      .then((result) => {
-        console.log('✅ Excel import completed:', result.message);
-      })
-      .catch((err) => {
-        console.error('❌ Excel import failed:', err?.message || err);
+  @Post('SyncAudioInfo')
+  async SyncAudioInfo(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    try {
+      res.status(202).json({
+        success: true,
+        message: 'Audio sync started. Processing in background.',
       });
 
-  } catch (err) {
-    return jsonErrorHandler(err, req, res, () => {});
-  }
-}
+      setImmediate(async () => {
+        try {
+          console.log('🚀 Background SyncAudioInfo started');
 
 
- @Post('testBroker')
-async testBrokerValue(
-  @Body() ticketPayload: any,
-  @Req() req: Request,
-  @Res({ passthrough: true }) res: Response,
-) {
-  console.log("🔥 Endpoint hit, payload:", ticketPayload);
-
-  const userEmail = ticketPayload?.userEmail?.trim();
-
-  if (!userEmail) {
-    return {
-      rcode: 0,
-      rmessage: 'User Email is required',
-    };
-  }
-
-  console.log("📨 Sending to RabbitMQ...");
-  await this.testBroker.sendToQueueInfo(ticketPayload);
-  console.log("✅ Message sent to RabbitMQ");
-
-  const rmessage =
-    'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.';
-
-  return jsonResponseHandler([], rmessage, req, res, () => {});
-}
-
-
-@Post('SyncAudioInfo')
-async SyncAudioInfo(
-  @Body() payload: any,
-  @Req() req: Request,
-  @Res() res: Response,
-) {
-  try {
-    res.status(202).json({
-      success: true,
-      message: 'Audio sync started. Processing in background.',
-    });
-
-    setImmediate(async () => {
-      try {
-        console.log('🚀 Background SyncAudioInfo started');
-
-    
           await this.dashboardService.syncAudioCall();
 
-      
-      } catch (bgErr) {
-        console.error('❌ Background SyncAudioInfo failed:', bgErr);
-      }
-    });
 
-  } catch (err) {
-    console.error('Immediate error in SyncAudioInfo:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to start audio sync',
-    });
+        } catch (bgErr) {
+          console.error('❌ Background SyncAudioInfo failed:', bgErr);
+        }
+      });
+
+    } catch (err) {
+      console.error('Immediate error in SyncAudioInfo:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to start audio sync',
+      });
+    }
   }
-}
 
 
 
@@ -605,12 +605,35 @@ async SyncAudioInfo(
     }
   }
 
+
+
+
+
+  @Post('ageingGrievance')
+  async AgeingGrievance(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    try {
+      let { data, message }: any = await this.dashboardService.AgeingGrievanceService(payload);
+
+      if (data) {
+        data = await this.utilService.GZip(data);
+      }
+
+      return jsonResponseHandler(data, message, req, res, () => { });
+    } catch (err) {
+      return jsonErrorHandler(err, req, res, () => { });
+    }
+  }
+
 }
 
- 
 
 
-  
+
+
 
 
 

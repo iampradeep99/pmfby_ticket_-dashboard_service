@@ -19,9 +19,7 @@ import { Sequelize } from 'sequelize-typescript';
 import { QueryTypes } from 'sequelize';
 import { MongoClient } from 'mongodb';
 import * as moment from "moment";
-// import { parse } from "csv-parse/sync";
-import { pipeline } from 'stream';
-// import { Readable } from "stream";
+
 
 import { parse } from "csv-parse";
 import { Readable } from "stream";
@@ -34,7 +32,6 @@ export class TicketDashboardService {
   public gcp = new GCPServices();
   logDir = path.join(__dirname, '..', 'logs');
 
-  // private redisWrapper: RedisWrapper;
 
   constructor(@Inject('MONGO_DB') private readonly db: Db, @Inject('SEQUELIZE') private readonly sequelize: Sequelize,
     private readonly redisWrapper: RedisWrapper, private readonly mailService: MailService,) {
@@ -364,9 +361,6 @@ export class TicketDashboardService {
     SPTicketHeaderID = Number(SPTicketHeaderID);
 
     const db = this.db;
-    //  this.AddIndexForSupportTickets(db);
-    // this.AddIndexForSupportTickets(db);
-
 
     if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
     if (!SPStateID) return { rcode: 0, rmessage: 'StateID Missing!' };
@@ -546,7 +540,6 @@ export class TicketDashboardService {
           TicketReOpenDate: 1,
           InsuranceCompany: 1,
           SchemeName: 1,
-          // Unwinded lookups
           ticketHistory: 1,
           claimInfo: 1,
           agentInfo: 1,
@@ -583,12 +576,9 @@ export class TicketDashboardService {
           "ticket_comment_journey": "$ticket_comment_journey"
         }
       },
-      // { $sort: { "Creation Date": -1 } },
-      // { $skip: (page - 1) * limit },
-      // { $limit: limit }
+
     ];
     console.log(JSON.stringify(pipeline), "test")
-    // return
     let results = await db.collection('SLA_KRPH_SupportTickets_Records').aggregate(pipeline, { allowDiskUse: true }).toArray();
 
     if (results.length === 0) {
@@ -1067,26 +1057,26 @@ export class TicketDashboardService {
       if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
     }
 
-//     if (SPFROMDATE || SPTODATE) {
-//       match.InsertDateTime = {};
+    //     if (SPFROMDATE || SPTODATE) {
+    //       match.InsertDateTime = {};
 
-//       if (SPFROMDATE) {
-//         // const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
-//         // match.InsertDateTime.$gte = start;
+    //       if (SPFROMDATE) {
+    //         // const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
+    //         // match.InsertDateTime.$gte = start;
 
-//         const start = new Date(`${SPFROMDATE}T00:00:00+05:30`);
-// match.InsertDateTime.$gte = start;
+    //         const start = new Date(`${SPFROMDATE}T00:00:00+05:30`);
+    // match.InsertDateTime.$gte = start;
 
-        
-//       }
 
-//       if (SPTODATE) {
-//         // const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
-//         // match.InsertDateTime.$lte = end;
-//         const end = new Date(`${SPTODATE}T23:59:59.999+05:30`);
-// match.InsertDateTime.$lte = end;
-//       }
-//     }
+    //       }
+
+    //       if (SPTODATE) {
+    //         // const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
+    //         // match.InsertDateTime.$lte = end;
+    //         const end = new Date(`${SPTODATE}T23:59:59.999+05:30`);
+    // match.InsertDateTime.$lte = end;
+    //       }
+    //     }
 
 
 
@@ -7256,11 +7246,11 @@ export class TicketDashboardService {
       if (viewTYP === "FILTER") {
         if (fromdate && toDate) {
 
-    //        if (SPFROMDATE || SPTODATE) {
-    //   match.InsertDateTime = {}
-    //   if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
-    //   if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
-    // }
+          //        if (SPFROMDATE || SPTODATE) {
+          //   match.InsertDateTime = {}
+          //   if (SPFROMDATE) match.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
+          //   if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
+          // }
 
 
           match.Created = {};
@@ -9402,6 +9392,373 @@ Your Automation System
       .replace(/\s+/g, " ")  // normalize spaces
       .trim();
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async AgeingGrievanceService(payload: any) {
+  try {
+    if (!payload || typeof payload !== "object") {
+      return {
+        data: [],
+        message: { msg: "Invalid request payload", code: "0" }
+      };
+    }
+
+    const { viewMode, objCommon } = payload;
+    const insertedUserID = objCommon?.insertedUserID;
+
+    if (!insertedUserID) {
+      return {
+        data: [],
+        message: { msg: "User Id is required", code: "0" }
+      };
+    }
+
+    const [userRes] = await Promise.all([
+      this.getSupportTicketUserDetail(insertedUserID)
+    ]);
+
+    if (!userRes?.responseDynamic) {
+      return {
+        data: [],
+        message: { msg: "User data not available", code: "0" }
+      };
+    }
+
+    const responseInfo = await new UtilService().unGZip(userRes.responseDynamic);
+    const item = (responseInfo.data as any)?.user?.[0];
+
+    if (!item) {
+      return {
+        data: [],
+        message: { msg: "User details not found", code: "0" }
+      };
+    }
+
+    const InsuranceCompanyID = item.InsuranceCompanyID
+      ? await this.convertStringToArray(item.InsuranceCompanyID)
+      : [];
+
+    const match: any = {
+      TicketStatusID: { $in: [109301, 109304] },
+      TicketHeaderID: 1
+    };
+
+    if (
+      viewMode === "Insurance" &&
+      Array.isArray(InsuranceCompanyID) &&
+      InsuranceCompanyID.length > 0
+    ) {
+      match.InsuranceCompanyID = { $in: InsuranceCompanyID };
+    }
+
+    const DAY = 86400000;
+
+   /*  const pipeline = [
+      { $match: match },
+      {
+        $addFields: {
+          safeInsertDate: {
+            $cond: [
+              { $eq: [{ $type: "$InsertDateTime" }, "date"] },
+              "$InsertDateTime",
+              { $toDate: "$InsertDateTime" }
+            ]
+          }
+        }
+      },
+      {
+        $addFields: {
+          ageInMs: {
+            $cond: [
+              { $ne: ["$safeInsertDate", null] },
+              { $subtract: ["$$NOW", "$safeInsertDate"] },
+              0
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$InsuranceCompanyID",
+          totalOpenTickets: { $sum: 1 },
+          bucket_0_3: {
+            $sum: { $cond: [{ $lte: ["$ageInMs", 3 * DAY] }, 1, 0] }
+          },
+          bucket_4_7: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: ["$ageInMs", 3 * DAY] },
+                    { $lte: ["$ageInMs", 7 * DAY] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          bucket_8_12: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: ["$ageInMs", 7 * DAY] },
+                    { $lte: ["$ageInMs", 12 * DAY] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          bucket_13_15: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: ["$ageInMs", 12 * DAY] },
+                    { $lte: ["$ageInMs", 15 * DAY] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          bucket_16_30: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: ["$ageInMs", 15 * DAY] },
+                    { $lte: ["$ageInMs", 30 * DAY] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          bucket_more_than_30: {
+            $sum: { $cond: [{ $gt: ["$ageInMs", 30 * DAY] }, 1, 0] }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: "KRPH_InsuranceMaster",
+          localField: "_id",
+          foreignField: "InsuranceMasterID",
+          as: "company"
+        }
+      },
+      {
+        $unwind: {
+          path: "$company",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          InsuranceCompanyID: "$_id",
+          InsuranceCompanyName: {
+            $ifNull: ["$company.InsuranceMasterName", "Unknown"]
+          },
+          totalOpenTickets: 1,
+          bucket_0_3: 1,
+          bucket_4_7: 1,
+          bucket_8_12: 1,
+          bucket_13_15: 1,
+          bucket_16_30: 1,
+          bucket_more_than_30: 1
+        }
+      }
+    ]; */
+
+    const pipeline = [
+  { $match: match },
+
+  {
+    $addFields: {
+      safeInsertDate: {
+        $cond: [
+          { $eq: [{ $type: "$InsertDateTime" }, "date"] },
+          "$InsertDateTime",
+          {
+            $cond: [
+              { $ne: ["$InsertDateTime", null] },
+              { $toDate: "$InsertDateTime" },
+              null
+            ]
+          }
+        ]
+      }
+    }
+  },
+
+  {
+    $addFields: {
+      ageInDays: {
+        $cond: [
+          { $ne: ["$safeInsertDate", null] },
+          {
+            $dateDiff: {
+              startDate: "$safeInsertDate",
+              endDate: "$$NOW",
+              unit: "day"
+            }
+          },
+          0
+        ]
+      }
+    }
+  },
+
+  {
+    $group: {
+      _id: "$InsuranceCompanyID",
+
+      totalOpenTickets: { $sum: 1 },
+
+      bucket_0_3: {
+        $sum: { $cond: [{ $lte: ["$ageInDays", 3] }, 1, 0] }
+      },
+
+      bucket_4_7: {
+        $sum: {
+          $cond: [
+            {
+              $and: [
+                { $gte: ["$ageInDays", 4] },
+                { $lte: ["$ageInDays", 7] }
+              ]
+            },
+            1,
+            0
+          ]
+        }
+      },
+
+      bucket_8_12: {
+        $sum: {
+          $cond: [
+            {
+              $and: [
+                { $gte: ["$ageInDays", 8] },
+                { $lte: ["$ageInDays", 12] }
+              ]
+            },
+            1,
+            0
+          ]
+        }
+      },
+
+      bucket_13_15: {
+        $sum: {
+          $cond: [
+            {
+              $and: [
+                { $gte: ["$ageInDays", 13] },
+                { $lte: ["$ageInDays", 15] }
+              ]
+            },
+            1,
+            0
+          ]
+        }
+      },
+
+      bucket_16_30: {
+        $sum: {
+          $cond: [
+            {
+              $and: [
+                { $gte: ["$ageInDays", 16] },
+                { $lte: ["$ageInDays", 30] }
+              ]
+            },
+            1,
+            0
+          ]
+        }
+      },
+
+      bucket_more_than_30: {
+        $sum: { $cond: [{ $gt: ["$ageInDays", 30] }, 1, 0] }
+      }
+    }
+  },
+
+  {
+    $lookup: {
+      from: "KRPH_InsuranceMaster",
+      localField: "_id",
+      foreignField: "InsuranceMasterID",
+      as: "company"
+    }
+  },
+
+  {
+    $unwind: {
+      path: "$company",
+      preserveNullAndEmptyArrays: true
+    }
+  },
+
+  {
+    $project: {
+      _id: 0,
+      InsuranceCompanyID: "$_id",
+      InsuranceCompanyName: {
+        $ifNull: ["$company.InsuranceMasterName", "Unknown"]
+      },
+      totalOpenTickets: 1,
+      bucket_0_3: 1,
+      bucket_4_7: 1,
+      bucket_8_12: 1,
+      bucket_13_15: 1,
+      bucket_16_30: 1,
+      bucket_more_than_30: 1
+    }
+  }
+];
+
+    
+    const aggResult = await this.db
+      .collection("SLA_Ticket_listing")
+      .aggregate(pipeline, { allowDiskUse: true })
+      .toArray();
+
+    return {
+      data: aggResult,
+      message: { msg: "Dashboard data fetched successfully", code: "1" }
+    };
+  } catch (error) {
+    console.error("AgeingGrievanceService Error:", error);
+    return {
+      data: [],
+      message: { msg: "Internal server error", code: "0" }
+    };
+  }
+}
+
+
+
 
 
 }
