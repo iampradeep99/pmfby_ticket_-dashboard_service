@@ -1137,7 +1137,6 @@ async getToken() {
       async AssignTicketService(payload: any) {
   const {
     ticketIds,
-
     assignedBy,
     assignedByName,
     assignedTo,
@@ -1187,7 +1186,6 @@ async getToken() {
 
       const currentAssignment = await currentCol.findOne({ SupportTicketID: ticketId });
 
-      // 🚫 Prevent assigning to same user again
       if (currentAssignment?.assignedTo === assignedTo) {
         results.push({
           ticketId,
@@ -1220,13 +1218,14 @@ async getToken() {
         PreviousRoleName: roleMap[previousRoleName]
       };
 
-      // 1️⃣ HISTORY (AUDIT)
       await historyCol.insertOne({
         ...assignmentData,
         CreatedDate: now
       });
 
-      // 2️⃣ CURRENT OWNER (SINGLE SOURCE OF TRUTH)
+
+     await this.InsertionIntoSql(assignmentData);
+
       await currentCol.updateOne(
         { SupportTicketID: ticketId },
         {
@@ -1237,6 +1236,8 @@ async getToken() {
         },
         { upsert: true }
       );
+
+       await this.InsertionIntoSqlHistory(assignmentData);
 
       results.push({
         ticketId,
@@ -1278,6 +1279,95 @@ async getToken() {
     }
   };
 }
+
+
+async InsertionIntoSql(payload: any) {
+  const query = `
+    INSERT INTO krph_ticket_assignment (
+      SupportTicketID,
+      AssigneRoleName,
+      AssignedDate,
+      AssignedDistrictID,
+      AssigneeMobileNo,
+      AssigneeRoleID,
+      AssigneeStateID,
+      InsuranceCompanyId,
+      InsuranceCompanyName,
+      PreviousRoleId,
+      PreviousRoleName,
+      SupportTicketNo,
+      TicketComment,
+      TicketStatus,
+      TicketStatusID,
+      UpdatedDate,
+      AssignToName,
+      AssignedBy,
+      AssignedByName,
+      AssignedTo
+    ) VALUES (
+      :SupportTicketID,
+      :AssigneRoleName,
+      :AssignedDate,
+      :AssignedDistrictID,
+      :AssigneeMobileNo,
+      :AssigneeRoleID,
+      :AssigneeStateID,
+      :InsuranceCompanyId,
+      :InsuranceCompanyName,
+      :PreviousRoleId,
+      :PreviousRoleName,
+      :SupportTicketNo,
+      :TicketComment,
+      :TicketStatus,
+      :TicketStatusID,
+      :UpdatedDate,
+      :AssignToName,
+      :AssignedBy,
+      :AssignedByName,
+      :AssignedTo
+    )
+  `;
+
+  await this.sequelize.query(query, { replacements: payload });
+}
+
+
+async InsertionIntoSqlHistory(payload: any) {
+  const query = `
+    INSERT INTO krph_ticket_assignment_history (
+      SupportTicketID,
+      SupportTicketNo,
+      AssignedRoleId,
+      AssignedRoleName,
+      AssignedTo,
+      AssignedToName,
+      AssignedBy,
+      AssignedByName,
+      AssignedDate,
+      TicketStatus,
+      TicketStatusID,
+      TicketComment,
+      CreatedDate
+    ) VALUES (
+      :SupportTicketID,
+      :SupportTicketNo,
+      :AssigneeRoleID,
+      :AssigneRoleName,
+      :AssignedTo,
+      :AssignToName,
+      :AssignedBy,
+      :AssignedByName,
+      :AssignedDate,
+      :TicketStatus,
+      :TicketStatusID,
+      :TicketComment,
+      NOW()
+    )
+  `;
+
+  await this.sequelize.query(query, { replacements: payload });
+}
+
 
 
 
