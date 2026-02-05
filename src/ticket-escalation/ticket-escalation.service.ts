@@ -1338,7 +1338,7 @@ async getToken() {
       };
 
       const query = `
-      INSERT INTO krishi_rakshak_pro.krph_ticket_assignment (
+      INSERT INTO krph_uat.krph_ticket_assignment (
         SupportTicketID,
         AssigneRoleName,
         AssignedDate,
@@ -1423,7 +1423,7 @@ async getToken() {
       };
 
       const query = `
-      INSERT INTO krishi_rakshak_pro.krph_ticket_assignment_history (
+      INSERT INTO krph_uat.krph_ticket_assignment_history (
         SupportTicketID,
         AssigneRoleName,
         AssignedDate,
