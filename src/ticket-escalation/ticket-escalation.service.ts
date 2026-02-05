@@ -975,162 +975,10 @@ async getToken() {
 
 
 
-/*   async AssignTicketService(payload: any) {
-    const {
-      ticketIds,
-      assignedBy,
-      assignedByName,
-      assignedTo,
-      assignToName,
-      roleName,
-      stateID,
-      mobileNo,
-      districtID,
-      ticketDescription
-    } = payload || {};
-
-    if (!ticketIds) {
-      return { data: {}, message: { msg: "ticketIds is required.", code: "0" } };
-    }
-
-    const roleId = roleName;
-
-    const ticketIdArray = ticketIds
-      .split(",")
-      .map(id => id.trim())
-      .filter(Boolean);
-
-    if (!ticketIdArray.length) {
-      return { data: {}, message: { msg: "No valid ticket IDs provided.", code: "0" } };
-    }
-
-    const ticketCollection = this.db.collection("SLA_Ticket_listing");
-    const assignHistoryCollection = this.db.collection("Ticket_Assignment_History");
-    const currentAssignCollection = this.db.collection("Ticket_Assignment");
-
-    const now = new Date();
-    const results: any[] = [];
-
-    let assignedRoleName = "";
-    if (roleId == 1) assignedRoleName = "STATE_GOVT_ADMIN";
-    if (roleId == 2) assignedRoleName = "STATE_GOVT_USER";
-    if (roleId == 3) assignedRoleName = "DEPUTY_DIRECTOR";
-
-    for (const ticketIdStr of ticketIdArray) {
-      const ticketId = Number(ticketIdStr);
-
-      if (isNaN(ticketId)) {
-        results.push({ ticketId: ticketIdStr, status: "Failed", reason: "Invalid ticket ID" });
-        continue;
-      }
-
-      try {
-        const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
-        if (!ticket) {
-          results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
-          continue;
-        }
-
-        const currentAssignment = await currentAssignCollection.findOne({
-          SupportTicketID: ticketId
-        });
-
-        if (currentAssignment && currentAssignment.assignedTo === assignedTo) {
-          results.push({
-            ticketId,
-            ticketNo: ticket.SupportTicketNo,
-            status: "Failed",
-            reason: "Ticket already assigned to this user"
-          });
-          continue;
-        }
-
-        const assignmentData = {
-          SupportTicketID: ticketId,
-          SupportTicketNo: ticket.SupportTicketNo,
-          TicketStatusID: ticket.TicketStatusID || null,
-          TicketStatus: ticket.TicketStatus || null,
-          assignedBy,
-          assignedByName,
-          assignedTo,
-          assignToName,
-          AssignedDate: now,
-          AssigneeStateID: stateID,
-          AssignedDistrictID: districtID,
-          AssigneeMobileNo: mobileNo,
-          AssigneRoleName: assignedRoleName,
-          AssigneeRoleID: roleId,
-          InsuranceCompanyId: ticket?.InsuranceCompanyID,
-          InsuranceCompanyName: ticket?.InsuranceCompany,
-          TicketComment:ticketDescription
-
-        };
-
-       let insertedRecords =  await assignHistoryCollection.insertOne({
-          ...assignmentData,
-          CreatedDate: now
-        });
-      
-
-        await currentAssignCollection.updateOne(
-          { SupportTicketID: ticketId },
-          {
-            $set: {
-              ...assignmentData,
-              UpdatedDate: now
-            }
-          },
-          { upsert: true }
-        );
-
-        results.push({
-          ticketId,
-          ticketNo: ticket.SupportTicketNo,
-          status: "Success",
-          reason: `Ticket ${ticket.SupportTicketNo} assigned successfully`
-        });
-
-      } catch (err: any) {
-        results.push({
-          ticketId,
-          status: "Error",
-          reason: err.message || "Unexpected error"
-        });
-      }
-    }
-
-    const successCount = results.filter(r => r.status === "Success").length;
-    const failedCount = results.length - successCount;
-
-    for (const item of results) {
-      if (item.status === "Success") {
-        await this.sendSMSToUser({
-          ticket: item.ticketNo,
-          mobileNO: "916386236314",
-          Name: assignToName
-        });
-      }
-    }
-
-    const summary = {
-      totalTickets: results.length,
-      successCount,
-      failedCount,
-      message:
-        successCount === results.length
-          ? "All tickets assigned successfully."
-          : successCount === 0
-            ? "All tickets failed."
-            : `${successCount} assigned, ${failedCount} failed.`
-    };
-
-    return successCount === 0
-      ? { data: summary, message: { msg: "All Failed", code: "0" } }
-      : { data: summary, message: { msg: "Success", code: "1" } };
-  } */
 
 
-      async AssignTicketService(payload: any) {
+
+/*       async AssignTicketService(payload: any) {
   const {
     ticketIds,
 
@@ -1263,9 +1111,374 @@ async getToken() {
       code: successCount ? "1" : "0"
     }
   };
-}
+} */
 
 
+
+
+    async AssignTicketService(payload: any) {
+    try {
+      const {
+        ticketIds,
+        assignedBy,
+        assignedByName,
+        assignedTo,
+        assignToName,
+        roleName,
+        previousRoleName,
+        stateID,
+        mobileNo,
+        districtID,
+        ticketDescription
+      } = payload || {};
+
+      if (!ticketIds) {
+        return { data: {}, message: { msg: "ticketIds is required.", code: "0" } };
+      }
+
+      const ticketIdArray = ticketIds
+        .split(",")
+        .map(id => Number(id.trim()))
+        .filter(id => !isNaN(id));
+
+      if (!ticketIdArray.length) {
+        return { data: {}, message: { msg: "No valid ticket IDs provided.", code: "0" } };
+      }
+
+      const ticketCollection = this.db.collection("SLA_Ticket_listing");
+      const historyCol = this.db.collection("Ticket_Assignment_History");
+      const currentCol = this.db.collection("Ticket_Assignment");
+
+      const now = new Date();
+      const results: any[] = [];
+
+      const roleMap: any = {
+        0: "INSURANCE_COMPANY",
+        1: "STATE_GOVT_ADMIN",
+        2: "STATE_GOVT_USER",
+        3: "DEPUTY_DIRECTOR",
+      };
+
+      for (const ticketId of ticketIdArray) {
+        try {
+          const ticket = await ticketCollection.findOne({ SupportTicketID: ticketId });
+          if (!ticket) {
+            results.push({ ticketId, status: "Failed", reason: "Ticket not found" });
+            continue;
+          }
+
+          const currentAssignment = await currentCol.findOne({ SupportTicketID: ticketId });
+
+          if (currentAssignment?.assignedTo === assignedTo) {
+            results.push({
+              ticketId,
+              ticketNo: ticket.SupportTicketNo,
+              status: "Failed",
+              reason: "Ticket already assigned to this user"
+            });
+            continue;
+          }
+
+          const assignmentData = {
+            SupportTicketID: ticketId,
+            SupportTicketNo: ticket.SupportTicketNo,
+            TicketStatusID: ticket.TicketStatusID || null,
+            TicketStatus: ticket.TicketStatus || null,
+            assignedBy,
+            assignedByName,
+            assignedTo,
+            assignToName,
+            AssignedDate: now,
+            AssigneeStateID: stateID || "",
+            AssignedDistrictID: districtID || "",
+            AssigneeMobileNo: mobileNo || "",
+            AssigneRoleName: roleMap[roleName] || "",
+            AssigneeRoleID: roleName,
+            InsuranceCompanyId: ticket?.InsuranceCompanyID,
+            InsuranceCompanyName: ticket?.InsuranceCompany,
+            TicketComment: ticketDescription || "",
+            PreviousRoleId: previousRoleName,
+            PreviousRoleName: roleMap[previousRoleName]
+          };
+
+          await historyCol.insertOne({
+            ...assignmentData,
+            CreatedDate: now
+          });
+
+          let SqlAssignpayload = {
+            SupportTicketID: ticketId,
+            SupportTicketNo: ticket.SupportTicketNo,
+            TicketStatusID: ticket.TicketStatusID || null,
+            TicketStatus: ticket.TicketStatus || null,
+            assignedBy,
+            assignedByName,
+            assignedTo,
+            assignToName,
+            AssignedDate: now,
+            UpdatedDate: now,
+            AssigneeStateID: stateID || "",
+            AssignedDistrictID: districtID || "",
+            AssigneeMobileNo: mobileNo || "",
+            AssigneRoleName: roleMap[roleName] || "",
+            AssigneeRoleID: roleName,
+            InsuranceCompanyId: ticket?.InsuranceCompanyID,
+            InsuranceCompanyName: ticket?.InsuranceCompany,
+            TicketComment: ticketDescription || "",
+            PreviousRoleId: previousRoleName,
+            PreviousRoleName: roleMap[previousRoleName]
+          }
+
+
+
+
+
+          await currentCol.updateOne(
+            { SupportTicketID: ticketId },
+            {
+              $set: {
+                ...assignmentData,
+                UpdatedDate: now
+              }
+            },
+            { upsert: true }
+          );
+
+
+          const transaction = await this.sequelize.transaction();
+
+          try {
+            await this.InsertionIntoSql(SqlAssignpayload, transaction);
+            await this.InsertionIntoSqlHistory(SqlAssignpayload, transaction);
+
+            await transaction.commit();
+          } catch (err) {
+            await transaction.rollback();
+            throw err;
+          }
+
+
+
+          results.push({
+            ticketId,
+            ticketNo: ticket.SupportTicketNo,
+            status: "Success",
+            reason: "Assigned successfully"
+          });
+
+        } catch (err: any) {
+          results.push({
+            ticketId,
+            status: "Error",
+            reason: err.message || "Unexpected error"
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.status === "Success").length;
+
+      for (const item of results) {
+        if (item.status === "Success") {
+          await this.sendSMSToUser({
+            ticket: item.ticketNo,
+            mobileNO: "916386236314",
+            Name: assignToName
+          });
+        }
+      }
+
+      return {
+        data: {
+          totalTickets: results.length,
+          successCount,
+          failedCount: results.length - successCount
+        },
+        message: {
+          msg: successCount ? "Success" : "All Failed",
+          code: successCount ? "1" : "0"
+        }
+      };
+    } catch (err) {
+      console.log(err)
+    }
+  }
+
+
+
+  async InsertionIntoSql(payload: any, transaction?: any) {
+    console.log(payload, "ss");
+
+    try {
+      const formattedPayload = {
+        SupportTicketID: payload.SupportTicketID,
+        SupportTicketNo: payload.SupportTicketNo,
+        TicketStatusID: payload.TicketStatusID,
+        TicketStatus: payload.TicketStatus,
+
+        AssignedBy: payload.assignedBy,
+        AssignedByName: payload.assignedByName,
+        AssignedTo: payload.assignedTo,
+        AssignToName: payload.assignToName,
+
+        AssignedDate: payload.AssignedDate,
+        UpdatedDate: payload.UpdatedDate,
+
+        AssigneeStateID: payload.AssigneeStateID,
+        AssignedDistrictID: payload.AssignedDistrictID || null,
+        AssigneeMobileNo: payload.AssigneeMobileNo,
+        AssigneRoleName: payload.AssigneRoleName,
+        AssigneeRoleID: payload.AssigneeRoleID,
+
+        InsuranceCompanyId: payload.InsuranceCompanyId,
+        InsuranceCompanyName: payload.InsuranceCompanyName,
+
+        TicketComment: payload.TicketComment,
+        PreviousRoleId: payload.PreviousRoleId,
+        PreviousRoleName: payload.PreviousRoleName
+      };
+
+      const query = `
+      INSERT INTO krishi_rakshak_pro.krph_ticket_assignment (
+        SupportTicketID,
+        AssigneRoleName,
+        AssignedDate,
+        AssignedDistrictID,
+        AssigneeMobileNo,
+        AssigneeRoleID,
+        AssigneeStateID,
+        InsuranceCompanyId,
+        InsuranceCompanyName,
+        PreviousRoleId,
+        PreviousRoleName,
+        SupportTicketNo,
+        TicketComment,
+        TicketStatus,
+        TicketStatusID,
+        UpdatedDate,
+        AssignToName,
+        AssignedBy,
+        AssignedByName,
+        AssignedTo
+      ) VALUES (
+        :SupportTicketID,
+        :AssigneRoleName,
+        :AssignedDate,
+        :AssignedDistrictID,
+        :AssigneeMobileNo,
+        :AssigneeRoleID,
+        :AssigneeStateID,
+        :InsuranceCompanyId,
+        :InsuranceCompanyName,
+        :PreviousRoleId,
+        :PreviousRoleName,
+        :SupportTicketNo,
+        :TicketComment,
+        :TicketStatus,
+        :TicketStatusID,
+        :UpdatedDate,
+        :AssignToName,
+        :AssignedBy,
+        :AssignedByName,
+        :AssignedTo
+      );
+    `;
+
+      await this.sequelize.query(query, {
+        replacements: formattedPayload,
+        type: QueryTypes.INSERT,
+        transaction
+      });
+
+    } catch (error) {
+      console.error('InsertionIntoSql Error:', error);
+      throw error;
+    }
+  }
+
+
+
+  async InsertionIntoSqlHistory(payload: any, transaction?: any) {
+    try {
+      const formattedPayload = {
+        SupportTicketID: payload.SupportTicketID,
+        AssigneRoleName: payload.AssigneRoleName,
+        AssignedDate: payload.AssignedDate,
+        AssignedDistrictID: payload.AssignedDistrictID || null,
+        AssigneeMobileNo: payload.AssigneeMobileNo,
+        AssigneeRoleID: payload.AssigneeRoleID,
+        AssigneeStateID: payload.AssigneeStateID,
+        InsuranceCompanyId: payload.InsuranceCompanyId,
+        InsuranceCompanyName: payload.InsuranceCompanyName,
+        PreviousRoleId: payload.PreviousRoleId,
+        PreviousRoleName: payload.PreviousRoleName,
+        SupportTicketNo: payload.SupportTicketNo,
+        TicketComment: payload.TicketComment,
+        TicketStatus: payload.TicketStatus,
+        TicketStatusID: payload.TicketStatusID,
+        UpdatedDate: payload.UpdatedDate,
+        AssignToName: payload.assignToName,
+        AssignedBy: payload.assignedBy,
+        AssignedByName: payload.assignedByName,
+        AssignedTo: payload.assignedTo
+      };
+
+      const query = `
+      INSERT INTO krishi_rakshak_pro.krph_ticket_assignment_history (
+        SupportTicketID,
+        AssigneRoleName,
+        AssignedDate,
+        AssignedDistrictID,
+        AssigneeMobileNo,
+        AssigneeRoleID,
+        AssigneeStateID,
+        InsuranceCompanyId,
+        InsuranceCompanyName,
+        PreviousRoleId,
+        PreviousRoleName,
+        SupportTicketNo,
+        TicketComment,
+        TicketStatus,
+        TicketStatusID,
+        UpdatedDate,
+        AssignToName,
+        AssignedBy,
+        AssignedByName,
+        AssignedTo
+      ) VALUES (
+        :SupportTicketID,
+        :AssigneRoleName,
+        :AssignedDate,
+        :AssignedDistrictID,
+        :AssigneeMobileNo,
+        :AssigneeRoleID,
+        :AssigneeStateID,
+        :InsuranceCompanyId,
+        :InsuranceCompanyName,
+        :PreviousRoleId,
+        :PreviousRoleName,
+        :SupportTicketNo,
+        :TicketComment,
+        :TicketStatus,
+        :TicketStatusID,
+        :UpdatedDate,
+        :AssignToName,
+        :AssignedBy,
+        :AssignedByName,
+        :AssignedTo
+      );
+    `;
+
+      await this.sequelize.query(query, {
+        replacements: formattedPayload,
+        type: QueryTypes.INSERT,
+        transaction
+      });
+
+    } catch (error) {
+      console.error('InsertionIntoSqlHistory Error:', error);
+      throw error;
+    }
+  }
 
   async sendSMSToUser(payload) {
     try {
@@ -1292,6 +1505,7 @@ async getToken() {
           WhatsAppReferenceNo: '',
           TemplateID: templateID,
           MobileNo: payload.mobileNO,
+          createdAt: new Date()   // ✅ current timestamp
         }
         await this.db.collection(collection).insertOne(payloadForSms)
 
