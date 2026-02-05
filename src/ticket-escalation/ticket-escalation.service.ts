@@ -1224,9 +1224,31 @@ export class TicketEscalationService {
           CreatedDate: now
         });
 
+        let SqlAssignpayload = {
+            SupportTicketID: ticketId,
+          SupportTicketNo: ticket.SupportTicketNo,
+          TicketStatusID: ticket.TicketStatusID || null,
+          TicketStatus: ticket.TicketStatus || null,
+          assignedBy,
+          assignedByName,
+          assignedTo,
+          assignToName,
+          AssignedDate: now,
+          UpdatedDate: now,
+          AssigneeStateID: stateID || "",
+          AssignedDistrictID: districtID || "",
+          AssigneeMobileNo: mobileNo || "",
+          AssigneRoleName: roleMap[roleName] || "",
+          AssigneeRoleID: roleName,
+          InsuranceCompanyId: ticket?.InsuranceCompanyID,
+          InsuranceCompanyName: ticket?.InsuranceCompany,
+          TicketComment: ticketDescription || "",
+          PreviousRoleId: previousRoleName,
+          PreviousRoleName: roleMap[previousRoleName]
+        }
 
         try {
-          await this.InsertionIntoSql(assignmentData);
+          await this.InsertionIntoSql(SqlAssignpayload);
         } catch (err) {
           console.log(err)
         }
@@ -1245,7 +1267,7 @@ export class TicketEscalationService {
 
 
         try {
-          await this.InsertionIntoSqlHistory(assignmentData);
+          await this.InsertionIntoSqlHistory(SqlAssignpayload);
         } catch (err) {
           console.log(err)
         }
