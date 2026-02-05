@@ -1323,9 +1323,39 @@ export class TicketEscalationService {
 
 
 
-  async InsertionIntoSql(payload: any, transaction?: any) {
-    try {
-      const query = `
+async InsertionIntoSql(payload: any, transaction?: any) {
+  console.log(payload, "ss");
+
+  try {
+    const formattedPayload = {
+      SupportTicketID: payload.SupportTicketID,
+      SupportTicketNo: payload.SupportTicketNo,
+      TicketStatusID: payload.TicketStatusID,
+      TicketStatus: payload.TicketStatus,
+
+      AssignedBy: payload.assignedBy,
+      AssignedByName: payload.assignedByName,
+      AssignedTo: payload.assignedTo,
+      AssignToName: payload.assignToName,
+
+      AssignedDate: payload.AssignedDate,
+      UpdatedDate: payload.UpdatedDate,
+
+      AssigneeStateID: payload.AssigneeStateID,
+      AssignedDistrictID: payload.AssignedDistrictID || null,
+      AssigneeMobileNo: payload.AssigneeMobileNo,
+      AssigneRoleName: payload.AssigneRoleName,
+      AssigneeRoleID: payload.AssigneeRoleID,
+
+      InsuranceCompanyId: payload.InsuranceCompanyId,
+      InsuranceCompanyName: payload.InsuranceCompanyName,
+
+      TicketComment: payload.TicketComment,
+      PreviousRoleId: payload.PreviousRoleId,
+      PreviousRoleName: payload.PreviousRoleName
+    };
+
+    const query = `
       INSERT INTO krishi_rakshak_pro.krph_ticket_assignment (
         SupportTicketID,
         AssigneRoleName,
@@ -1368,67 +1398,107 @@ export class TicketEscalationService {
         :AssignedBy,
         :AssignedByName,
         :AssignedTo
-      )
+      );
     `;
 
-      await this.sequelize.query(query, {
-        replacements: payload,
-        type: QueryTypes.INSERT,
-        transaction
-      });
+    await this.sequelize.query(query, {
+      replacements: formattedPayload,
+      type: QueryTypes.INSERT,
+      transaction
+    });
 
-    } catch (error) {
-      console.error('InsertionIntoSql Error:', error);
-      throw error;
-    }
+  } catch (error) {
+    console.error('InsertionIntoSql Error:', error);
+    throw error;
   }
+}
 
 
-  async InsertionIntoSqlHistory(payload: any, transaction?: any) {
-    try {
-      const query = `
+
+async InsertionIntoSqlHistory(payload: any, transaction?: any) {
+  try {
+    const formattedPayload = {
+      SupportTicketID: payload.SupportTicketID,
+      AssigneRoleName: payload.AssigneRoleName,
+      AssignedDate: payload.AssignedDate,
+      AssignedDistrictID: payload.AssignedDistrictID || null,
+      AssigneeMobileNo: payload.AssigneeMobileNo,
+      AssigneeRoleID: payload.AssigneeRoleID,
+      AssigneeStateID: payload.AssigneeStateID,
+      InsuranceCompanyId: payload.InsuranceCompanyId,
+      InsuranceCompanyName: payload.InsuranceCompanyName,
+      PreviousRoleId: payload.PreviousRoleId,
+      PreviousRoleName: payload.PreviousRoleName,
+      SupportTicketNo: payload.SupportTicketNo,
+      TicketComment: payload.TicketComment,
+      TicketStatus: payload.TicketStatus,
+      TicketStatusID: payload.TicketStatusID,
+      UpdatedDate: payload.UpdatedDate,
+      AssignToName: payload.assignToName,
+      AssignedBy: payload.assignedBy,
+      AssignedByName: payload.assignedByName,
+      AssignedTo: payload.assignedTo
+    };
+
+    const query = `
       INSERT INTO krishi_rakshak_pro.krph_ticket_assignment_history (
         SupportTicketID,
-        SupportTicketNo,
-        AssignedRoleId,
-        AssignedRoleName,
-        AssignedTo,
-        AssignedToName,
-        AssignedBy,
-        AssignedByName,
+        AssigneRoleName,
         AssignedDate,
+        AssignedDistrictID,
+        AssigneeMobileNo,
+        AssigneeRoleID,
+        AssigneeStateID,
+        InsuranceCompanyId,
+        InsuranceCompanyName,
+        PreviousRoleId,
+        PreviousRoleName,
+        SupportTicketNo,
+        TicketComment,
         TicketStatus,
         TicketStatusID,
-        TicketComment,
-        CreatedDate
+        UpdatedDate,
+        AssignToName,
+        AssignedBy,
+        AssignedByName,
+        AssignedTo
       ) VALUES (
         :SupportTicketID,
-        :SupportTicketNo,
-        :AssigneeRoleID,
         :AssigneRoleName,
-        :AssignedTo,
+        :AssignedDate,
+        :AssignedDistrictID,
+        :AssigneeMobileNo,
+        :AssigneeRoleID,
+        :AssigneeStateID,
+        :InsuranceCompanyId,
+        :InsuranceCompanyName,
+        :PreviousRoleId,
+        :PreviousRoleName,
+        :SupportTicketNo,
+        :TicketComment,
+        :TicketStatus,
+        :TicketStatusID,
+        :UpdatedDate,
         :AssignToName,
         :AssignedBy,
         :AssignedByName,
-        :AssignedDate,
-        :TicketStatus,
-        :TicketStatusID,
-        :TicketComment,
-        NOW()
-      )
+        :AssignedTo
+      );
     `;
 
-      await this.sequelize.query(query, {
-        replacements: payload,
-        type: QueryTypes.INSERT,
-        transaction
-      });
+    await this.sequelize.query(query, {
+      replacements: formattedPayload,
+      type: QueryTypes.INSERT,
+      transaction
+    });
 
-    } catch (error) {
-      console.error('InsertionIntoSqlHistory Error:', error);
-      throw error;
-    }
+  } catch (error) {
+    console.error('InsertionIntoSqlHistory Error:', error);
+    throw error;
   }
+}
+
+
 
 
 
