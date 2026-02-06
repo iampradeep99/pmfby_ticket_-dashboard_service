@@ -1511,8 +1511,9 @@ export class TicketEscalationService {
 
       let customTemplate = `Dear ${payload?.Name}, Grievance Ticket Number ${payload?.ticket} has been assigned to you for review and action. Please log in to the system and proceed as per the prescribed timelines. Portal: https://pmfby.gov.in/krph Regards CSC SPV/Ministry of Agriculture & Farmers Welfare Government of India`;
       let definedTemplate = await this.GetSingleUnicodeHex(customTemplate)
+      let mobileNumber = this.normalizeMobileNumber(payload.mobileNO)
       
-      const response = await axios.post(`https://bulksmsapi.vispl.in/?username=cscetrnapi3&password=csce_123&messageType=unicode&mobile=${payload.mobileNO}&senderId=CSCSPV&ContentID=${templateID}&EntityID=1301157363501533886&message=${definedTemplate}`);
+      const response = await axios.post(`https://bulksmsapi.vispl.in/?username=cscetrnapi3&password=csce_123&messageType=unicode&mobile=${mobileNumber}&senderId=CSCSPV&ContentID=${templateID}&EntityID=1301157363501533886&message=${definedTemplate}`);
 
       if (response.status === 200) {
         const val = response.data.split('#');
@@ -1527,8 +1528,8 @@ export class TicketEscalationService {
           SMSReferenceNo: val[2] || '',
           WhatsAppReferenceNo: '',
           TemplateID: templateID,
-          MobileNo: payload.mobileNO,
-          createdAt: new Date()   // ✅ current timestamp
+          MobileNo: mobileNumber,
+          createdAt: new Date()   
         };
         await this.db.collection(collection).insertOne(payloadForSms)
 
@@ -1539,6 +1540,19 @@ export class TicketEscalationService {
       console.log(err);
     }
   }
+
+
+  async normalizeMobileNumber(mobile) {
+  if (!mobile) return '';
+
+  let mobileNo = mobile.toString().replace(/\D/g, '');
+
+  if (mobileNo.length === 10) {
+    mobileNo = `91${mobileNo}`;
+  }
+
+  return mobileNo;
+}
 
   async GetSingleUnicodeHex(x) {
     let result = "", notation = "";
