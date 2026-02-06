@@ -1299,7 +1299,7 @@ export class TicketEscalationService {
         if (item.status === "Success") {
           await this.sendSMSToUser({
             ticket: item.ticketNo,
-            mobileNO: "916386236314",
+            mobileNO: item.AssigneeMobileNo,
             Name: assignToName
           });
         }
@@ -1511,8 +1511,7 @@ export class TicketEscalationService {
 
       let customTemplate = `Dear ${payload?.Name}, Grievance Ticket Number ${payload?.ticket} has been assigned to you for review and action. Please log in to the system and proceed as per the prescribed timelines. Portal: https://pmfby.gov.in/krph Regards CSC SPV/Ministry of Agriculture & Farmers Welfare Government of India`;
       let definedTemplate = await this.GetSingleUnicodeHex(customTemplate)
-      payload["mobileNO"] = "916386236314"
-
+      
       const response = await axios.post(`https://bulksmsapi.vispl.in/?username=cscetrnapi3&password=csce_123&messageType=unicode&mobile=${payload.mobileNO}&senderId=CSCSPV&ContentID=${templateID}&EntityID=1301157363501533886&message=${definedTemplate}`);
 
       if (response.status === 200) {
