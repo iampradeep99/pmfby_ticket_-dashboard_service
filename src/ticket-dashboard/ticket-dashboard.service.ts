@@ -1057,30 +1057,6 @@ export class TicketDashboardService {
       if (SPTODATE) match.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
     }
 
-    //     if (SPFROMDATE || SPTODATE) {
-    //       match.InsertDateTime = {};
-
-    //       if (SPFROMDATE) {
-    //         // const start = new Date(`${SPFROMDATE}T00:00:00+05:30`); // IST start of day
-    //         // match.InsertDateTime.$gte = start;
-
-    //         const start = new Date(`${SPFROMDATE}T00:00:00+05:30`);
-    // match.InsertDateTime.$gte = start;
-
-
-    //       }
-
-    //       if (SPTODATE) {
-    //         // const end = new Date(`${SPTODATE}T23:59:59.999+05:30`); // IST end of day
-    //         // match.InsertDateTime.$lte = end;
-    //         const end = new Date(`${SPTODATE}T23:59:59.999+05:30`);
-    // match.InsertDateTime.$lte = end;
-    //       }
-    //     }
-
-
-
-
 
     const countPipeline: any[] = [
       { $match: match },
