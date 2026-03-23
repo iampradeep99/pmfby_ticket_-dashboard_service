@@ -14,10 +14,10 @@ export class DocketUpdateCron {
   ) {}
 
   @Cron(CronExpression.EVERY_4_HOURS)
-  async handleCronUpdate() {
-    console.log("⏰ Docket Update Cron Triggered");
-    await this.docketUpdateTickets();
-  }
+  // async handleCronUpdate() {
+  //   console.log("⏰ Docket Update Cron Triggered");
+  //   await this.docketUpdateTickets();
+  // }
 
   async docketUpdateTickets() {
     const sourceCollection = "SLA_Ticket_listing";
