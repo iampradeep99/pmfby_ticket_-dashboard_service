@@ -7368,6 +7368,7 @@ export class TicketDashboardService {
                   AgentName: 1,
                   CreatedBY: 1,
                   CallingUserID: 1,
+                  IsTicketAssigned:1,
                   TicketReOpenDate: {
                     $cond: {
                       if: { $or: [{ $eq: ["$TicketReOpenDate", null] }, { $eq: ["$TicketReOpenDate", ""] }] },
