@@ -7056,7 +7056,7 @@ export class TicketDashboardService {
 
 
 
-    async fetchTicketListing(payload: any) {
+    async fetchTicketListingBkddddrecent(payload: any) {
     try {
       const db = this.db;
       await this.createIndexesForTicketListing(db);
@@ -7593,7 +7593,7 @@ console.log(toDateValue, "toDateValue");
 
 
 
-  async fetchTicketListingBackup(payload: any) {
+  async fetchTicketListing(payload: any) {
     try {
       const db = this.db;
       await this.createIndexesForTicketListing(db);
