@@ -6642,11 +6642,16 @@ export class TicketDashboardService {
     }
   }
 
-  async fetchTicketListingFirstClassWorking(payload: any) {
-    try {
 
+
+
+
+  async fetchTicketListing(payload: any) {
+    try {
       const db = this.db;
-      await this.createIndexesForTicketListing(this.db)
+      await this.createIndexesForTicketListing(db);
+
+      // Destructure payload with defaults
       let {
         fromdate,
         toDate,
@@ -6665,120 +6670,125 @@ export class TicketDashboardService {
         stateID,
         districtID,
         insuranceCompanyID,
+        defaultLoad,
         pageIndex = 1,
         pageSize = 100,
         objCommon
       } = payload;
 
+      // Ensure numeric conversions for IDs
       ticketHeaderID = Number(ticketHeaderID);
       ticketCategoryID = Number(ticketCategoryID);
       supportTicketTypeID = Number(supportTicketTypeID);
       statusID = Number(statusID);
-      // insuranceCompanyID = Number(insuranceCompanyID)
       schemeID = Number(schemeID);
 
-
-
-      let pipeline: any[] = [];
-      let message = {};
-      let data: any = '';
-
-
-      if (!objCommon.insertedUserID && objCommon.insertedUserID == "") {
+      // Validate required user ID
+      if (!objCommon || !objCommon.insertedUserID || objCommon.insertedUserID === "") {
         return {
           data: [],
-          message: {
-            msg: `User Id is required`,
-            code: "0"
-          },
-
+          message: { msg: "User ID is required", code: "0" }
         };
-
       }
-      const Delta = await this.getSupportTicketUserDetail(objCommon.insertedUserID);
+
+      // Fetch user details
+      const [Delta] = await Promise.all([
+        this.getSupportTicketUserDetail(objCommon.insertedUserID),
+        Promise.resolve(null) // Placeholder for potential future parallel fetch
+      ]);
+
       const responseInfo = await new UtilService().unGZip(Delta.responseDynamic);
       const item = (responseInfo.data as any)?.user?.[0];
-      if (!item) return { rcode: 0, rmessage: 'User details not found.' };
+      if (!item) {
+        return { rcode: 0, rmessage: "User details not found." };
+      }
 
+      // Extract user details
       const userDetail = {
-        InsuranceCompanyID: item.InsuranceCompanyID
-          ? await this.convertStringToArray(item.InsuranceCompanyID)
-          : [],
-        StateMasterID: item.StateMasterID
-          ? await this.convertStringToArray(item.StateMasterID)
-          : [],
+        InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
+        StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
         BRHeadTypeID: item.BRHeadTypeID,
         LocationTypeID: item.LocationTypeID,
+        FromDay: item?.FromDay,
+        ToDay: item?.ToDay,
+        EscalationFlag: item?.EscalationFlag,
+        AppAccessID: item?.AppAccessID,
+        UserProfileID: item?.UserProfileID
       };
 
-      console.log(userDetail, "userDetail")
+      // Calculate date range based on user permissions
+      const fromDateValue = new Date(`${userDetail.FromDay}T00:00:00.000Z`);
+      const toDateValue = new Date(`${userDetail.ToDay}T23:59:59.999Z`);
 
-      const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail;
+      const { InsuranceCompanyID, StateMasterID, LocationTypeID, EscalationFlag, AppAccessID } = userDetail;
 
-      let locationFilter: any = {};
-      if (LocationTypeID === 1 && StateMasterID?.length) {
-        locationFilter = { FilterStateID: { $in: StateMasterID } };
-      } else if (LocationTypeID === 2 && item.DistrictIDs?.length) {
-        locationFilter = { FilterDistrictRequestorID: { $in: item.DistrictIDs } };
+      // Build location filter based on user type
+      let locationFilter = {};
+      if (LocationTypeID === 1) {
+        // State-level user
+        if (Array.isArray(StateMasterID) && StateMasterID.length > 0) {
+          locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } };
+        } else {
+          locationFilter = { FilterStateID: { $in: [] } };
+        }
+      } else if (LocationTypeID === 2) {
+        // District-level user
+        const districtInfo = await this.GetDetailsForDistrictUsers(Number(AppAccessID));
+        const collectedDistrictInfo = await new UtilService().unGZip(districtInfo.responseDynamic);
+
+        const districtId: number[] = [];
+        if (collectedDistrictInfo?.masterdatabinding && Array.isArray(collectedDistrictInfo.masterdatabinding)) {
+          for (const itemData of collectedDistrictInfo.masterdatabinding) {
+            districtId.push(itemData.DistrictCodeAlpha);
+          }
+          locationFilter = { FilterDistrictRequestorID: { $in: districtId } };
+        } else {
+          console.warn("Invalid district info format:", collectedDistrictInfo);
+          locationFilter = {};
+        }
       }
 
+      // Initialize match object with location filter
       const match: any = { ...locationFilter };
 
-      if (ticketHeaderID && ticketHeaderID !== 0) {
-        match.TicketHeaderID = ticketHeaderID;
-      }
+      // Apply filters based on payload
+      if (ticketHeaderID && ticketHeaderID !== 0) match.TicketHeaderID = ticketHeaderID;
 
-      // Insurance company filter
+      // Insurance company filter with authorization check
       if (insuranceCompanyID && insuranceCompanyID !== 0) {
-        console.log(insuranceCompanyID, "insuranceCompanyID")
-        // const requestedInsuranceIDs = insuranceCompanyID
-        //   .split(',')
-        //   .map(id => Number(id.trim()));
-        const requestedInsuranceIDs = String(insuranceCompanyID)
-          .split(',')
-          .map(id => Number(id.trim()));
-
+        const requestedInsuranceIDs = String(insuranceCompanyID).split(",").map(id => Number(id.trim()));
         const allowedInsuranceIDs = InsuranceCompanyID.map(Number);
-        const validInsuranceIDs = requestedInsuranceIDs.filter(id =>
-          allowedInsuranceIDs.includes(id)
-        );
-
+        const validInsuranceIDs = requestedInsuranceIDs.filter(id => allowedInsuranceIDs.includes(id));
         if (validInsuranceIDs.length === 0) {
-          return { rcode: 0, rmessage: 'Unauthorized InsuranceCompanyID(s).' };
+          return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." };
         }
-
         match.InsuranceCompanyID = { $in: validInsuranceIDs };
-      } else {
-        if (InsuranceCompanyID?.length) {
-          match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+      } else if (InsuranceCompanyID?.length) {
+        match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) };
+      }
+
+      // State filter logic (only for non-district users)
+      if (LocationTypeID !== 2) {
+        const hasPayloadState = stateID && String(stateID).trim() !== "";
+        if (hasPayloadState) {
+          // Validate user-provided states against allowed list
+          const requestedStateIDs = String(stateID).split(",").map(id => Number(id.trim()));
+          const allowedStateIDs = StateMasterID?.map(Number) || [];
+          const validStateIDs = requestedStateIDs.filter(id => allowedStateIDs.includes(id));
+          if (validStateIDs.length === 0) {
+            return { rcode: 0, rmessage: "Unauthorized StateID(s)." };
+          }
+          match.FilterStateID = { $in: validStateIDs };
+        } else if (StateMasterID?.length > 0) {
+          // Fall back to user permissions
+          match.FilterStateID = { $in: StateMasterID.map(Number) };
         }
       }
 
-
-
-      if (stateID && stateID !== '') {
-        const requestedStateIDs = String(stateID)
-          .split(',')
-          .map(id => Number(id.trim()));
-
-        const validStateIDs = requestedStateIDs.filter(id =>
-          StateMasterID.map(Number).includes(id)
-        );
-
-        if (validStateIDs.length === 0) {
-          return { rcode: 0, rmessage: 'Unauthorized StateID(s).' };
-        }
-
-        match.StateMasterID = { $in: validStateIDs };
-
-      } else if (StateMasterID?.length && LocationTypeID !== 2) {
-        match.StateMasterID = { $in: StateMasterID.map(Number) };
-      }
-
-
-      if (viewTYP === 'FILTER') {
+      // Apply view-specific filters
+      if (viewTYP === "FILTER") {
         if (fromdate && toDate) {
-          match.Created = {
+          match.InsertDateTime = {
             $gte: new Date(`${fromdate}T00:00:00.000Z`),
             $lte: new Date(`${toDate}T23:59:59.999Z`)
           };
@@ -6789,274 +6799,323 @@ export class TicketDashboardService {
         if (supportTicketTypeID) match.SupportTicketTypeID = supportTicketTypeID;
         if (statusID) match.TicketStatusID = statusID;
         if (schemeID) match.SchemeID = schemeID;
-        if (ticketHeaderID) match.TicketHeaderID = ticketHeaderID;
-        // if (stateID) match.StateMasterID = parseInt(stateID);
         if (districtID) match.DistrictMasterID = districtID;
-        if (insuranceCompanyID) match.InsuranceCompanyID = insuranceCompanyID;
         if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
         if (applicationNo) match.ApplicationNo = applicationNo;
         if (docketNo) match.TicketNCIPDocketNo = docketNo;
         if (RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
       }
 
-      if (viewTYP === 'MOBILE') {
-        if (RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
+      // Additional view-specific matches
+      if (viewTYP === "MOBILE" && RequestorMobileNo) match.RequestorMobileNo = RequestorMobileNo;
+      if (viewTYP === "TICKET" && supportTicketNo) match.SupportTicketNo = supportTicketNo;
+      if (viewTYP === "APPNO" && applicationNo) match.ApplicationNo = applicationNo;
+      if (viewTYP === "DOCKT" && docketNo) match.TicketNCIPDocketNo = docketNo;
+
+      // Escalation-specific logic - only apply if defaultLoad is provided
+      if ((viewTYP === "ESCAL" || viewTYP === "DEFESCAL") && (defaultLoad === true || defaultLoad === false)) {
+        // For UserProfileID 64, always show extended data (false branch logic)
+        if (userDetail.UserProfileID === 64) {
+          console.log("enter1")
+          delete match.InsertDateTime;
+          match.TicketStatusID = { $in: [109301, 109302, 109304] };
+          match.TicketHeaderID = 1;
+          match.$or = [
+            { TicketReOpenDate: { $gte: fromDateValue, $lte: toDateValue } },
+            { TicketReOpenDate: { $in: [null, ""] }, Created: { $gte: fromDateValue, $lte: toDateValue } }
+          ];
+        } else if (defaultLoad === true) {
+           console.log("enter2")
+          // Standard defaultLoad true logic
+          match.TicketStatusID = { $eq: 109301 };
+        } else if (defaultLoad === false) {
+           console.log("enter3")
+          // Standard defaultLoad false logic
+          delete match.InsertDateTime;
+          match.TicketStatusID = { $in: [109301, 109302, 109304] };
+          match.TicketHeaderID = 1;
+          match.$or = [
+            { TicketReOpenDate: { $gte: fromDateValue, $lte: toDateValue } },
+            { TicketReOpenDate: { $in: [null, ""] }, Created: { $gte: fromDateValue, $lte: toDateValue } }
+          ];
+        }
       }
-
-      if (viewTYP === 'TICKET') {
-        if (supportTicketNo) match.SupportTicketNo = supportTicketNo;
-
-      }
-      if (viewTYP === 'APPNO') {
-        if (applicationNo) match.ApplicationNo = applicationNo;
-
-      }
-
-      if (viewTYP === 'DOCKT') {
-
-        if (docketNo) match.TicketNCIPDocketNo = docketNo;
-      }
-
-
 
       console.log(JSON.stringify(match))
-
-
-
-      const totalCount = await db.collection('SLA_Ticket_listing').countDocuments(match);
-
-      pipeline.push({ $match: match });
-      pipeline.push({
-        $sort: {
-          InsertDateTime: -1
+      // Build aggregation pipeline
+      const pipeline: any[] = [
+        { $match: match },
+        { $sort: { InsertDateTime: -1 } },
+        {
+          $facet: {
+            data: [
+              ...(pageIndex !== -1 ? [{ $skip: (pageIndex - 1) * pageSize }, { $limit: pageSize }] : []),
+              {
+                $project: {
+                  _id: 0,
+                  SupportTicketID: 1,
+                  CallerContactNumber: 1,
+                  CallingAudioFile: 1,
+                  TicketRequestorID: 1,
+                  StateCodeAlpha: 1,
+                  StateMasterID: 1,
+                  DistrictMasterID: 1,
+                  VillageRequestorID: 1,
+                  NyayPanchayatID: 1,
+                  NyayPanchayat: 1,
+                  GramPanchayatID: 1,
+                  GramPanchayat: 1,
+                  CallerID: 1,
+                  CreationMode: 1,
+                  SupportTicketNo: 1,
+                  RequestorUniqueNo: 1,
+                  RequestorName: 1,
+                  RequestorMobileNo: 1,
+                  RequestorAccountNo: 1,
+                  RequestorAadharNo: 1,
+                  TicketCategoryID: 1,
+                  CropCategoryOthers: 1,
+                  CropStageMaster: 1,
+                  CropStageMasterID: 1,
+                  TicketHeaderID: 1,
+                  SupportTicketTypeID: 1,
+                  RequestYear: 1,
+                  RequestSeason: 1,
+                  TicketSourceID: 1,
+                  TicketDescription: 1,
+                  LossDate: 1,
+                  LossTime: 1,
+                  OnTimeIntimationFlag: 1,
+                  VillageName: 1,
+                  ApplicationCropName: 1,
+                  CropName: 1,
+                  AREA: 1,
+                  DistrictRequestorID: 1,
+                  PostHarvestDate: 1,
+                  TicketStatusID: 1,
+                  StatusUpdateTime: 1,
+                  StatusUpdateUserID: 1,
+                  ApplicationNo: 1,
+                  InsuranceCompanyCode: 1,
+                  InsuranceCompanyID: 1,
+                  InsurancePolicyNo: 1,
+                  InsurancePolicyDate: 1,
+                  InsuranceExpiryDate: 1,
+                  BankMasterID: 1,
+                  AgentUserID: 1,
+                  SchemeID: 1,
+                  AttachmentPath: 1,
+                  HasDocument: 1,
+                  Relation: 1,
+                  RelativeName: 1,
+                  SubDistrictID: 1,
+                  SubDistrictName: 1,
+                  PolicyPremium: 1,
+                  PolicyArea: 1,
+                  PolicyType: 1,
+                  LandSurveyNumber: 1,
+                  LandDivisionNumber: 1,
+                  PlotVillageName: 1,
+                  PlotDistrictName: 1,
+                  PlotStateName: 1,
+                  ApplicationSource: 1,
+                  CropShare: 1,
+                  IFSCCode: 1,
+                  FarmerShare: 1,
+                  CropSeasonName: 1,
+                  TicketSourceName: 1,
+                  TicketCategoryName: 1,
+                  TicketStatus: 1,
+                  InsuranceCompany: 1,
+                  TicketTypeName: 1,
+                  StateMasterName: 1,
+                  DistrictMasterName: 1,
+                  TicketHeadName: 1,
+                  BMCGCode: 1,
+                  BusinessRelationName: 1,
+                  CropLossDetailID: 1,
+                  CallingUniqueID: 1,
+                  CallingInsertUserID: 1,
+                  CropStage: 1,
+                  CategoryHeadID: 1,
+                  Sos: 1,
+                  IsSos: 1,
+                  TicketNCIPDocketNo: 1,
+                  FilterDistrictRequestorID: 1,
+                  FilterStateID: 1,
+                  SchemeName: 1,
+                  InsertUserID: 1,
+                  InsertIPAddress: 1,
+                  UpdateUserID: 1,
+                  AgentName: 1,
+                  CreatedBY: 1,
+                  CallingUserID: 1,
+                  IsAssignedTicket: { $ifNull: ["$IsAssignedTicket", null] },
+                  TicketReOpenDate: {
+                    $cond: {
+                      if: { $or: [{ $eq: ["$TicketReOpenDate", null] }, { $eq: ["$TicketReOpenDate", ""] }] },
+                      then: null,
+                      else: {
+                        $dateToString: {
+                          date: { $toDate: "$TicketReOpenDate" },
+                          format: "%Y-%m-%dT%H:%M:%S",
+                          timezone: "Asia/Kolkata"
+                        }
+                      }
+                    }
+                  },
+                  InsertDateTime: {
+                    $cond: {
+                      if: { $or: [{ $eq: ["$InsertDateTime", null] }, { $eq: ["$InsertDateTime", ""] }] },
+                      then: null,
+                      else: {
+                        $dateToString: {
+                          date: { $toDate: "$InsertDateTime" },
+                          format: "%Y-%m-%dT%H:%M:%S",
+                          timezone: "Asia/Kolkata"
+                        }
+                      }
+                    }
+                  },
+                  UpdateDateTime: {
+                    $cond: {
+                      if: { $or: [{ $eq: ["$UpdateDateTime", null] }, { $eq: ["$UpdateDateTime", ""] }] },
+                      then: null,
+                      else: {
+                        $dateToString: {
+                          date: { $toDate: "$UpdateDateTime" },
+                          format: "%Y-%m-%dT%H:%M:%S",
+                          timezone: "Asia/Kolkata"
+                        }
+                      }
+                    }
+                  },
+                  SowingDate: {
+                    $cond: {
+                      if: { $or: [{ $eq: ["$SowingDate", null] }, { $eq: ["$SowingDate", ""] }] },
+                      then: null,
+                      else: {
+                        $dateToString: {
+                          date: { $toDate: "$SowingDate" },
+                          format: "%Y-%m-%dT%H:%M:%S",
+                          timezone: "Asia/Kolkata"
+                        }
+                      }
+                    }
+                  },
+                  CreatedAt: {
+                    $dateToString: {
+                      date: { $toDate: "$Created" },
+                      format: "%Y-%m-%dT%H:%M:%S",
+                      timezone: "Asia/Kolkata"
+                    }
+                  }
+                }
+              }
+            ],
+            totalCount: [{ $count: "count" }],
+            ticketStatusSummary: [
+              {
+                $project: {
+                  TicketStatusID: 1,
+                  TicketHeaderID: 1,
+                  TicketReOpenDate: 1,
+                  Created: 1,
+                  customStatus: {
+                    $switch: {
+                      branches: [
+                        {
+                          case: { $and: [{ $eq: ["$TicketStatusID", 109303] }, { $in: ["$TicketHeaderID", [1, 4]] }] },
+                          then: "Resolved"
+                        },
+                        {
+                          case: { $and: [{ $eq: ["$TicketStatusID", 109303] }, { $eq: ["$TicketHeaderID", 2] }] },
+                          then: "Resolved(Information)"
+                        },
+                        { case: { $eq: ["$TicketStatusID", 109301] }, then: "Open" },
+                        { case: { $eq: ["$TicketStatusID", 109302] }, then: "In-Progress" },
+                        { case: { $eq: ["$TicketStatusID", 109304] }, then: "Re-Open" }
+                      ],
+                      default: "Other"
+                    }
+                  }
+                }
+              },
+              ...(
+                (viewTYP === "ESCAL" || viewTYP === "DEFESCAL") && (defaultLoad === true || defaultLoad === false)
+                  ? (
+                      userDetail.UserProfileID === 64
+                        ? [
+                            {
+                              $match: {
+                                TicketStatusID: { $in: [109301, 109302, 109304]  },
+                                TicketHeaderID: 1,
+                                $or: [
+                                  { TicketReOpenDate: { $gte: fromDateValue, $lte: toDateValue } },
+                                  { TicketReOpenDate: { $in: [null, ""] }, Created: { $gte: fromDateValue, $lte: toDateValue } }
+                                ]
+                              }
+                            }
+                          ]
+                        : defaultLoad === true
+                        ? [{ $match: { TicketStatusID: { $eq: 109301 } } }]
+                        : [
+                            {
+                              $match: {
+                                TicketStatusID: { $in: [109301, 109302, 109304] },
+                                TicketHeaderID: 1,
+                                $or: [
+                                  { TicketReOpenDate: { $gte: fromDateValue, $lte: toDateValue } },
+                                  { TicketReOpenDate: { $in: [null, ""] }, Created: { $gte: fromDateValue, $lte: toDateValue } }
+                                ]
+                              }
+                            }
+                          ]
+                    )
+                  : []
+              ),
+              { $group: { _id: "$customStatus", count: { $sum: 1 } } }
+            ]
+          }
         }
-      })
+      ];
 
-      const skipCount = (pageIndex - 1) * pageSize;
-      pipeline.push({ $skip: skipCount });
-      pipeline.push({ $limit: pageSize });
+      // Execute aggregation
+      const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
+      const result = aggResult[0] || { data: [], totalCount: [], ticketStatusSummary: [] };
 
-
-
-      pipeline.push({
-        $project: {
-          _id: 0,
-          SupportTicketID: 1,
-          CallerContactNumber: 1,
-          CallingAudioFile: 1,
-          TicketRequestorID: 1,
-          StateCodeAlpha: 1,
-          StateMasterID: 1,
-          DistrictMasterID: 1,
-          VillageRequestorID: 1,
-          NyayPanchayatID: 1,
-          NyayPanchayat: 1,
-          GramPanchayatID: 1,
-          GramPanchayat: 1,
-          CallerID: 1,
-          CreationMode: 1,
-          SupportTicketNo: 1,
-          RequestorUniqueNo: 1,
-          RequestorName: 1,
-          RequestorMobileNo: 1,
-          RequestorAccountNo: 1,
-          RequestorAadharNo: 1,
-          TicketCategoryID: 1,
-          CropCategoryOthers: 1,
-          CropStageMaster: 1,
-          CropStageMasterID: 1,
-          TicketHeaderID: 1,
-          SupportTicketTypeID: 1,
-          RequestYear: 1,
-          RequestSeason: 1,
-          TicketSourceID: 1,
-          TicketDescription: 1,
-          LossDate: 1,
-          LossTime: 1,
-          OnTimeIntimationFlag: 1,
-          VillageName: 1,
-          ApplicationCropName: 1,
-          CropName: 1,
-          AREA: 1,
-          DistrictRequestorID: 1,
-          PostHarvestDate: 1,
-          TicketStatusID: 1,
-          StatusUpdateTime: 1,
-          StatusUpdateUserID: 1,
-          ApplicationNo: 1,
-          InsuranceCompanyCode: 1,
-          InsuranceCompanyID: 1,
-          InsurancePolicyNo: 1,
-          InsurancePolicyDate: 1,
-          InsuranceExpiryDate: 1,
-          BankMasterID: 1,
-          AgentUserID: 1,
-          SchemeID: 1,
-          AttachmentPath: 1,
-          HasDocument: 1,
-          Relation: 1,
-          RelativeName: 1,
-          SubDistrictID: 1,
-          SubDistrictName: 1,
-          PolicyPremium: 1,
-          PolicyArea: 1,
-          PolicyType: 1,
-          LandSurveyNumber: 1,
-          LandDivisionNumber: 1,
-          PlotVillageName: 1,
-          PlotDistrictName: 1,
-          PlotStateName: 1,
-          ApplicationSource: 1,
-          CropShare: 1,
-          IFSCCode: 1,
-          FarmerShare: 1,
-          SowingDate: 1,
-          CropSeasonName: 1,
-          TicketSourceName: 1,
-          TicketCategoryName: 1,
-          TicketStatus: 1,
-          InsuranceCompany: 1,
-          CreatedAt: "$Created",
-          TicketTypeName: 1,
-          StateMasterName: 1,
-          DistrictMasterName: 1,
-          TicketHeadName: 1,
-          BMCGCode: 1,
-          BusinessRelationName: 1,
-          CropLossDetailID: 1,
-          CallingUniqueID: 1,
-          CallingInsertUserID: 1,
-          CropStage: 1,
-          CategoryHeadID: 1,
-          TicketReOpenDate: 1,
-          Sos: 1,
-          IsSos: 1,
-          TicketNCIPDocketNo: 1,
-          FilterDistrictRequestorID: 1,
-          FilterStateID: 1,
-          SchemeName: 1,
-          InsertUserID: 1,
-          InsertDateTime: 1,
-          InsertIPAddress: 1,
-          UpdateUserID: 1,
-          AgentName: 1,
-          CreatedBY: 1,
-          CallingUserID: 1,
-          UpdateDateTime: 1,
-          UpdateIPAddress: 1,
-          // CreatedAt: 1
-        }
-      });
-
-
-
-      data = await db.collection('SLA_Ticket_listing')
-        .aggregate(pipeline, { allowDiskUse: true })
-        .toArray();
-
-      if (data.length === 0) {
+      // Handle no data case
+      if (result.data.length === 0) {
         return {
           data: [],
-          message: {
-            msg: "Record Not Found",
-            code: "0"
-          },
+          message: { msg: "Record Not Found", code: "0" },
           totalCount: 0,
           totalPages: 0
         };
       }
 
-      const totalPages = Math.ceil(totalCount / pageSize);
-
-
-
-      const aggPipelineAllStatuses = [
-        {
-          $match: match // ✅ Use the same filtered match object
-        },
-        {
-          $project: {
-            TicketStatusID: 1,
-            TicketHeaderID: 1,
-            customStatus: {
-              $switch: {
-                branches: [
-                  {
-                    case: {
-                      $and: [
-                        { $eq: ["$TicketStatusID", 109303] },
-                        { $in: ["$TicketHeaderID", [1, 4]] }
-                      ]
-                    },
-                    then: "Resolved"
-                  },
-                  {
-                    case: {
-                      $and: [
-                        { $eq: ["$TicketStatusID", 109303] },
-                        { $eq: ["$TicketHeaderID", 2] }
-                      ]
-                    },
-                    then: "Resolved(Information)"
-                  },
-                  {
-                    case: { $eq: ["$TicketStatusID", 109301] },
-                    then: "Open"
-                  },
-                  {
-                    case: { $eq: ["$TicketStatusID", 109302] },
-                    then: "In-Progress"
-                  },
-                  {
-                    case: { $eq: ["$TicketStatusID", 109304] },
-                    then: "Re-Open"
-                  }
-                ],
-                default: "Other"
-              }
-            }
-          }
-        },
-        {
-          $group: {
-            _id: "$customStatus",
-            count: { $sum: 1 }
-          }
-        }
-      ];
-
-      const ticketStatusResults = await db
-        .collection('SLA_Ticket_listing')
-        .aggregate(aggPipelineAllStatuses)
-        .toArray();
-
-      const ticketSummary = ticketStatusResults.map(item => ({
+      // Process ticket summary
+      const ticketSummary = result.ticketStatusSummary.map(item => ({
         Total: item.count.toString(),
         TicketStatus: item._id
       }));
 
-
+      // Return successful response
       return {
-        obj: {
-          status: ticketSummary,
-          supportTicket: data,
-
-
-        },
-        message: {
-          msg: "Fetched Success",
-          code: "1"
-        }
+        obj: { status: ticketSummary, supportTicket: result.data },
+        message: { msg: "Fetched Success", code: "1" },
+        totalCount: result.totalCount[0]?.count || 0,
+        totalPages: pageSize > 0 ? Math.ceil((result.totalCount[0]?.count || 0) / pageSize) : 1
       };
     } catch (err) {
-      console.log('❌ Top-level error:', err);
-      return { data: [], message: 'Unexpected error' };
+      console.error("❌ Top-level error:", err);
+      return { data: [], message: "Unexpected error" };
     }
   }
 
 
 
-    async fetchTicketListingBkddddrecent(payload: any) {
+     async fetchTicketListingPradeep(payload: any) {
     try {
       const db = this.db;
       await this.createIndexesForTicketListing(db);
@@ -7079,6 +7138,7 @@ export class TicketDashboardService {
         stateID,
         districtID,
         insuranceCompanyID,
+        defaultLoad,
         pageIndex = 1,
         pageSize = 100,
         objCommon
@@ -7116,7 +7176,8 @@ export class TicketDashboardService {
         FromDay: item?.FromDay,
         ToDay: item?.ToDay,
         EscalationFlag: item?.EscalationFlag,
-        AppAccessID: item?.AppAccessID
+        AppAccessID: item?.AppAccessID,
+        UserProfileID: item?.UserProfileID
       };
 
       console.log(userDetail, "testuserDetails");
@@ -7125,15 +7186,12 @@ export class TicketDashboardService {
         
       
 
-          const fromDateValue = new Date(userDetail.FromDay);
-const toDateValue = new Date(userDetail.ToDay);
 
-// optional: normalize time range
-fromDateValue.setHours(0, 0, 0, 0);
-toDateValue.setHours(23, 59, 59, 999);
+const fromDateValue = new Date(`${userDetail.FromDay}T00:00:00.000Z`);
+const toDateValue = new Date(`${userDetail.ToDay}T23:59:59.999Z`);
 
-console.log(fromDateValue, "fromDateValue");
-console.log(toDateValue, "toDateValue");
+console.log(fromDateValue.toISOString(), "fromDateValue");
+console.log(toDateValue.toISOString(), "toDateValue");
 
 
       const { InsuranceCompanyID, StateMasterID, LocationTypeID, EscalationFlag, AppAccessID } = userDetail;
@@ -7225,13 +7283,13 @@ console.log(toDateValue, "toDateValue");
          
 
 
-          match.Created = {};
+          match.InsertDateTime = {};
 
           const start = new Date(`${fromdate}T00:00:00.000Z`);
-          match.Created.$gte = start;
+          match.InsertDateTime.$gte = start;
 
           const end = new Date(`${toDate}T23:59:59.999Z`);
-          match.Created.$lte = end;
+          match.InsertDateTime.$lte = end;
         }
         if (supportTicketID) match.SupportTicketID = supportTicketID;
         if (ticketCategoryID) match.TicketCategoryID = ticketCategoryID;
@@ -7250,16 +7308,27 @@ console.log(toDateValue, "toDateValue");
       if (viewTYP === "TICKET" && supportTicketNo) match.SupportTicketNo = supportTicketNo;
       if (viewTYP === "APPNO" && applicationNo) match.ApplicationNo = applicationNo;
       if (viewTYP === "DOCKT" && docketNo) match.TicketNCIPDocketNo = docketNo;
-      
 
-    
-        
-        
 
-        if (viewTYP === "ESCAL" || viewTYP === "DEFESCAL") {
-  delete match.Created;
 
-  match.TicketStatusID = { $ne: 109303 };
+if (
+  (viewTYP === "ESCAL" || viewTYP === "DEFESCAL") &&
+  defaultLoad === true
+) {
+ 
+  match.TicketStatusID = { $eq: 109301 };
+
+} else if (
+  (viewTYP === "ESCAL" || viewTYP === "DEFESCAL") &&
+  defaultLoad === false
+) {
+
+  delete match.InsertDateTime;
+
+  match.TicketStatusID = {
+    $in: [109301, 109302, 109304]
+  };
+
   match.TicketHeaderID = 1;
 
   match.$or = [
@@ -7270,15 +7339,22 @@ console.log(toDateValue, "toDateValue");
       }
     },
     {
-      TicketReOpenDate: { $in: [null, ""] },
+      TicketReOpenDate: {
+        $in: [null, ""]
+      },
       Created: {
         $gte: fromDateValue,
         $lte: toDateValue
       }
     }
   ];
-}
 
+
+} else {
+  console.log(
+    "No specific view type matched or defaultLoad is not true for ESCAL/DEFESCAL."
+  );
+}
        
       const pipeline: any[] = [
         
@@ -7520,33 +7596,44 @@ console.log(toDateValue, "toDateValue");
           }
         },
 
-     
-        ...(viewTYP === "DEFESCAL" || viewTYP === "ESCAL"
-  ? [
-      {
-        $match: {
-          TicketStatusID: { $ne: 109303 },
-          TicketHeaderID: 1,
+  ...(
+  (viewTYP === "ESCAL" || viewTYP === "DEFESCAL")
+    ? (
+        defaultLoad === true
+          ? [
+              {
+                $match: {
+                  TicketStatusID: { $eq: 109301 }
+                }
+              }
+            ]
+          : [
+              {
+                $match: {
+                  TicketStatusID: { $ne: 109303 },
+                  TicketHeaderID: 1,
 
-          $or: [
-            {
-              TicketReOpenDate: {
-                $gte: fromDateValue,
-                $lte: toDateValue
+                  $or: [
+                    {
+                      TicketReOpenDate: {
+                        $gte: fromDateValue,
+                        $lte: toDateValue
+                      }
+                    },
+                    {
+                      TicketReOpenDate: { $in: [null, ""] },
+                      Created: {
+                        $gte: fromDateValue,
+                        $lte: toDateValue
+                      }
+                    }
+                  ]
+                }
               }
-            },
-            {
-              TicketReOpenDate: { $in: [null, ""] },
-              Created: {
-                $gte: fromDateValue,
-                $lte: toDateValue
-              }
-            }
-          ]
-        }
-      }
-    ]
-  : []),
+            ]
+      )
+    : []
+),
 
         {
           $group: {
@@ -7593,7 +7680,7 @@ console.log(toDateValue, "toDateValue");
 
 
 
-  async fetchTicketListing(payload: any) {
+  async fetchTicketListingDate7May(payload: any) {
     try {
       const db = this.db;
       await this.createIndexesForTicketListing(db);
@@ -8443,7 +8530,7 @@ console.log(toDateValue, "toDateValue");
 
 
 
-  async createIndexesForTicketListing(db: any) {
+  async createIndexesForTicketListingssBkp(db: any) {
     try {
       const collection = db.collection('SLA_Ticket_listing');
       const allIndexes = await collection.indexes();
@@ -8476,11 +8563,7 @@ console.log(toDateValue, "toDateValue");
         console.log(`Created index: ${mobileIndexName}`);
       } else console.log(`Index ${mobileIndexName} already exists.`);
 
-      // === 3. idx_supportTicketID ===
-      // if (!allIndexes.some(idx => idx.name === 'idx_supportTicketID')) {
-      //   await collection.createIndex({ SupportTicketID: 1 }, { name: 'idx_supportTicketID' });
-      //   console.log('Created index: idx_supportTicketID');
-      // }
+  
 
       // === 4. idx_ticketStatusID ===
       if (!allIndexes.some(idx => idx.name === 'idx_ticketStatusID')) {
@@ -8534,6 +8617,143 @@ console.log(toDateValue, "toDateValue");
     }
   }
 
+
+  async createIndexesForTicketListing(db: any) {
+    try {
+      const collection = db.collection('SLA_Ticket_listing');
+      const allIndexes = await collection.indexes();
+
+      // === 1. idx_created_ticketheader_insurance_filterstate_statemaster ===
+      const createdIndexName = 'idx_created_ticketheader_insurance_filterstate_statemaster';
+      const createdIndexKey = {
+        Created: 1,
+        TicketHeaderID: 1,
+        InsuranceCompanyID: 1,
+        FilterStateID: 1,
+        StateMasterID: 1
+      };
+      if (!allIndexes.some(idx => idx.name === createdIndexName && JSON.stringify(idx.key) === JSON.stringify(createdIndexKey))) {
+        await collection.createIndex(createdIndexKey, { name: createdIndexName });
+        console.log(`Created index: ${createdIndexName}`);
+      } else console.log(`Index ${createdIndexName} already exists.`);
+
+      // === 2. idx_mobile_ticketheader_insurance_filterstate_statemaster ===
+      const mobileIndexName = 'idx_mobile_ticketheader_insurance_filterstate_statemaster';
+      const mobileIndexKey = {
+        RequestorMobileNo: 1,
+        TicketHeaderID: 1,
+        InsuranceCompanyID: 1,
+        FilterStateID: 1,
+        StateMasterID: 1
+      };
+      if (!allIndexes.some(idx => idx.name === mobileIndexName && JSON.stringify(idx.key) === JSON.stringify(mobileIndexKey))) {
+        await collection.createIndex(mobileIndexKey, { name: mobileIndexName });
+        console.log(`Created index: ${mobileIndexName}`);
+      } else console.log(`Index ${mobileIndexName} already exists.`);
+
+  
+
+      // === 4. idx_ticketStatusID ===
+      if (!allIndexes.some(idx => idx.name === 'idx_ticketStatusID')) {
+        await collection.createIndex({ TicketStatusID: 1 }, { name: 'idx_ticketStatusID' });
+        console.log('Created index: idx_ticketStatusID');
+      }
+
+      // === 5. InsertDateTime_1 ===
+      if (!allIndexes.some(idx => idx.name === 'InsertDateTime_1')) {
+        await collection.createIndex({ InsertDateTime: 1 }, { name: 'InsertDateTime_1' });
+        console.log('Created index: InsertDateTime_1');
+      }
+
+      // === 6. SupportTicketNo_1 ===
+      if (!allIndexes.some(idx => idx.name === 'SupportTicketNo_1')) {
+        await collection.createIndex({ SupportTicketNo: 1 }, { name: 'SupportTicketNo_1' });
+        console.log('Created index: SupportTicketNo_1');
+      }
+
+      // === 7. ApplicationNo_1 ===
+      if (!allIndexes.some(idx => idx.name === 'ApplicationNo_1')) {
+        await collection.createIndex({ ApplicationNo: 1 }, { name: 'ApplicationNo_1' });
+        console.log('Created index: ApplicationNo_1');
+      }
+
+      // === 8. TicketNCIPDocketNo_1 ===
+      if (!allIndexes.some(idx => idx.name === 'TicketNCIPDocketNo_1')) {
+        await collection.createIndex({ TicketNCIPDocketNo: 1 }, { name: 'TicketNCIPDocketNo_1' });
+        console.log('Created index: TicketNCIPDocketNo_1');
+      }
+
+        // =========================================================
+// 9. ESCAL INDEX -> TicketReOpenDate Branch
+// =========================================================
+
+const escalReopenIndexName = 'idx_escal_reopen';
+
+const escalReopenIndexKey = {
+  FilterStateID: 1,
+  InsuranceCompanyID: 1,
+  TicketHeaderID: 1,
+  TicketStatusID: 1,
+  TicketReOpenDate: 1,
+  InsertDateTime: -1
+};
+
+if (
+  !allIndexes.some(
+    idx =>
+      idx.name === escalReopenIndexName &&
+      JSON.stringify(idx.key) ===
+        JSON.stringify(escalReopenIndexKey)
+  )
+) {
+  await collection.createIndex(escalReopenIndexKey, {
+    name: escalReopenIndexName,
+    background: true
+  });
+
+  console.log(`Created index: ${escalReopenIndexName}`);
+} else {
+  console.log(`Index ${escalReopenIndexName} already exists.`);
+}
+
+// =========================================================
+// 10. ESCAL INDEX -> Created Branch
+// =========================================================
+
+const escalCreatedIndexName = 'idx_escal_created';
+
+const escalCreatedIndexKey = {
+  FilterStateID: 1,
+  InsuranceCompanyID: 1,
+  TicketHeaderID: 1,
+  TicketStatusID: 1,
+  Created: 1,
+  InsertDateTime: -1
+};
+
+if (
+  !allIndexes.some(
+    idx =>
+      idx.name === escalCreatedIndexName &&
+      JSON.stringify(idx.key) ===
+        JSON.stringify(escalCreatedIndexKey)
+  )
+) {
+  await collection.createIndex(escalCreatedIndexKey, {
+    name: escalCreatedIndexName,
+    background: true
+  });
+
+  console.log(`Created index: ${escalCreatedIndexName}`);
+} else {
+  console.log(`Index ${escalCreatedIndexName} already exists.`);
+}
+
+      console.log('✅ Index setup completed successfully.');
+    } catch (err) {
+      console.error('❌ Error creating indexes:', err);
+    }
+  }
 
   // async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<string> {
   //   const MYSQL_BATCH_SIZE = 100000;
