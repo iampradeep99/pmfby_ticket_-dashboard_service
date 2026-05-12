@@ -1900,7 +1900,7 @@ console.log(JSON.stringify(pipeline))
 
     TicketHeaderID = TicketHeaderID ? Number(TicketHeaderID) : null;
 
-    const collection = db.collection("Ticket_Assignment_History");
+    const collection = db.collection("Ticket_Escalation");
     if (!collection) {
       return { data: [], message: { msg: "Collection not found", code: "0" } };
     }
