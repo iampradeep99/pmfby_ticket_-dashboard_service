@@ -57,10 +57,11 @@ export class TicketDashboardController {
       return { rcode: 0, rmessage: 'User Email is required' };
     }
 
-    await this.rabbitMQService.sendToQueue(ticketPayload);
+    const requestId = await this.dashboardService.createSupportTicketDownloadRequest(ticketPayload, req);
+    await this.rabbitMQService.sendToQueue({ ...ticketPayload, requestId });
 
     return jsonResponseHandler(
-      [],
+      { requestId },
       'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.',
       req,
       res,
@@ -124,9 +125,7 @@ export class TicketDashboardController {
 
       let gzippedData = null;
       if (resultArray && resultArray.length > 0) {
-        const stringifiedData: any = resultArray;
-        console.log(stringifiedData)
-        gzippedData = await this.utilService.GZip(stringifiedData);
+        gzippedData = await this.utilService.GZip(resultArray as any);
       }
 
       return jsonResponseHandler(gzippedData, message, req, res, () => { });
@@ -190,9 +189,10 @@ export class TicketDashboardController {
         rmessage: 'User Email is required',
       };
     }
-    await this.rabbitMQService.sendToQueue(ticketPayload);
+    const requestId = await this.dashboardService.createSupportTicketDownloadRequest(ticketPayload, req);
+    await this.rabbitMQService.sendToQueue({ ...ticketPayload, requestId });
     let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
-    return jsonResponseHandler([], rmessage, req, res, () => { });
+    return jsonResponseHandler({ requestId }, rmessage, req, res, () => { });
 
   }
 
@@ -629,9 +629,6 @@ export class TicketDashboardController {
   }
 
 }
-
-
-
 
 
 

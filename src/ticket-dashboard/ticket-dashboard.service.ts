@@ -19,6 +19,8 @@ import { Sequelize } from 'sequelize-typescript';
 import { QueryTypes } from 'sequelize';
 import { MongoClient } from 'mongodb';
 import * as moment from "moment";
+import { randomUUID } from 'crypto';
+import { Request } from 'express';
 
 
 import { parse } from "csv-parse";
@@ -5023,10 +5025,16 @@ export class TicketDashboardService {
   async downloadHistory(payload) {
     console.log(payload)
     let collectionName = 'support_ticket_download_logs'
+    const requestedUserId = payload.userID ?? payload.SPUserID;
+    const numericUserId = Number(requestedUserId);
+    const userIdFilter = Number.isNaN(numericUserId)
+      ? [requestedUserId]
+      : [requestedUserId, numericUserId];
+
     let pipeline = [
       {
         $match: {
-          userId: payload.userID
+          userId: { $in: userIdFilter }
         }
       },
       {
@@ -5045,21 +5053,39 @@ export class TicketDashboardService {
       },
       {
         $project: {
-          ReqestorUserID: "$userId",
-          RequestedParamsTicketHeaderID: "$ticketHeaderId",
-          RequestedParamsInsuranceCompany: "$insuranceCompanyId",
-          RequestedParamsStateID: "$stateId",
-          RequestedParamsFromDate: "$fromDate",
-          RequestedParamsToDate: "$toDate",
-          ZippedFileName: "$zipFileName",
-          DownloadURL: "$downloadUrl",
-          RequestCreationDate: "$createdAt",
-          RequestorUserName: "$data.AppAccessUserName",
-          RequestorRole: "$data.BRHeadTypeID"
-
+          _id: 1,
+          requestId: 1,
+          status: 1,
+          userId: 1,
+          requestedBy: 1,
+          insuranceCompanyId: 1,
+          stateId: 1,
+          ticketHeaderId: 1,
+          fromDate: 1,
+          toDate: 1,
+          recipients: 1,
+          insertedIPAddress: 1,
+          requestedAt: 1,
+          createdAt: 1,
+          estimatedTotalRecords: 1,
+          processedRecords: 1,
+          progressPercentage: 1,
+          progressStage: 1,
+          progressUpdatedAt: 1,
+          zipFileName: 1,
+          downloadUrl: 1,
+          fileName: 1,
+          fileUrl: 1,
+          startedAt: 1,
+          completedAt: 1,
+          failedAt: 1,
+          totalRecords: 1,
+          errorMessage: 1,
+          requestorUserName: "$data.AppAccessUserName",
+          requestorRole: "$data.BRHeadTypeID"
         }
       }, {
-        $sort: { RequestCreationDate: -1 }
+        $sort: { requestedAt: -1, createdAt: -1 }
       }
     ]
 
@@ -5070,6 +5096,41 @@ export class TicketDashboardService {
       data: result,
       message: { msg: '✅ Data fetched successfully', code: 1 }
     };
+  }
+
+  async createSupportTicketDownloadRequest(payload: any, req?: Request) {
+    const requestId = randomUUID();
+    const userEmail = payload?.userEmail?.trim();
+    const recipients = userEmail
+      ? userEmail.split(',').map((email: string) => email.trim()).filter(Boolean)
+      : [];
+
+    await this.db.collection('support_ticket_download_logs').insertOne({
+      requestId,
+      status: 'QUEUED',
+      userId: payload?.SPUserID,
+      requestedBy: payload?.SPUserID,
+      insuranceCompanyId: payload?.SPInsuranceCompanyID,
+      stateId: payload?.SPStateID,
+      ticketHeaderId: Number(payload?.SPTicketHeaderID || 0),
+      fromDate: payload?.SPFROMDATE,
+      toDate: payload?.SPTODATE,
+      recipients,
+      insertedIPAddress: req?.ip || req?.socket?.remoteAddress || '',
+      requestedAt: new Date(),
+      createdAt: new Date(),
+      estimatedTotalRecords: 0,
+      processedRecords: 0,
+      progressPercentage: 0,
+      progressStage: 'QUEUED',
+      progressUpdatedAt: new Date(),
+      zipFileName: '',
+      downloadUrl: '',
+      fileName: '',
+      fileUrl: '',
+    });
+
+    return requestId;
   }
 
 
@@ -10495,4 +10556,3 @@ async AgeingGrievanceService(payload: any) {
 
 
 }
-
