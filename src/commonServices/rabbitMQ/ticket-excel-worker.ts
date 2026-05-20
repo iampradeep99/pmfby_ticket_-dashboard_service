@@ -467,8 +467,48 @@ async function processChunk(
   }
 }
 
-async function processDateRange(db: Db, baseMatch: any, startDate: Date, endDate: Date, worksheet: any): Promise<void> {
+async function updateDownloadProgress(db: Db, requestId: string, fields: any): Promise<void> {
+  if (!requestId) return
+
+  await db.collection(DOWNLOAD_LOG_COLLECTION).updateOne(
+    { requestId },
+    {
+      $set: {
+        ...fields,
+        progressUpdatedAt: new Date(),
+      },
+    },
+  )
+}
+
+async function getEstimatedTotalRecords(db: Db, baseMatch: any, startDate: Date, endDate: Date): Promise<number> {
+  const match = {
+    ...baseMatch,
+    InsertDateTime: {
+      $gte: moment(startDate).utc().startOf("day").toDate(),
+      $lte: moment(endDate).utc().endOf("day").toDate(),
+    },
+  }
+
+  const result = await db
+    .collection(TICKET_COLLECTION)
+    .aggregate([{ $match: match }, { $group: { _id: "$SupportTicketNo" } }, { $count: "total" }], { allowDiskUse: true })
+    .toArray()
+
+  return result?.[0]?.total || 0
+}
+
+async function processDateRange(
+  db: Db,
+  baseMatch: any,
+  startDate: Date,
+  endDate: Date,
+  worksheet: any,
+  requestId: string,
+  estimatedTotalRecords: number,
+): Promise<number> {
   let currentDate = moment(startDate)
+  let totalProcessed = 0
 
   while (currentDate.isSameOrBefore(endDate, "day")) {
     const dayStart = currentDate.clone().utc().startOf("day").toDate()
@@ -483,12 +523,26 @@ async function processDateRange(db: Db, baseMatch: any, startDate: Date, endDate
       const { hasMore: hasMoreResults, processedCount } = await processChunk(db, dailyMatch, skip, worksheet)
       hasMore = hasMoreResults
       skip += CHUNK_SIZE
+      totalProcessed += processedCount
+
+      const progressPercentage = estimatedTotalRecords
+        ? Math.min(99, Math.floor((totalProcessed / estimatedTotalRecords) * 100))
+        : 0
+
+      await updateDownloadProgress(db, requestId, {
+        status: "PROCESSING",
+        processedRecords: totalProcessed,
+        progressPercentage,
+        progressStage: "GENERATING_EXCEL",
+      })
 
       console.log(`Processed ${processedCount} documents for ${currentDate.format("YYYY-MM-DD")}`)
     }
 
     currentDate = currentDate.add(1, "day")
   }
+
+  return totalProcessed
 }
 
 async function createExcelFile(
@@ -530,6 +584,7 @@ async function uploadToGCP(zipFilePath: string, zipFileName: string): Promise<st
 }
 
 async function insertOrUpdateDownloadLog(
+  requestId: string,
   userId: string,
   insuranceCompanyId: string,
   stateId: string,
@@ -540,12 +595,26 @@ async function insertOrUpdateDownloadLog(
   downloadUrl: string,
   db: Db,
 ): Promise<void> {
+  const filter = requestId
+    ? { requestId }
+    : { userId, insuranceCompanyId, stateId, ticketHeaderId, fromDate, toDate }
+
   await db.collection(DOWNLOAD_LOG_COLLECTION).updateOne(
-    { userId, insuranceCompanyId, stateId, ticketHeaderId, fromDate, toDate },
+    filter,
     {
       $set: {
+        requestId,
+        userId,
+        requestedBy: userId,
+        insuranceCompanyId,
+        stateId,
+        ticketHeaderId,
+        fromDate,
+        toDate,
         zipFileName,
         downloadUrl,
+        fileName: zipFileName,
+        fileUrl: downloadUrl,
         createdAt: new Date(),
       },
     },
@@ -623,6 +692,7 @@ async function processTicketHistory(ticketPayload: any) {
     page = 1,
     limit = 1000000000,
     userEmail,
+    requestId,
   } = ticketPayload
 
   const db = await connectToDatabase(DB_URI, DB_NAME)
@@ -656,6 +726,12 @@ async function processTicketHistory(ticketPayload: any) {
 
   const permissionCheck = await validateUserPermissions(userDetail, SPInsuranceCompanyID, SPStateID)
   if (!permissionCheck.valid) {
+    await updateDownloadProgress(db, requestId, {
+      status: "FAILED",
+      progressStage: "FAILED",
+      failedAt: new Date(),
+      errorMessage: permissionCheck.error,
+    })
     return { rcode: 0, rmessage: permissionCheck.error }
   }
 
@@ -675,7 +751,18 @@ const excelFileName =
   const allColumns = [...STATIC_COLUMNS, ...buildDynamicColumns()]
   const { workbook, filePath: excelFilePath, worksheet } = await createExcelFile(folderPath, excelFileName, allColumns)
 
+  await updateDownloadProgress(db, requestId, {
+    status: "PROCESSING",
+    startedAt: new Date(),
+    progressStage: "COUNTING_RECORDS",
+    progressPercentage: 0,
+    processedRecords: 0,
+  })
+
+  const estimatedTotalRecords = await getEstimatedTotalRecords(db, baseMatch, new Date(SPFROMDATE), new Date(SPTODATE))
+
   await insertOrUpdateDownloadLog(
+    requestId,
     SPUserID,
     SPInsuranceCompanyID,
     SPStateID,
@@ -687,7 +774,21 @@ const excelFileName =
     db,
   )
 
-  await processDateRange(db, baseMatch, new Date(SPFROMDATE), new Date(SPTODATE), worksheet)
+  await updateDownloadProgress(db, requestId, {
+    estimatedTotalRecords,
+    totalRecords: estimatedTotalRecords,
+    progressStage: "GENERATING_EXCEL",
+  })
+
+  const processedRecords = await processDateRange(
+    db,
+    baseMatch,
+    new Date(SPFROMDATE),
+    new Date(SPTODATE),
+    worksheet,
+    requestId,
+    estimatedTotalRecords,
+  )
 
   await workbook.commit()
   console.log(`Excel file created at: ${excelFilePath}`)
@@ -702,6 +803,7 @@ const excelFileName =
   }
 
   await insertOrUpdateDownloadLog(
+    requestId,
     SPUserID,
     SPInsuranceCompanyID,
     SPStateID,
@@ -713,9 +815,19 @@ const excelFileName =
     db,
   )
 
+  await updateDownloadProgress(db, requestId, {
+    status: "COMPLETED",
+    processedRecords,
+    progressPercentage: 100,
+    progressStage: "COMPLETED",
+    completedAt: new Date(),
+    totalRecords: processedRecords,
+  })
+
   const responsePayload = {
     data: [],
-    pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+    pagination: { total: processedRecords, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+    requestId,
     downloadUrl: gcpDownloadUrl,
     zipFileName: zipFileName,
   }
@@ -727,4 +839,18 @@ const excelFileName =
 
 processTicketHistory(workerData)
   .then((result) => parentPort?.postMessage({ success: true, result }))
-  .catch((err) => parentPort?.postMessage({ success: false, error: err.message }))
+  .catch(async (err) => {
+    try {
+      const db = await connectToDatabase(DB_URI, DB_NAME)
+      await updateDownloadProgress(db, workerData?.requestId, {
+        status: "FAILED",
+        progressStage: "FAILED",
+        failedAt: new Date(),
+        errorMessage: err.message,
+      })
+    } catch (logErr) {
+      console.error("Failed to update download log after worker error:", logErr)
+    }
+
+    parentPort?.postMessage({ success: false, error: err.message })
+  })
