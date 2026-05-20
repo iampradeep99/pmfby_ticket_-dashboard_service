@@ -60,8 +60,10 @@ export class TicketDashboardController {
     const requestId = await this.dashboardService.createSupportTicketDownloadRequest(ticketPayload, req);
     await this.rabbitMQService.sendToQueue({ ...ticketPayload, requestId });
 
+    const compressedData = await this.utilService.GZip({ requestId });
+
     return jsonResponseHandler(
-      { requestId },
+      compressedData,
       'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.',
       req,
       res,
@@ -191,8 +193,9 @@ export class TicketDashboardController {
     }
     const requestId = await this.dashboardService.createSupportTicketDownloadRequest(ticketPayload, req);
     await this.rabbitMQService.sendToQueue({ ...ticketPayload, requestId });
+    const compressedData = await this.utilService.GZip({ requestId });
     let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
-    return jsonResponseHandler({ requestId }, rmessage, req, res, () => { });
+    return jsonResponseHandler(compressedData, rmessage, req, res, () => { });
 
   }
 
@@ -629,7 +632,6 @@ export class TicketDashboardController {
   }
 
 }
-
 
 
 
