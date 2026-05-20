@@ -24,6 +24,8 @@ import * as moment from "moment";
 import { parse } from "csv-parse";
 import { Readable } from "stream";
 
+const SUPPORT_TICKET_LISTING_COLLECTION = 'SLA_Ticket_listing';
+
 
 @Injectable()
 export class TicketDashboardService {
@@ -36,7 +38,7 @@ export class TicketDashboardService {
   constructor(@Inject('MONGO_DB') private readonly db: Db, @Inject('SEQUELIZE') private readonly sequelize: Sequelize,
     private readonly redisWrapper: RedisWrapper, private readonly mailService: MailService,) {
     this.ticketCollection = this.db.collection('tickets');
-    this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
+    this.ticketDbCollection = this.db.collection(SUPPORT_TICKET_LISTING_COLLECTION);
 
   }
 
@@ -52,7 +54,7 @@ export class TicketDashboardService {
 
   async createOptimizedIndex(db: any): Promise<void> {
     try {
-      const collection = db.collection('SLA_KRPH_SupportTickets_Records');
+      const collection = db.collection(SUPPORT_TICKET_LISTING_COLLECTION);
 
       const indexes = await collection.indexes();
 
@@ -1068,8 +1070,8 @@ export class TicketDashboardService {
       { $count: "total" },
     ]
 
-    // const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
-    const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
+    const ticketCollection = db.collection(SUPPORT_TICKET_LISTING_COLLECTION)
+    const countResult = await ticketCollection.aggregate(countPipeline).toArray()
 
     const totalCount = countResult?.[0]?.total || 0
     const totalPages = Math.ceil(totalCount / limit)
@@ -1218,8 +1220,7 @@ export class TicketDashboardService {
     ]
 
     console.log(JSON.stringify(pipeline), "testpipeline")
-    let results = await db
-      .collection("SLA_KRPH_SupportTickets_Records")
+    let results = await ticketCollection
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray()
 
@@ -1566,7 +1567,7 @@ export class TicketDashboardService {
 
 
   async AddIndexForSupportTickets(db: any) {
-    await db.collection('SLA_KRPH_SupportTickets_Records').createIndexes([
+    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndexes([
       { key: { SupportTicketNo: 1 }, name: 'idx_SupportTicketNo' },
       { key: { InsertDateTime: -1 }, name: 'idx_InsertDateTime' },
       { key: { InsuranceCompanyID: 1 }, name: 'idx_InsuranceCompanyID' },
@@ -5325,7 +5326,7 @@ export class TicketDashboardService {
   async AddIndexss(db) {
     // Drop indexes before recreating (excluding _id index)
     const collections = [
-      'SLA_KRPH_SupportTickets_Records',
+      SUPPORT_TICKET_LISTING_COLLECTION,
       'SLA_KRPH_SupportTicketsHistory_Records',
       'support_ticket_claim_intimation_report_history',
       'csc_agent_master',
@@ -5343,16 +5344,16 @@ export class TicketDashboardService {
       }
     }
 
-    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
+    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({
       InsuranceCompanyID: 1,
       FilterStateID: 1,
       TicketHeaderID: 1,
       InsertDateTime: 1,
     });
 
-    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ SupportTicketID: 1 });
-    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ SupportTicketNo: 1 });
-    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ InsertUserID: 1 });
+    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({ SupportTicketID: 1 });
+    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({ SupportTicketNo: 1 });
+    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({ InsertUserID: 1 });
 
     await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
       SupportTicketID: 1,
@@ -5376,7 +5377,7 @@ export class TicketDashboardService {
   }
 
   async AddIndex(db) {
-    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
+    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({
       InsuranceCompanyID: 1,
       FilterStateID: 1,
       TicketHeaderID: 1,
@@ -5384,7 +5385,7 @@ export class TicketDashboardService {
     });
 
     // ✅ Index to support SupportTicketNo lookups
-    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
+    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({
       SupportTicketNo: 1
     });
 
@@ -10494,6 +10495,4 @@ async AgeingGrievanceService(payload: any) {
 
 
 }
-
-
 
