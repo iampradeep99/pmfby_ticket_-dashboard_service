@@ -283,7 +283,7 @@ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<strin
     // Email summary report
     console.log("📧 Preparing email summary...");
 
-    const to = ['pradeep.meandev@gmail.com'];
+    const to = ['pradeep.kumar@infodartmail.com'];
     const subject = 'Support Ticket Docket Number Update Report';
 
     const text = `
