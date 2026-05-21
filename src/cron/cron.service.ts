@@ -58,6 +58,30 @@ async handleCronUpdateDocketNumber() {
     }
   }
 
+  @Cron('0 5 0 * * *')
+  async cleanupOldSupportTicketDownloadLogs() {
+    const collection = this.db.collection('support_ticket_download_logs');
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    try {
+      await collection.createIndex({ requestedAt: 1 }, { background: true, name: 'requestedAt_cleanup_idx' });
+      await collection.createIndex({ createdAt: 1 }, { background: true, name: 'createdAt_cleanup_idx' });
+
+      const result = await collection.deleteMany({
+        status: { $nin: ['QUEUED', 'PROCESSING'] },
+        $or: [
+          { requestedAt: { $lt: startOfToday } },
+          { requestedAt: { $exists: false }, createdAt: { $lt: startOfToday } },
+        ],
+      });
+
+      console.log(`Deleted ${result.deletedCount} old support ticket download logs`);
+    } catch (err) {
+      console.error('Support ticket download log cleanup failed:', err);
+    }
+  }
+
   
 
 
