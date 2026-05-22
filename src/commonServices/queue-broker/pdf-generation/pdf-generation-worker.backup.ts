@@ -152,10 +152,6 @@ const stepsTATJourneyGrv = [
 
 const logger = new Logger("worker-runner.log")
 
-const PDF_CDN_FILE_PATH = "krph/farmer/tickets-pdf/";
-const PDF_CDN_UPLOAD_URL = "https://pmfby.gov.in/krphapi/FGMS/GCPFileUploadForCDR";
-const PDF_SEND_LOG_COLLECTION = "KRPH_Ticket_PDF_Send_Logs_test";
-
 
 
 export class PDFGenerationWorkerService {
@@ -201,7 +197,7 @@ export class PDFGenerationWorkerService {
 
     async sendFileToGCP(documentsPath: any) {
         const formData = new FormData();
-        formData.append("filePath", PDF_CDN_FILE_PATH);
+        formData.append("filePath", "krph/farmer/tickets-pdf/");
         formData.append("uploadedBy", "KRPH");
         formData.append("documents", fs.createReadStream(documentsPath));
 
@@ -215,12 +211,7 @@ export class PDFGenerationWorkerService {
             }
         );
 
-        return {
-            ...response.data,
-            statusCode: response.status,
-            headers: typeof response.headers?.toJSON === "function" ? response.headers.toJSON() : response.headers,
-            body: response.data,
-        };
+        return response.data;
     }
 
 
@@ -239,71 +230,6 @@ export class PDFGenerationWorkerService {
         } catch (err) {
             throw err;
         }
-    }
-
-    async savePDFSendDetailToDatabase(payload: object) {
-        try {
-            const database = await this.connectDB();
-            const result = await database
-                .collection(PDF_SEND_LOG_COLLECTION)
-                .insertOne(payload);
-
-            if (result.acknowledged) {
-                return { ...payload, _id: result.insertedId };
-            } else {
-                throw new Error("Failed to insert PDF send detail into database");
-            }
-        } catch (err) {
-            throw err;
-        }
-    }
-
-    private buildPDFSendDetailLog(params: {
-        selectedData: any;
-        pdfPath: string;
-        pdfName: string;
-        localFileSize: number;
-        gcpResponse: any;
-        gupshupResponse: any;
-        status: string;
-        deletedAt?: Date | null;
-    }) {
-        const now = new Date();
-        const uploadedFiles = params.gcpResponse?.responseDynamic || params.gcpResponse?.body?.responseDynamic || [];
-
-        return {
-            serviceKey: "krph-ticket-pdf-generation",
-            serviceName: "KRPH ticket PDF generation",
-            logDate: moment(now).format("YYYY-MM-DD"),
-            localFilePath: path.relative(process.cwd(), params.pdfPath).replace(/\\/g, "/"),
-            localFileName: params.pdfName,
-            localFileSize: params.localFileSize,
-            queue: "krph_support_ticket_pdf_generation_queue_1",
-            exchange: "",
-            routingKey: "",
-            logQueue: "KRPH_Ticket_PDF_Send_Logs",
-            logRoutingKey: "krph.ticket.pdf.send",
-            cdnUploadUrl: PDF_CDN_UPLOAD_URL,
-            cdnFilePath: PDF_CDN_FILE_PATH,
-            uploadedBy: "KRPH",
-            SupportTicketID: params.selectedData?.SupportTicketID || "",
-            SupportTicketNo: params.selectedData?.SupportTicketNo || "",
-            TicketHistoryID: params.selectedData?.TicketHistoryID || "",
-            TicketStatusID: params.selectedData?.TicketStatusID || "",
-            TicketStatus: params.selectedData?.TicketStatus || "",
-            RequestorMobileNo: params.selectedData?.RequestorMobileNo || "",
-            uploadResponse: {
-                statusCode: params.gcpResponse?.statusCode,
-                headers: params.gcpResponse?.headers,
-                body: params.gcpResponse?.body || params.gcpResponse,
-            },
-            uploadedFiles,
-            sendResponse: params.gupshupResponse || null,
-            status: params.status,
-            createdAt: now,
-            updatedAt: now,
-            deletedAt: params.deletedAt || null,
-        };
     }
 
 
@@ -345,12 +271,8 @@ export class PDFGenerationWorkerService {
             console.log("Response:", response.data);
             return response.data;
 
-        } catch (err: any) {
+        } catch (err) {
             console.error("Error:", err);
-            return {
-                success: false,
-                error: err?.message || err,
-            };
         }
     }
 
@@ -646,7 +568,6 @@ export class PDFGenerationWorkerService {
                     await page.close();
                     page = null;
 
-                    const localFileSize = fs.statSync(pdfPath).size;
                     const gcpResponse = await this.sendFileToGCP(pdfPath);
                     const fetchedGCPInfo = gcpResponse?.responseDynamic?.[0];
 
@@ -674,39 +595,15 @@ export class PDFGenerationWorkerService {
 
                     const savedInfo = await this.saveToDatabase(finalPayloadToSave);
 
-                    let gupshupResponse = null;
                     if (savedInfo?._id) {
-                        gupshupResponse = await this.gupshupCallForPDFSend(finalPayloadToSave).catch(err => {
-                            console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err);
-                            return {
-                                success: false,
-                                error: err?.message || err,
-                            };
-                        });
+                        await this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+                            console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
+                        );
                     }
 
-                    let deletedAt: Date | null = null;
-                    let isLocalFileDeleted = false;
                     try {
                         fs.unlinkSync(pdfPath);
-                        deletedAt = new Date();
-                        isLocalFileDeleted = true;
-                    } catch (err: any) {
-                        console.log(`Failed to delete temp PDF ${pdfPath}: ${err?.message || err}`);
-                    }
-
-                    const isMessageSent = gupshupResponse?.success !== false;
-
-                    await this.savePDFSendDetailToDatabase(this.buildPDFSendDetailLog({
-                        selectedData,
-                        pdfPath,
-                        pdfName,
-                        localFileSize,
-                        gcpResponse,
-                        gupshupResponse,
-                        status: `${isMessageSent ? "uploaded_sent" : "uploaded_send_failed"}${isLocalFileDeleted ? "_deleted" : ""}`,
-                        deletedAt,
-                    }));
+                    } catch { }
 
                     const processingTime = Date.now() - startTime;
                     console.log(`Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
