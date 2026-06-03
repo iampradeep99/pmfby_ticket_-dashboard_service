@@ -5133,6 +5133,51 @@ export class TicketDashboardService {
     return requestId;
   }
 
+  async updateSupportTicketDownloadRequest(requestId: string, fields: any) {
+    if (!requestId) return;
+
+    await this.db.collection('support_ticket_download_logs').updateOne(
+      { requestId },
+      {
+        $set: {
+          ...fields,
+          progressUpdatedAt: new Date(),
+        },
+      },
+    );
+  }
+
+  async claimQueuedSupportTicketDownloadRequests(limit = 5) {
+    const collection = this.db.collection('support_ticket_download_logs');
+    const claimedRequests = [];
+
+    for (let index = 0; index < limit; index++) {
+      const claimedRequest = await collection.findOneAndUpdate(
+        {
+          status: 'QUEUED',
+          requestId: { $exists: true, $ne: '' },
+        },
+        {
+          $set: {
+            status: 'PROCESSING',
+            progressStage: 'RECOVERED_DIRECT_WORKER_FALLBACK',
+            errorMessage: 'Recovered from stale QUEUED status',
+            progressUpdatedAt: new Date(),
+          },
+        },
+        {
+          sort: { requestedAt: 1, createdAt: 1 },
+          returnDocument: 'after',
+        },
+      );
+
+      if (!claimedRequest) break;
+      claimedRequests.push(claimedRequest);
+    }
+
+    return claimedRequests;
+  }
+
 
   async downloadFarmerCallingHistory(payload) {
     console.log(payload)
