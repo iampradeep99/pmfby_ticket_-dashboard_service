@@ -6732,6 +6732,7 @@ export class TicketDashboardService {
         stateID,
         districtID,
         insuranceCompanyID,
+        cropSeasonID,
         defaultLoad,
         pageIndex = 1,
         pageSize = 100,
@@ -6744,6 +6745,7 @@ export class TicketDashboardService {
       supportTicketTypeID = Number(supportTicketTypeID);
       statusID = Number(statusID);
       schemeID = Number(schemeID);
+      cropSeasonID = Number(cropSeasonID);
 
       // Validate required user ID
       if (!objCommon || !objCommon.insertedUserID || objCommon.insertedUserID === "") {
@@ -6815,6 +6817,7 @@ export class TicketDashboardService {
 
       // Apply filters based on payload
       if (ticketHeaderID && ticketHeaderID !== 0) match.TicketHeaderID = ticketHeaderID;
+      if (cropSeasonID && cropSeasonID !== 0) match.RequestSeason = cropSeasonID;
 
       // Insurance company filter with authorization check
       if (insuranceCompanyID && insuranceCompanyID !== 0) {
