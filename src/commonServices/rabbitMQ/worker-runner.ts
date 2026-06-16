@@ -10,9 +10,6 @@ export function runWorker(payload: any): Promise<any> {
 
     const worker = new Worker(workerPath, {
       workerData: payload,
-      resourceLimits: {
-        maxOldGenerationSizeMb: 4096,
-      },
     });
 
     worker.on('message', (msg) => {

@@ -7,23 +7,24 @@ const axios = require("axios")
 import { GCPServices } from "../GCSFileUpload"
 import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from "../../templates/mailTemplates"
 import { UtilService } from "../../commonServices/utilService"
+import { RedisWrapper } from "../../commonServices/redisWrapper"
 import { MailService } from "../../mail/mail.service"
 import * as moment from "moment"
 import { MongoClient, type Db } from "mongodb"
 
+const redisWrapper = new RedisWrapper()
 const mailService = new MailService()
 let cachedDb: Db | null = null
 
-const CURSOR_BATCH_SIZE = 500
-const PROGRESS_UPDATE_EVERY = 5000
-const EXCEL_MAX_DATA_ROWS_PER_SHEET = 1000000
+const CHUNK_SIZE = 10000
 const MAX_JOURNEY_INDICES = 3
 const DB_URI = "mongodb://10.128.60.45:27017"
 const DB_NAME = "krph_db"
 const API_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk"
 const API_URL = "https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail"
-const TICKET_COLLECTION = "SLA_Ticket_listing"
+const TICKET_COLLECTION = "SLA_KRPH_SupportTickets_Records"
+// const TICKET_COLLECTION = "SLA_Ticket_listing";
 const DOWNLOAD_LOG_COLLECTION = "support_ticket_download_logs"
 
 const TICKET_TYPE_MAP: Record<number, string> = {
@@ -161,7 +162,79 @@ function buildDynamicColumns(maxIndices: number = MAX_JOURNEY_INDICES): any[] {
   return dynamicColumns
 }
 
-function buildAggregationPipeline(baseMatch: any): any[] {
+function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: number = CHUNK_SIZE): any[] {
+  console.log(JSON.stringify([
+    { $match: baseMatch },
+    { $sort: { InsertDateTime: -1 } },
+    {
+      $group: {
+        _id: "$SupportTicketNo",
+        doc: { $first: "$$ROOT" },
+      },
+    },
+    { $replaceRoot: { newRoot: "$doc" } },
+    {
+      $lookup: {
+        from: "SLA_KRPH_SupportTicketsHistory_Records",
+        let: { ticketId: "$SupportTicketID" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [{ $eq: ["$SupportTicketID", "$$ticketId"] }, { $eq: ["$TicketStatusID", 109304] }],
+              },
+            },
+          },
+          { $sort: { TicketHistoryID: -1 } },
+          { $limit: 1 },
+        ],
+        as: "ticketHistory",
+      },
+    },
+    { $unwind: { path: "$ticketHistory", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "support_ticket_claim_intimation_report_history",
+        let: { ticketNo: "$SupportTicketNo" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$SupportTicketNo", "$$ticketNo"] } } },
+          { $sort: { InsertDateTime: -1 } },
+          { $limit: 1 },
+        ],
+        as: "claimInfo",
+      },
+    },
+    { $unwind: { path: "$claimInfo", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "csc_agent_master",
+        let: { userLoginId: "$InsertUserID" },
+        pipeline: [{ $match: { $expr: { $eq: ["$UserLoginID", "$$userLoginId"] } } }, { $limit: 1 }],
+        as: "agentInfo",
+      },
+    },
+    { $unwind: { path: "$agentInfo", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "ticket_comment_journey",
+        localField: "SupportTicketNo",
+        foreignField: "SupportTicketNo",
+        as: "ticket_comment_journey",
+        pipeline: [
+          { $sort: { CreatedDate: -1 } },
+          {
+            $group: {
+              _id: "$ResolvedComment",
+              unique_comments: { $first: "$$ROOT" },
+            },
+          },
+          { $replaceRoot: { newRoot: "$unique_comments" } },
+        ],
+      },
+    },
+    { $skip: skip },
+    { $limit: fetchLimit },
+  ]))
   return [
     { $match: baseMatch },
     { $sort: { InsertDateTime: -1 } },
@@ -231,6 +304,8 @@ function buildAggregationPipeline(baseMatch: any): any[] {
         ],
       },
     },
+    { $skip: skip },
+    { $limit: fetchLimit },
   ]
 }
 
@@ -366,142 +441,67 @@ function mapDocumentToRow(doc: any, dynamicColumnsBatch: Record<string, any>): R
   }
 }
 
-async function updateDownloadProgress(db: Db, requestId: string, fields: any): Promise<void> {
-  if (!requestId) return
-
-  await db.collection(DOWNLOAD_LOG_COLLECTION).updateOne(
-    { requestId },
-    {
-      $set: {
-        ...fields,
-        progressUpdatedAt: new Date(),
-      },
-    },
-  )
-}
-
-async function getEstimatedTotalRecords(db: Db, baseMatch: any, startDate: Date, endDate: Date): Promise<number> {
-  const match = {
-    ...baseMatch,
-    InsertDateTime: {
-      $gte: moment(startDate).utc().startOf("day").toDate(),
-      $lte: moment(endDate).utc().endOf("day").toDate(),
-    },
-  }
-
-  const result = await db
-    .collection(TICKET_COLLECTION)
-    .aggregate([{ $match: match }, { $group: { _id: "$SupportTicketNo" } }, { $count: "total" }], { allowDiskUse: true })
-    .toArray()
-
-  return result?.[0]?.total || 0
-}
-
-async function processDateRange(
+async function processChunk(
   db: Db,
   baseMatch: any,
-  startDate: Date,
-  endDate: Date,
-  excelFile: ExcelFileWriter,
-  requestId: string,
-  estimatedTotalRecords: number,
-): Promise<number> {
+  skip: number,
+  worksheet: any,
+): Promise<{ hasMore: boolean; processedCount: number }> {
+  const FETCH_LIMIT = CHUNK_SIZE + 1
+  const pipeline = buildAggregationPipeline(baseMatch, skip, FETCH_LIMIT)
+  const cursor = db.collection(TICKET_COLLECTION).aggregate(pipeline, { allowDiskUse: true })
+  const docs = await cursor.toArray()
+
+  const docsToProcess = docs.slice(0, CHUNK_SIZE)
+  const hasMoreRecords = docs.length > CHUNK_SIZE
+
+  for (const doc of docsToProcess) {
+    const journey = extractJourneyFromDoc(doc)
+    const dynamicColumnsBatch = buildDynamicColumnsBatch(journey)
+    const row = mapDocumentToRow(doc, dynamicColumnsBatch)
+    worksheet.addRow(row).commit()
+  }
+
+  return {
+    hasMore: hasMoreRecords,
+    processedCount: docsToProcess.length,
+  }
+}
+
+async function processDateRange(db: Db, baseMatch: any, startDate: Date, endDate: Date, worksheet: any): Promise<void> {
   let currentDate = moment(startDate)
-  let totalProcessed = 0
 
   while (currentDate.isSameOrBefore(endDate, "day")) {
     const dayStart = currentDate.clone().utc().startOf("day").toDate()
     const dayEnd = currentDate.clone().utc().endOf("day").toDate()
 
     const dailyMatch = { ...baseMatch, InsertDateTime: { $gte: dayStart, $lte: dayEnd } }
-    const pipeline = buildAggregationPipeline(dailyMatch)
-    const cursor = db
-      .collection(TICKET_COLLECTION)
-      .aggregate(pipeline, { allowDiskUse: true, batchSize: CURSOR_BATCH_SIZE })
 
-    let dailyProcessed = 0
+    let skip = 0
+    let hasMore = true
 
-    try {
-      for await (const doc of cursor) {
-        const journey = extractJourneyFromDoc(doc)
-        const dynamicColumnsBatch = buildDynamicColumnsBatch(journey)
-        const row = mapDocumentToRow(doc, dynamicColumnsBatch)
-        addRowToExcelFile(excelFile, row)
+    while (hasMore) {
+      const { hasMore: hasMoreResults, processedCount } = await processChunk(db, dailyMatch, skip, worksheet)
+      hasMore = hasMoreResults
+      skip += CHUNK_SIZE
 
-        dailyProcessed += 1
-        totalProcessed += 1
-
-        if (totalProcessed % PROGRESS_UPDATE_EVERY === 0) {
-          const progressPercentage = estimatedTotalRecords
-            ? Math.min(99, Math.floor((totalProcessed / estimatedTotalRecords) * 100))
-            : 0
-
-          await updateDownloadProgress(db, requestId, {
-            status: "PROCESSING",
-            processedRecords: totalProcessed,
-            progressPercentage,
-            progressStage: "GENERATING_EXCEL",
-            currentDate: currentDate.format("YYYY-MM-DD"),
-          })
-        }
-      }
-    } finally {
-      await cursor.close()
+      console.log(`Processed ${processedCount} documents for ${currentDate.format("YYYY-MM-DD")}`)
     }
 
-    await updateDownloadProgress(db, requestId, {
-      status: "PROCESSING",
-      processedRecords: totalProcessed,
-      progressPercentage: estimatedTotalRecords
-        ? Math.min(99, Math.floor((totalProcessed / estimatedTotalRecords) * 100))
-        : 0,
-      progressStage: "GENERATING_EXCEL",
-      currentDate: currentDate.format("YYYY-MM-DD"),
-    })
-
-    console.log(`Processed ${dailyProcessed} documents for ${currentDate.format("YYYY-MM-DD")}`)
     currentDate = currentDate.add(1, "day")
   }
-
-  return totalProcessed
 }
 
 async function createExcelFile(
   folderPath: string,
   fileName: string,
   columns: any[],
-): Promise<ExcelFileWriter> {
+): Promise<{ workbook: any; filePath: string; worksheet: any }> {
   const filePath = path.join(folderPath, fileName)
-  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-    filename: filePath,
-    useStyles: false,
-    useSharedStrings: false,
-  })
-  const worksheet = workbook.addWorksheet("Support Tickets 1")
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: filePath })
+  const worksheet = workbook.addWorksheet("Support Tickets")
   worksheet.columns = columns
-  return { workbook, filePath, worksheet, columns, sheetIndex: 1, rowsInCurrentSheet: 0 }
-}
-
-type ExcelFileWriter = {
-  workbook: any
-  filePath: string
-  worksheet: any
-  columns: any[]
-  sheetIndex: number
-  rowsInCurrentSheet: number
-}
-
-function addRowToExcelFile(excelFile: ExcelFileWriter, row: Record<string, any>): void {
-  if (excelFile.rowsInCurrentSheet >= EXCEL_MAX_DATA_ROWS_PER_SHEET) {
-    excelFile.worksheet.commit()
-    excelFile.sheetIndex += 1
-    excelFile.worksheet = excelFile.workbook.addWorksheet(`Support Tickets ${excelFile.sheetIndex}`)
-    excelFile.worksheet.columns = excelFile.columns
-    excelFile.rowsInCurrentSheet = 0
-  }
-
-  excelFile.worksheet.addRow(row).commit()
-  excelFile.rowsInCurrentSheet += 1
+  return { workbook, filePath, worksheet }
 }
 
 async function createZipFile(excelFilePath: string, zipFileName: string, folderPath: string): Promise<string> {
@@ -509,32 +509,28 @@ async function createZipFile(excelFilePath: string, zipFileName: string, folderP
   const output = fs.createWriteStream(zipFilePath)
   const archive = archiver("zip", { zlib: { level: 9 } })
 
-  const zipCompleted = new Promise<string>((resolve, reject) => {
-    output.on("close", () => resolve(zipFilePath))
-    output.on("error", reject)
-    archive.on("error", reject)
-  })
-
   archive.pipe(output)
   archive.file(excelFilePath, { name: path.basename(excelFilePath) })
   await archive.finalize()
 
-  return zipCompleted
+  return new Promise((resolve, reject) => {
+    output.on("close", () => resolve(zipFilePath))
+    output.on("error", reject)
+  })
 }
 
 async function uploadToGCP(zipFilePath: string, zipFileName: string): Promise<string> {
   const gcpService = new GCPServices()
-  const uploadResult = await gcpService.uploadFilePathToGCP({
+  const fileBuffer = await fs.promises.readFile(zipFilePath)
+  const uploadResult = await gcpService.uploadFileToGCP({
     filePath: "krph/reports/",
     uploadedBy: "KRPH",
-    localFilePath: zipFilePath,
-    originalname: zipFileName,
+    file: { buffer: fileBuffer, originalname: zipFileName },
   })
   return uploadResult?.file?.[0]?.gcsUrl || ""
 }
 
 async function insertOrUpdateDownloadLog(
-  requestId: string,
   userId: string,
   insuranceCompanyId: string,
   stateId: string,
@@ -545,26 +541,12 @@ async function insertOrUpdateDownloadLog(
   downloadUrl: string,
   db: Db,
 ): Promise<void> {
-  const filter = requestId
-    ? { requestId }
-    : { userId, insuranceCompanyId, stateId, ticketHeaderId, fromDate, toDate }
-
   await db.collection(DOWNLOAD_LOG_COLLECTION).updateOne(
-    filter,
+    { userId, insuranceCompanyId, stateId, ticketHeaderId, fromDate, toDate },
     {
       $set: {
-        requestId,
-        userId,
-        requestedBy: userId,
-        insuranceCompanyId,
-        stateId,
-        ticketHeaderId,
-        fromDate,
-        toDate,
         zipFileName,
         downloadUrl,
-        fileName: zipFileName,
-        fileUrl: downloadUrl,
         createdAt: new Date(),
       },
     },
@@ -642,7 +624,6 @@ async function processTicketHistory(ticketPayload: any) {
     page = 1,
     limit = 1000000000,
     userEmail,
-    requestId,
   } = ticketPayload
 
   const db = await connectToDatabase(DB_URI, DB_NAME)
@@ -676,12 +657,6 @@ async function processTicketHistory(ticketPayload: any) {
 
   const permissionCheck = await validateUserPermissions(userDetail, SPInsuranceCompanyID, SPStateID)
   if (!permissionCheck.valid) {
-    await updateDownloadProgress(db, requestId, {
-      status: "FAILED",
-      progressStage: "FAILED",
-      failedAt: new Date(),
-      errorMessage: permissionCheck.error,
-    })
     return { rcode: 0, rmessage: permissionCheck.error }
   }
 
@@ -691,25 +666,17 @@ async function processTicketHistory(ticketPayload: any) {
   }
 
   const ticketTypeName = TICKET_TYPE_MAP[SPTicketHeaderID] || "General"
+  const currentDateStr = new Date().toLocaleDateString("en-GB").split("/").join("_")
   const fromDateStr = new Date(SPFROMDATE).toLocaleDateString("en-GB").split("/").join("_")
   const toDateStr = new Date(SPTODATE).toLocaleDateString("en-GB").split("/").join("_")
-  const excelFileName = `${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}_${Date.now()}.xlsx`
+  // const excelFileName = `${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}.xlsx`
+const excelFileName =
+  `${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}_${Date.now()}.xlsx`;
 
   const allColumns = [...STATIC_COLUMNS, ...buildDynamicColumns()]
-  const excelFile = await createExcelFile(folderPath, excelFileName, allColumns)
-
-  await updateDownloadProgress(db, requestId, {
-    status: "PROCESSING",
-    startedAt: new Date(),
-    progressStage: "COUNTING_RECORDS",
-    progressPercentage: 0,
-    processedRecords: 0,
-  })
-
-  const estimatedTotalRecords = await getEstimatedTotalRecords(db, baseMatch, new Date(SPFROMDATE), new Date(SPTODATE))
+  const { workbook, filePath: excelFilePath, worksheet } = await createExcelFile(folderPath, excelFileName, allColumns)
 
   await insertOrUpdateDownloadLog(
-    requestId,
     SPUserID,
     SPInsuranceCompanyID,
     SPStateID,
@@ -721,28 +688,14 @@ async function processTicketHistory(ticketPayload: any) {
     db,
   )
 
-  await updateDownloadProgress(db, requestId, {
-    estimatedTotalRecords,
-    totalRecords: estimatedTotalRecords,
-    progressStage: "GENERATING_EXCEL",
-  })
+  await processDateRange(db, baseMatch, new Date(SPFROMDATE), new Date(SPTODATE), worksheet)
 
-  const processedRecords = await processDateRange(
-    db,
-    baseMatch,
-    new Date(SPFROMDATE),
-    new Date(SPTODATE),
-    excelFile,
-    requestId,
-    estimatedTotalRecords,
-  )
-
-  await excelFile.workbook.commit()
-  console.log(`Excel file created at: ${excelFile.filePath}`)
+  await workbook.commit()
+  console.log(`Excel file created at: ${excelFilePath}`)
 
   const zipFileName = excelFileName.replace(".xlsx", ".zip")
-  const zipFilePath = await createZipFile(excelFile.filePath, zipFileName, folderPath)
-  await fs.promises.unlink(excelFile.filePath).catch(console.error)
+  const zipFilePath = await createZipFile(excelFilePath, zipFileName, folderPath)
+  await fs.promises.unlink(excelFilePath).catch(console.error)
 
   const gcpDownloadUrl = await uploadToGCP(zipFilePath, zipFileName)
   if (gcpDownloadUrl) {
@@ -750,7 +703,6 @@ async function processTicketHistory(ticketPayload: any) {
   }
 
   await insertOrUpdateDownloadLog(
-    requestId,
     SPUserID,
     SPInsuranceCompanyID,
     SPStateID,
@@ -762,19 +714,9 @@ async function processTicketHistory(ticketPayload: any) {
     db,
   )
 
-  await updateDownloadProgress(db, requestId, {
-    status: "COMPLETED",
-    processedRecords,
-    progressPercentage: 100,
-    progressStage: "COMPLETED",
-    completedAt: new Date(),
-    totalRecords: processedRecords,
-  })
-
   const responsePayload = {
     data: [],
-    pagination: { total: processedRecords, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
-    requestId,
+    pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
     downloadUrl: gcpDownloadUrl,
     zipFileName: zipFileName,
   }
@@ -786,18 +728,4 @@ async function processTicketHistory(ticketPayload: any) {
 
 processTicketHistory(workerData)
   .then((result) => parentPort?.postMessage({ success: true, result }))
-  .catch(async (err) => {
-    try {
-      const db = await connectToDatabase(DB_URI, DB_NAME)
-      await updateDownloadProgress(db, workerData?.requestId, {
-        status: "FAILED",
-        progressStage: "FAILED",
-        failedAt: new Date(),
-        errorMessage: err.message,
-      })
-    } catch (logErr) {
-      console.error("Failed to update download log after worker error:", logErr)
-    }
-
-    parentPort?.postMessage({ success: false, error: err.message })
-  })
+  .catch((err) => parentPort?.postMessage({ success: false, error: err.message }))

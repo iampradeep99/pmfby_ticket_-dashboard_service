@@ -152,10 +152,6 @@ const stepsTATJourneyGrv = [
 
 const logger = new Logger("worker-runner.log")
 
-const PDF_CDN_FILE_PATH = "krph/farmer/tickets-pdf/";
-const PDF_CDN_UPLOAD_URL = "https://pmfby.gov.in/krphapi/FGMS/GCPFileUploadForCDR";
-const PDF_SEND_LOG_COLLECTION = "KRPH_Ticket_PDF_Send_Logs_test";
-
 
 
 export class PDFGenerationWorkerService {
@@ -201,7 +197,7 @@ export class PDFGenerationWorkerService {
 
     async sendFileToGCP(documentsPath: any) {
         const formData = new FormData();
-        formData.append("filePath", PDF_CDN_FILE_PATH);
+        formData.append("filePath", "krph/farmer/tickets-pdf/");
         formData.append("uploadedBy", "KRPH");
         formData.append("documents", fs.createReadStream(documentsPath));
 
@@ -215,12 +211,7 @@ export class PDFGenerationWorkerService {
             }
         );
 
-        return {
-            ...response.data,
-            statusCode: response.status,
-            headers: typeof response.headers?.toJSON === "function" ? response.headers.toJSON() : response.headers,
-            body: response.data,
-        };
+        return response.data;
     }
 
 
@@ -239,71 +230,6 @@ export class PDFGenerationWorkerService {
         } catch (err) {
             throw err;
         }
-    }
-
-    async savePDFSendDetailToDatabase(payload: object) {
-        try {
-            const database = await this.connectDB();
-            const result = await database
-                .collection(PDF_SEND_LOG_COLLECTION)
-                .insertOne(payload);
-
-            if (result.acknowledged) {
-                return { ...payload, _id: result.insertedId };
-            } else {
-                throw new Error("Failed to insert PDF send detail into database");
-            }
-        } catch (err) {
-            throw err;
-        }
-    }
-
-    private buildPDFSendDetailLog(params: {
-        selectedData: any;
-        pdfPath: string;
-        pdfName: string;
-        localFileSize: number;
-        gcpResponse: any;
-        gupshupResponse: any;
-        status: string;
-        deletedAt?: Date | null;
-    }) {
-        const now = new Date();
-        const uploadedFiles = params.gcpResponse?.responseDynamic || params.gcpResponse?.body?.responseDynamic || [];
-
-        return {
-            serviceKey: "krph-ticket-pdf-generation",
-            serviceName: "KRPH ticket PDF generation",
-            logDate: moment(now).format("YYYY-MM-DD"),
-            localFilePath: path.relative(process.cwd(), params.pdfPath).replace(/\\/g, "/"),
-            localFileName: params.pdfName,
-            localFileSize: params.localFileSize,
-            queue: "krph_support_ticket_pdf_generation_queue_1",
-            exchange: "",
-            routingKey: "",
-            logQueue: "KRPH_Ticket_PDF_Send_Logs",
-            logRoutingKey: "krph.ticket.pdf.send",
-            cdnUploadUrl: PDF_CDN_UPLOAD_URL,
-            cdnFilePath: PDF_CDN_FILE_PATH,
-            uploadedBy: "KRPH",
-            SupportTicketID: params.selectedData?.SupportTicketID || "",
-            SupportTicketNo: params.selectedData?.SupportTicketNo || "",
-            TicketHistoryID: params.selectedData?.TicketHistoryID || "",
-            TicketStatusID: params.selectedData?.TicketStatusID || "",
-            TicketStatus: params.selectedData?.TicketStatus || "",
-            RequestorMobileNo: params.selectedData?.RequestorMobileNo || "",
-            uploadResponse: {
-                statusCode: params.gcpResponse?.statusCode,
-                headers: params.gcpResponse?.headers,
-                body: params.gcpResponse?.body || params.gcpResponse,
-            },
-            uploadedFiles,
-            sendResponse: params.gupshupResponse || null,
-            status: params.status,
-            createdAt: now,
-            updatedAt: now,
-            deletedAt: params.deletedAt || null,
-        };
     }
 
 
@@ -345,97 +271,93 @@ export class PDFGenerationWorkerService {
             console.log("Response:", response.data);
             return response.data;
 
-        } catch (err: any) {
+        } catch (err) {
             console.error("Error:", err);
-            return {
-                success: false,
-                error: err?.message || err,
-            };
         }
     }
 
 
-//     async gupshupCallForPDFSend(payload) {
-//         try {
+    async gupshupCallForPDFSendWorking(payload) {
+        try {
 
-//             const allowedNumbers = [
-//                 // "919873382826",
-//                 // "919891651196",
-//                  "916386236314",
-//                 // "919899499022",
-//                 //  "919215368699"
-//             ];
+            const allowedNumbers = [
+                "919873382826",
+                "919891651196",
+                //  "916386236314",
+                "919899499022",
+                 "919215368699"
+            ];
 
-//             const requestorMobileNo = allowedNumbers[Math.floor(Math.random() * allowedNumbers.length)];
+            const requestorMobileNo = allowedNumbers[Math.floor(Math.random() * allowedNumbers.length)];
 
-//             const requestData = {
-//                 userid: config.gupshupConfig.userid,
-//                 password: config.gupshupConfig.password,
-//                 send_to: requestorMobileNo,
-//                 v: config.gupshupConfig.version,
-//                 format: config.gupshupConfig.format,
-//                 msg_type: config.gupshupConfig.msg_type,
-//                 method: config.gupshupConfig.method,
-//                 caption: config.gupshupConfig.caption,
-//                 media_url: payload?.TicketFileURl,
-//                 filename: payload?.fileName
-//             };
+            const requestData = {
+                userid: config.gupshupConfig.userid,
+                password: config.gupshupConfig.password,
+                send_to: requestorMobileNo,
+                v: config.gupshupConfig.version,
+                format: config.gupshupConfig.format,
+                msg_type: config.gupshupConfig.msg_type,
+                method: config.gupshupConfig.method,
+                caption: config.gupshupConfig.caption,
+                media_url: payload?.TicketFileURl,
+                filename: payload?.fileName
+            };
 
-//             let apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
+            let apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
 
-//             const response = await this.client.post(apiUrl, requestData, {
-//                 headers: { "Content-Type": "application/json" },
-//             });
+            const response = await this.client.post(apiUrl, requestData, {
+                headers: { "Content-Type": "application/json" },
+            });
 
-//             console.log("Sent To:", requestorMobileNo);
-//             console.log("Response:", response.data);
+            console.log("Sent To:", requestorMobileNo);
+            console.log("Response:", response.data);
 
-//             return response.data;
+            return response.data;
 
-//         } catch (err) {
-//             console.error("Error:", err);
-//         }
-//     }
+        } catch (err) {
+            console.error("Error:", err);
+        }
+    }
 
 
-//     async  gupshupCallForPDFSendOld(payload) {
-//     try {
+    async  gupshupCallForPDFSendOld(payload) {
+    try {
 
-//         const allowedNumbers = payload?.RequestorMobileNo
+        const allowedNumbers = payload?.RequestorMobileNo
 
-//         // Select number in sequence and update index
-//         const requestorMobileNoInfo = allowedNumbers[currentIndex];
-//         currentIndex = (currentIndex + 1) % allowedNumbers.length; // Circular rotation
+        // Select number in sequence and update index
+        const requestorMobileNoInfo = allowedNumbers[currentIndex];
+        currentIndex = (currentIndex + 1) % allowedNumbers.length; // Circular rotation
 
-//         const requestData = {
-//             userid: config.gupshupConfig.userid,
-//             password: config.gupshupConfig.password,
-//             send_to: requestorMobileNoInfo,
-//             v: config.gupshupConfig.version,
-//             format: config.gupshupConfig.format,
-//             msg_type: config.gupshupConfig.msg_type,
-//             method: config.gupshupConfig.method,
-//             caption: config.gupshupConfig.caption,
-//             media_url: payload?.TicketFileURl,
-//             filename: payload?.fileName
-//         };
+        const requestData = {
+            userid: config.gupshupConfig.userid,
+            password: config.gupshupConfig.password,
+            send_to: requestorMobileNoInfo,
+            v: config.gupshupConfig.version,
+            format: config.gupshupConfig.format,
+            msg_type: config.gupshupConfig.msg_type,
+            method: config.gupshupConfig.method,
+            caption: config.gupshupConfig.caption,
+            media_url: payload?.TicketFileURl,
+            filename: payload?.fileName
+        };
 
-//         const apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
+        const apiUrl = "https://mediaapi.smsgupshup.com/GatewayAPI/rest";
 
-//         const response = await this.client.post(apiUrl, requestData, {
-//             headers: { "Content-Type": "application/json" },
-//         });
+        const response = await this.client.post(apiUrl, requestData, {
+            headers: { "Content-Type": "application/json" },
+        });
 
-//         console.log("Sent To:", requestorMobileNoInfo);
-//         console.log("Response:", response.data);
+        console.log("Sent To:", requestorMobileNoInfo);
+        console.log("Response:", response.data);
 
-//         return response.data;
+        return response.data;
 
-//     } catch (err) {
-//         console.error("Error sending WhatsApp message:", err.message);
-//         return { success: false, error: err.message };
-//     }
-// }
+    } catch (err) {
+        console.error("Error sending WhatsApp message:", err.message);
+        return { success: false, error: err.message };
+    }
+}
 
 
 
@@ -612,10 +534,8 @@ export class PDFGenerationWorkerService {
                     }
 
                     const ticketListDetails: any = await this.FetchTicketInformation(payload, selectedData);
-                    console.log(ticketListDetails, "ticketListDetails")
-                    const claimDetails = await this.fetchFarmerSeasonYearClaim(ticketListDetails?.[0] || selectedData)
 
-                    const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails, { claimDetails });
+                    const prinHTML = await this.renderPMFBYTemplate(selectedData, ticketListDetails);
 
                     browser = await chromium.launch({ headless: true });
                     context = await browser.newContext();
@@ -646,7 +566,6 @@ export class PDFGenerationWorkerService {
                     await page.close();
                     page = null;
 
-                    const localFileSize = fs.statSync(pdfPath).size;
                     const gcpResponse = await this.sendFileToGCP(pdfPath);
                     const fetchedGCPInfo = gcpResponse?.responseDynamic?.[0];
 
@@ -674,39 +593,15 @@ export class PDFGenerationWorkerService {
 
                     const savedInfo = await this.saveToDatabase(finalPayloadToSave);
 
-                    let gupshupResponse = null;
                     if (savedInfo?._id) {
-                        gupshupResponse = await this.gupshupCallForPDFSend(finalPayloadToSave).catch(err => {
-                            console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err);
-                            return {
-                                success: false,
-                                error: err?.message || err,
-                            };
-                        });
+                        await this.gupshupCallForPDFSend(finalPayloadToSave).catch(err =>
+                            console.log(`Gupshup call failed for ${payload.SupportTicketNo}:`, err)
+                        );
                     }
 
-                    let deletedAt: Date | null = null;
-                    let isLocalFileDeleted = false;
                     try {
                         fs.unlinkSync(pdfPath);
-                        deletedAt = new Date();
-                        isLocalFileDeleted = true;
-                    } catch (err: any) {
-                        console.log(`Failed to delete temp PDF ${pdfPath}: ${err?.message || err}`);
-                    }
-
-                    const isMessageSent = gupshupResponse?.success !== false;
-
-                    await this.savePDFSendDetailToDatabase(this.buildPDFSendDetailLog({
-                        selectedData,
-                        pdfPath,
-                        pdfName,
-                        localFileSize,
-                        gcpResponse,
-                        gupshupResponse,
-                        status: `${isMessageSent ? "uploaded_sent" : "uploaded_send_failed"}${isLocalFileDeleted ? "_deleted" : ""}`,
-                        deletedAt,
-                    }));
+                    } catch { }
 
                     const processingTime = Date.now() - startTime;
                     console.log(`Ticket ${payload.SupportTicketNo} processed in ${processingTime}ms`);
@@ -841,51 +736,6 @@ export class PDFGenerationWorkerService {
                 "Content-Type": "application/json",
             },
         })
-    }
-
-    private async fetchFarmerSeasonYearClaim(ticketData: any): Promise<any | null> {
-        try {
-            const seasonID = ticketData?.RequestSeason ? String(ticketData.RequestSeason) : ""
-            const year = ticketData?.RequestYear ? String(ticketData.RequestYear) : ""
-            const farmerID = ticketData?.TicketRequestorID || ""
-
-            if (!seasonID || !year || !farmerID) {
-                logger.warn("GetFarmerSeasonYearClaim skipped: seasonID/year/farmerID missing")
-                return null
-            }
-
-            const payload = {
-                seasonID,
-                year,
-                farmerID,
-                objCommon: {
-                    insertedUserID: "214",
-                    insertedIPAddress: "61.246.33.210",
-                    dateShort: "yyyy-MM-dd",
-                    dateLong: "yyyy-MM-dd HH:mm:ss",
-                },
-            }
-
-            const response = await this.client.post("/GetFarmerSeasonYearClaim", payload, {
-                baseURL: "https://pmfby.gov.in/krphapi/FGMS",
-                headers: {
-                    Authorization: `Bearer ${this.token}`,
-                    "Content-Type": "application/json",
-                },
-                timeout: 15000,
-            })
-
-            if (!response?.data?.responseDynamic) {
-                logger.warn("GetFarmerSeasonYearClaim: No responseDynamic found")
-                return null
-            }
-
-            const decodedResponse = await this.decompressResponse(response.data.responseDynamic)
-            return decodedResponse?.data || null
-        } catch (err: any) {
-            logger.warn(`GetFarmerSeasonYearClaim failed: ${err?.message || err}`)
-            return null
-        }
     }
 
     private async decompressResponse(compressedData: string | Uint8Array): Promise<any> {
@@ -1471,101 +1321,6 @@ export class PDFGenerationWorkerService {
         return rtnCommentsList
     }
 
-    private escapeHtml(value: any): string {
-        if (value === undefined || value === null || value === "") return "-"
-        return String(value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;")
-    }
-
-    private formatClaimAmount(amount: any): string {
-        const numericAmount = Number(amount)
-        if (!Number.isFinite(numericAmount)) return "-"
-        return numericAmount.toLocaleString("en-IN", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        })
-    }
-
-    private isPaidClaim(claim: any): boolean {
-        const claimStatus = String(claim?.claimStatus || claim?.claimStatusMessage || "").toLowerCase()
-        const paymentStatus = String(claim?.paymentStatus || "").toLowerCase()
-        return claimStatus.includes("payment success") || paymentStatus === "accp" || paymentStatus === "paid"
-    }
-
-    private buildClaimInformationHtml(claimDetails: any): string {
-        const applicationList = Array.isArray(claimDetails?.applicationList) ? claimDetails.applicationList : []
-        if (!applicationList.length) return ""
-
-        let claimHtml = ""
-
-        for (const application of applicationList) {
-            const claimData = Array.isArray(application?.claimData) ? application.claimData : []
-            const totalPaid = claimData.reduce((sum: number, claim: any) => {
-                const amount = Number(claim?.actualAmount || 0)
-                return this.isPaidClaim(claim) && Number.isFinite(amount) ? sum + amount : sum
-            }, 0)
-
-            claimHtml +=
-                '<div class="claim-block">' +
-                '  <div class="claim-title">Claim Information:</div>' +
-                '  <table class="claim-table">' +
-                "    <thead>" +
-                "      <tr>" +
-                "        <th>Application No</th>" +
-                "        <th>Status</th>" +
-                "        <th>UTR Number</th>" +
-                "        <th>Claim Date</th>" +
-                "        <th>Amount</th>" +
-                "        <th>Claim Type</th>" +
-                "        <th>Claim Status</th>" +
-                "        <th>Bank Account No.</th>" +
-                "        <th>IFSC Code</th>" +
-                "      </tr>" +
-                "    </thead>" +
-                "    <tbody>"
-
-            if (claimData.length) {
-                for (const claim of claimData) {
-                    claimHtml +=
-                        "      <tr>" +
-                        "        <td>" + this.escapeHtml(claim?.applicationNo || application?.applicationNo) + "</td>" +
-                        "        <td>" + this.escapeHtml(claim?.claimStatus || claim?.claimStatusMessage) + "</td>" +
-                        "        <td>" + this.escapeHtml(claim?.utrNumber) + "</td>" +
-                        "        <td>" + this.escapeHtml(claim?.claimGeneratedDate || claim?.utrDate) + "</td>" +
-                        "        <td>" + this.escapeHtml(this.formatClaimAmount(claim?.actualAmount)) + "</td>" +
-                        "        <td>" + this.escapeHtml(claim?.claimType) + "</td>" +
-                        "        <td>" + this.escapeHtml(claim?.paymentStatus || claim?.claimStatusMessage) + "</td>" +
-                        "        <td>" + this.escapeHtml(claim?.accountNumber || application?.accountNumber) + "</td>" +
-                        "        <td>" + this.escapeHtml(claim?.ifsc) + "</td>" +
-                        "      </tr>"
-                }
-            } else {
-                claimHtml +=
-                    "      <tr>" +
-                    "        <td>" + this.escapeHtml(application?.applicationNo) + "</td>" +
-                    '        <td colspan="8">No claim data found</td>' +
-                    "      </tr>"
-            }
-
-            claimHtml +=
-                "    </tbody>" +
-                "  </table>" +
-                '  <table class="claim-total-table">' +
-                "    <tr>" +
-                "      <td>Total Claim Paid:</td>" +
-                "      <td>Rs. " + this.escapeHtml(this.formatClaimAmount(totalPaid)) + "</td>" +
-                "    </tr>" +
-                "  </table>" +
-                "</div>"
-        }
-
-        return claimHtml
-    }
-
 
     async fetchSelectedData(ticketNumber: string) {
         try {
@@ -1599,7 +1354,6 @@ export class PDFGenerationWorkerService {
                 return def
             }
         }
-        const claimInformationHtml = this.buildClaimInformationHtml(helpers?.claimDetails)
 
         let ticketHtml = ""
 
@@ -2055,14 +1809,6 @@ export class PDFGenerationWorkerService {
             "  .section-title-table table { width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 12px; }" +
             "  .section-title-table td { padding: 4px; text-align: center; border: 1px solid #000; font-weight: 600; }" +
             "  .section-title-table th { padding: 4px 0; text-align: center; border: 1px solid #000; background-color: #fff; font-weight: normal; color: #000; }" +
-            "  .claim-block { margin: 8px 0 12px 0; page-break-inside: avoid; }" +
-            "  .claim-title { font-weight: 700; text-decoration: underline; margin: 3px 0 4px 0; font-size: 13px; }" +
-            "  .claim-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }" +
-            "  .claim-table th, .claim-table td { border: 1px solid #000; padding: 4px 3px; text-align: left; word-break: break-word; }" +
-            "  .claim-table th { font-weight: 700; text-align: center; }" +
-            "  .claim-total-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 11px; }" +
-            "  .claim-total-table td { border: 1px solid #000; padding: 4px 8px; text-align: left; font-weight: 600; }" +
-            "  .claim-total-table td:first-child { width: 68%; }" +
             "  .summary-table.no-inner-border { border: 1px solid #000; border-collapse: collapse; margin-bottom: 15px; }" +
             "  .summary-table.no-inner-border td { border: none; padding: 6px 10px; text-align: left; }" +
             "  .summary-table.no-inner-border tr td:first-child { border-right: 1px solid transparent; }" +
@@ -2226,7 +1972,6 @@ export class PDFGenerationWorkerService {
             "        </tr>" +
             "      </tbody>" +
             "    </table>" +
-            claimInformationHtml +
             '    <table class="summary-table no-inner-border" style="display:none;">' +
             "      <tr>" +
             "        <td><b>Total Area Insured (Hect./Plants):</b><br/></td>" +

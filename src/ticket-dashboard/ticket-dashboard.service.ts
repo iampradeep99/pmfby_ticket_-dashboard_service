@@ -19,14 +19,10 @@ import { Sequelize } from 'sequelize-typescript';
 import { QueryTypes } from 'sequelize';
 import { MongoClient } from 'mongodb';
 import * as moment from "moment";
-import { randomUUID } from 'crypto';
-import { Request } from 'express';
 
 
 import { parse } from "csv-parse";
 import { Readable } from "stream";
-
-const SUPPORT_TICKET_LISTING_COLLECTION = 'SLA_Ticket_listing';
 
 
 @Injectable()
@@ -40,7 +36,7 @@ export class TicketDashboardService {
   constructor(@Inject('MONGO_DB') private readonly db: Db, @Inject('SEQUELIZE') private readonly sequelize: Sequelize,
     private readonly redisWrapper: RedisWrapper, private readonly mailService: MailService,) {
     this.ticketCollection = this.db.collection('tickets');
-    this.ticketDbCollection = this.db.collection(SUPPORT_TICKET_LISTING_COLLECTION);
+    this.ticketDbCollection = this.db.collection('SLA_KRPH_SupportTickets_Records');
 
   }
 
@@ -56,7 +52,7 @@ export class TicketDashboardService {
 
   async createOptimizedIndex(db: any): Promise<void> {
     try {
-      const collection = db.collection(SUPPORT_TICKET_LISTING_COLLECTION);
+      const collection = db.collection('SLA_KRPH_SupportTickets_Records');
 
       const indexes = await collection.indexes();
 
@@ -1072,8 +1068,8 @@ export class TicketDashboardService {
       { $count: "total" },
     ]
 
-    const ticketCollection = db.collection(SUPPORT_TICKET_LISTING_COLLECTION)
-    const countResult = await ticketCollection.aggregate(countPipeline).toArray()
+    // const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
+    const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
 
     const totalCount = countResult?.[0]?.total || 0
     const totalPages = Math.ceil(totalCount / limit)
@@ -1222,7 +1218,8 @@ export class TicketDashboardService {
     ]
 
     console.log(JSON.stringify(pipeline), "testpipeline")
-    let results = await ticketCollection
+    let results = await db
+      .collection("SLA_KRPH_SupportTickets_Records")
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray()
 
@@ -1569,7 +1566,7 @@ export class TicketDashboardService {
 
 
   async AddIndexForSupportTickets(db: any) {
-    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndexes([
+    await db.collection('SLA_KRPH_SupportTickets_Records').createIndexes([
       { key: { SupportTicketNo: 1 }, name: 'idx_SupportTicketNo' },
       { key: { InsertDateTime: -1 }, name: 'idx_InsertDateTime' },
       { key: { InsuranceCompanyID: 1 }, name: 'idx_InsuranceCompanyID' },
@@ -5025,16 +5022,10 @@ export class TicketDashboardService {
   async downloadHistory(payload) {
     console.log(payload)
     let collectionName = 'support_ticket_download_logs'
-    const requestedUserId = payload.userID ?? payload.SPUserID;
-    const numericUserId = Number(requestedUserId);
-    const userIdFilter = Number.isNaN(numericUserId)
-      ? [requestedUserId]
-      : [requestedUserId, numericUserId];
-
     let pipeline = [
       {
         $match: {
-          userId: { $in: userIdFilter }
+          userId: payload.userID
         }
       },
       {
@@ -5053,39 +5044,21 @@ export class TicketDashboardService {
       },
       {
         $project: {
-          _id: 1,
-          requestId: 1,
-          status: 1,
-          userId: 1,
-          requestedBy: 1,
-          insuranceCompanyId: 1,
-          stateId: 1,
-          ticketHeaderId: 1,
-          fromDate: 1,
-          toDate: 1,
-          recipients: 1,
-          insertedIPAddress: 1,
-          requestedAt: 1,
-          createdAt: 1,
-          estimatedTotalRecords: 1,
-          processedRecords: 1,
-          progressPercentage: 1,
-          progressStage: 1,
-          progressUpdatedAt: 1,
-          zipFileName: 1,
-          downloadUrl: 1,
-          fileName: 1,
-          fileUrl: 1,
-          startedAt: 1,
-          completedAt: 1,
-          failedAt: 1,
-          totalRecords: 1,
-          errorMessage: 1,
-          requestorUserName: "$data.AppAccessUserName",
-          requestorRole: "$data.BRHeadTypeID"
+          ReqestorUserID: "$userId",
+          RequestedParamsTicketHeaderID: "$ticketHeaderId",
+          RequestedParamsInsuranceCompany: "$insuranceCompanyId",
+          RequestedParamsStateID: "$stateId",
+          RequestedParamsFromDate: "$fromDate",
+          RequestedParamsToDate: "$toDate",
+          ZippedFileName: "$zipFileName",
+          DownloadURL: "$downloadUrl",
+          RequestCreationDate: "$createdAt",
+          RequestorUserName: "$data.AppAccessUserName",
+          RequestorRole: "$data.BRHeadTypeID"
+
         }
       }, {
-        $sort: { requestedAt: -1, createdAt: -1 }
+        $sort: { RequestCreationDate: -1 }
       }
     ]
 
@@ -5096,86 +5069,6 @@ export class TicketDashboardService {
       data: result,
       message: { msg: '✅ Data fetched successfully', code: 1 }
     };
-  }
-
-  async createSupportTicketDownloadRequest(payload: any, req?: Request) {
-    const requestId = randomUUID();
-    const userEmail = payload?.userEmail?.trim();
-    const recipients = userEmail
-      ? userEmail.split(',').map((email: string) => email.trim()).filter(Boolean)
-      : [];
-
-    await this.db.collection('support_ticket_download_logs').insertOne({
-      requestId,
-      status: 'QUEUED',
-      userId: payload?.SPUserID,
-      requestedBy: payload?.SPUserID,
-      insuranceCompanyId: payload?.SPInsuranceCompanyID,
-      stateId: payload?.SPStateID,
-      ticketHeaderId: Number(payload?.SPTicketHeaderID || 0),
-      fromDate: payload?.SPFROMDATE,
-      toDate: payload?.SPTODATE,
-      recipients,
-      insertedIPAddress: req?.ip || req?.socket?.remoteAddress || '',
-      requestedAt: new Date(),
-      createdAt: new Date(),
-      estimatedTotalRecords: 0,
-      processedRecords: 0,
-      progressPercentage: 0,
-      progressStage: 'QUEUED',
-      progressUpdatedAt: new Date(),
-      zipFileName: '',
-      downloadUrl: '',
-      fileName: '',
-      fileUrl: '',
-    });
-
-    return requestId;
-  }
-
-  async updateSupportTicketDownloadRequest(requestId: string, fields: any) {
-    if (!requestId) return;
-
-    await this.db.collection('support_ticket_download_logs').updateOne(
-      { requestId },
-      {
-        $set: {
-          ...fields,
-          progressUpdatedAt: new Date(),
-        },
-      },
-    );
-  }
-
-  async claimQueuedSupportTicketDownloadRequests(limit = 5) {
-    const collection = this.db.collection('support_ticket_download_logs');
-    const claimedRequests = [];
-
-    for (let index = 0; index < limit; index++) {
-      const claimedRequest = await collection.findOneAndUpdate(
-        {
-          status: 'QUEUED',
-          requestId: { $exists: true, $ne: '' },
-        },
-        {
-          $set: {
-            status: 'PROCESSING',
-            progressStage: 'RECOVERED_DIRECT_WORKER_FALLBACK',
-            errorMessage: 'Recovered from stale QUEUED status',
-            progressUpdatedAt: new Date(),
-          },
-        },
-        {
-          sort: { requestedAt: 1, createdAt: 1 },
-          returnDocument: 'after',
-        },
-      );
-
-      if (!claimedRequest) break;
-      claimedRequests.push(claimedRequest);
-    }
-
-    return claimedRequests;
   }
 
 
@@ -5432,7 +5325,7 @@ export class TicketDashboardService {
   async AddIndexss(db) {
     // Drop indexes before recreating (excluding _id index)
     const collections = [
-      SUPPORT_TICKET_LISTING_COLLECTION,
+      'SLA_KRPH_SupportTickets_Records',
       'SLA_KRPH_SupportTicketsHistory_Records',
       'support_ticket_claim_intimation_report_history',
       'csc_agent_master',
@@ -5450,16 +5343,16 @@ export class TicketDashboardService {
       }
     }
 
-    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({
+    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
       InsuranceCompanyID: 1,
       FilterStateID: 1,
       TicketHeaderID: 1,
       InsertDateTime: 1,
     });
 
-    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({ SupportTicketID: 1 });
-    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({ SupportTicketNo: 1 });
-    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({ InsertUserID: 1 });
+    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ SupportTicketID: 1 });
+    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ SupportTicketNo: 1 });
+    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({ InsertUserID: 1 });
 
     await db.collection('SLA_KRPH_SupportTicketsHistory_Records').createIndex({
       SupportTicketID: 1,
@@ -5483,7 +5376,7 @@ export class TicketDashboardService {
   }
 
   async AddIndex(db) {
-    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({
+    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
       InsuranceCompanyID: 1,
       FilterStateID: 1,
       TicketHeaderID: 1,
@@ -5491,7 +5384,7 @@ export class TicketDashboardService {
     });
 
     // ✅ Index to support SupportTicketNo lookups
-    await db.collection(SUPPORT_TICKET_LISTING_COLLECTION).createIndex({
+    await db.collection('SLA_KRPH_SupportTickets_Records').createIndex({
       SupportTicketNo: 1
     });
 
@@ -6777,7 +6670,6 @@ export class TicketDashboardService {
         stateID,
         districtID,
         insuranceCompanyID,
-        cropSeasonID,
         defaultLoad,
         pageIndex = 1,
         pageSize = 100,
@@ -6790,7 +6682,6 @@ export class TicketDashboardService {
       supportTicketTypeID = Number(supportTicketTypeID);
       statusID = Number(statusID);
       schemeID = Number(schemeID);
-      cropSeasonID = Number(cropSeasonID);
 
       // Validate required user ID
       if (!objCommon || !objCommon.insertedUserID || objCommon.insertedUserID === "") {
@@ -6862,7 +6753,6 @@ export class TicketDashboardService {
 
       // Apply filters based on payload
       if (ticketHeaderID && ticketHeaderID !== 0) match.TicketHeaderID = ticketHeaderID;
-      if (cropSeasonID && cropSeasonID !== 0) match.RequestSeason = cropSeasonID;
 
       // Insurance company filter with authorization check
       if (insuranceCompanyID && insuranceCompanyID !== 0) {
@@ -10604,3 +10494,6 @@ async AgeingGrievanceService(payload: any) {
 
 
 }
+
+
+
