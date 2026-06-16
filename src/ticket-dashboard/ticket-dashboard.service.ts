@@ -7267,9 +7267,22 @@ export class TicketDashboardService {
                 ]
                 : []),
               {
+                $lookup: {
+                  from: "krph_farmer_feedback_data_v2",
+                  let: { ticketId: "$SupportTicketID" },
+                  pipeline: [
+                    { $match: { $expr: { $eq: ["$SupportTicketID", "$$ticketId"] } } },
+                    { $limit: 1 },
+                    { $project: { _id: 1 } }
+                  ],
+                  as: "farmerFeedbackData"
+                }
+              },
+              {
                 $project: {
                   _id: 0,
                   SupportTicketID: 1,
+                  FarmerFeedback: { $gt: [{ $size: "$farmerFeedbackData" }, 0] },
                   CallerContactNumber: 1,
                   CallingAudioFile: 1,
                   TicketRequestorID: 1,
@@ -7990,6 +8003,13 @@ export class TicketDashboardService {
         await collection.createIndex(escalIndexKey, { name: escalIndexName });
         console.log(`Created index: ${escalIndexName}`);
       } else console.log(`Index ${escalIndexName} already exists.`);
+
+      const feedbackCollection = db.collection('krph_farmer_feedback_data_v2');
+      const feedbackIndexes = await feedbackCollection.indexes();
+      if (!feedbackIndexes.some(idx => idx.name === 'idx_feedback_supportTicketID')) {
+        await feedbackCollection.createIndex({ SupportTicketID: 1 }, { name: 'idx_feedback_supportTicketID' });
+        console.log('Created index: idx_feedback_supportTicketID');
+      }
 
       console.log('✅ Index setup completed successfully.');
     } catch (err) {
@@ -9370,6 +9390,5 @@ Your Automation System
 
 
 }
-
 
 
