@@ -52,45 +52,20 @@ export class TicketDashboardController {
 
   @Post('getSupportTicketHistory')
   async fetchSupportTicketHistory(@Body() ticketPayload: any, @Req() req: Request, @Res() res: Response) {
-    try {
-      const userEmail = ticketPayload?.userEmail?.trim();
-      if (!userEmail) {
-        return jsonResponseHandler(
-          null,
-          { msg: 'User Email is required', code: 0 },
-          req,
-          res,
-          () => { }
-        );
-      }
-
-      const requestId = await this.dashboardService.createSupportTicketDownloadRequest(ticketPayload, req);
-      const queuedPayload = { ...ticketPayload, requestId };
-
-      try {
-        await this.rabbitMQService.sendToQueue(queuedPayload);
-      } catch (queueErr: any) {
-        console.error('RabbitMQ publish failed. Starting direct worker fallback:', queueErr);
-        await this.dashboardService.updateSupportTicketDownloadRequest(requestId, {
-          status: 'PROCESSING',
-          progressStage: 'DIRECT_WORKER_FALLBACK',
-          errorMessage: `RabbitMQ publish failed: ${queueErr?.message || queueErr}`,
-        });
-        this.rabbitMQService.runJobInWorker(queuedPayload);
-      }
-
-      const compressedData = await this.utilService.GZip({ requestId });
-
-      return jsonResponseHandler(
-        compressedData,
-        'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.',
-        req,
-        res,
-        () => { }
-      );
-    } catch (err) {
-      return jsonErrorHandler(err, req, res, () => { });
+    const userEmail = ticketPayload?.userEmail?.trim();
+    if (!userEmail) {
+      return { rcode: 0, rmessage: 'User Email is required' };
     }
+
+    await this.rabbitMQService.sendToQueue(ticketPayload);
+
+    return jsonResponseHandler(
+      [],
+      'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.',
+      req,
+      res,
+      () => { }
+    );
   }
 
 
@@ -149,7 +124,9 @@ export class TicketDashboardController {
 
       let gzippedData = null;
       if (resultArray && resultArray.length > 0) {
-        gzippedData = await this.utilService.GZip(resultArray as any);
+        const stringifiedData: any = resultArray;
+        console.log(stringifiedData)
+        gzippedData = await this.utilService.GZip(stringifiedData);
       }
 
       return jsonResponseHandler(gzippedData, message, req, res, () => { });
@@ -197,6 +174,26 @@ export class TicketDashboardController {
         () => { }
       );
     }
+  }
+
+
+
+  @Post('getSupportTicketHistory')
+  async FarmerSelectCallingHistoryDownload(@Body() ticketPayload: any, @Req() req: Request,
+    @Res({ passthrough: false }) res: Response) {
+
+    const userEmail = ticketPayload?.userEmail?.trim();
+
+    if (!userEmail) {
+      return {
+        rcode: 0,
+        rmessage: 'User Email is required',
+      };
+    }
+    await this.rabbitMQService.sendToQueue(ticketPayload);
+    let rmessage = 'Your request has been accepted and is being processed in the background. You will soon see the download link in the list section.'
+    return jsonResponseHandler([], rmessage, req, res, () => { });
+
   }
 
   @Post('FarmerSelectCallingHistoryDownload')
@@ -632,6 +629,11 @@ export class TicketDashboardController {
   }
 
 }
+
+
+
+
+
 
 
 

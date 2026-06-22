@@ -1315,35 +1315,92 @@ export class SlaReportService {
       const collectionName = `sla_call_quality_data_${year}_${month.toString().padStart(2, "0")}`;
 
       const pipelineBase = [
-        { $addFields: { call_date: { $toDate: "$call_date" } } },
-        { $match: { call_date: { $gte: startDate, $lte: endDate } } },
         {
           $addFields: {
-            uniqueid_new: {
-              $toInt: {
-                $substrBytes: [
-                  "$uniqueid",
-                  1,
-                  { $subtract: [{ $indexOfBytes: ["$uniqueid", "."] }, 1] }
-                ]
+            original_uniqueid: "$uniqueid",
+            call_date_parsed: {
+              $cond: {
+                if: { $eq: [{ $type: "$call_date" }, "date"] },
+                then: "$call_date",
+                else: {
+                  $dateFromString: {
+                    dateString: "$call_date",
+                    format: "%Y-%m-%d %H:%M:%S",
+                    onError: null,
+                    onNull: null
+                  }
+                }
               }
             },
-            uniqueid: {
+            uniqueid_dot_index: { $indexOfBytes: ["$uniqueid", "."] }
+          }
+        },
+        {
+          $match: {
+            call_date_parsed: { $gte: startDate, $lte: endDate },
+            uniqueid_dot_index: { $gt: 1 }
+          }
+        },
+        {
+          $addFields: {
+            uniqueid_without_prefix: {
               $substrBytes: [
                 "$uniqueid",
                 1,
-                { $subtract: [{ $indexOfBytes: ["$uniqueid", "."] }, 1] }
+                { $subtract: ["$uniqueid_dot_index", 1] }
               ]
-            },
-            agent_id_new: { $toInt: "$agent_id" },
-            total_score_value: { $toInt: "$total_rating" }
+            }
           }
-        }
+        },
+        {
+          $addFields: {
+            uniqueid_new: {
+              $convert: {
+                input: "$uniqueid_without_prefix",
+                to: "long",
+                onError: null,
+                onNull: null
+              }
+            },
+            call_date: "$call_date_parsed",
+            uniqueid: "$uniqueid_without_prefix"
+          }
+        },
+        {
+          $project: {
+            call_date_parsed: 0,
+            uniqueid_dot_index: 0,
+            uniqueid_without_prefix: 0
+          }
+        },
+        {
+          $addFields: {
+            agent_id_new: {
+              $convert: {
+                input: "$agent_id",
+                to: "int",
+                onError: null,
+                onNull: null
+              }
+            },
+            total_score_value: {
+              $convert: {
+                input: "$total_rating",
+                to: "int",
+                onError: null,
+                onNull: null
+              }
+            },
+          }
+        },
+        { $match: { uniqueid_new: { $ne: null } } },
+        { $sort: { _id: 1 } }
       ];
 
       const chunkSize = 1000;
       let skip = 0;
       let totalInserted = 0;
+      let totalUpdated = 0;
 
       while (true) {
         this.logger.info(`Fetching chunk (skip=${skip}, limit=${chunkSize})`);
@@ -1355,16 +1412,32 @@ export class SlaReportService {
         if (!Array.isArray(records) || records.length === 0) break;
 
         const bulkOps = records
-          .filter(r => r.uniqueid_new != null)
-          .map(r => ({
-            updateOne: { filter: { uniqueid_new: r.uniqueid_new }, update: { $setOnInsert: r }, upsert: true }
-          }));
+          .filter((r: any) => r.uniqueid_new != null)
+          .map(({ _id, original_uniqueid, ...recordToInsert }: any) => {
+            const uniqueidFilters: any[] = [
+              { uniqueid_new: recordToInsert.uniqueid_new },
+              { uniqueid: recordToInsert.uniqueid }
+            ];
+
+            if (original_uniqueid && original_uniqueid !== recordToInsert.uniqueid) {
+              uniqueidFilters.push({ uniqueid: original_uniqueid });
+            }
+
+            return {
+              updateOne: {
+                filter: { $or: uniqueidFilters },
+                update: { $set: recordToInsert },
+                upsert: true
+              }
+            };
+          });
 
         if (bulkOps.length > 0) {
           try {
             const result = await db.collection(baseCollection).bulkWrite(bulkOps, { ordered: false });
             totalInserted += result.upsertedCount || 0;
-            this.logger.info(`Chunk processed. New records inserted: ${result.upsertedCount || 0}`);
+            totalUpdated += result.modifiedCount || 0;
+            this.logger.info(`Chunk processed. New records inserted: ${result.upsertedCount || 0}, existing records updated: ${result.modifiedCount || 0}`);
           } catch (bulkErr) {
             this.logger.error("Error during bulkWrite", bulkErr);
           }
@@ -1373,9 +1446,9 @@ export class SlaReportService {
         skip += chunkSize;
       }
 
-      this.logger.info(`Processing completed. Total new records inserted: ${totalInserted}`);
+      this.logger.info(`Processing completed. Total new records inserted: ${totalInserted}, total existing records updated: ${totalUpdated}`);
 
-      return { data: { inserted: totalInserted }, message: { msg: "Success", code: 1 } };
+      return { data: { inserted: totalInserted, updated: totalUpdated }, message: { msg: "Success", code: 1 } };
 
     } catch (err) {
       this.logger.error("Unexpected error in calculateCallQualityRecords", err);
