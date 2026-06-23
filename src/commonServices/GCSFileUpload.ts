@@ -2,9 +2,7 @@
 
 import axios from 'axios';
 import * as FormData from 'form-data';
-import config from '../environment/config';
-import { UtilService } from './utilService';
-
+import config from '../environment/config'
 
 interface UploadFileData {
   filePath: string;
@@ -41,54 +39,20 @@ export class GCPServices {
       formData.append('documents', file.buffer, file.originalname);
       formData.append('uploadedBy', uploadedBy);
 
-      const uploadUrl = this.gcpFileUploadUrl || 'https://pmfby.gov.in/krphapi/FGMS/GCPFileUploadForCDR';
+      const uploadUrl = this.gcpFileUploadUrl;
+      if (!uploadUrl) throw new Error("Missing GCP_UPLOAD_URL environment variable");
+
       const response = await axios.post(uploadUrl, formData, {
         headers: {
           ...formData.getHeaders()
-        },
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        timeout: Number(process.env.GCP_UPLOAD_TIMEOUT_MS) || 1800000
+        }
       });
 
-      if (response.status !== 200) {
+      if (response.status === 200) {
+        return response.data;
+      } else {
         throw new Error('Failed to upload file to GCP');
       }
-
-      if (response?.data?.responseCode && response.data.responseCode !== '1') {
-        throw new Error(response.data.responseMessage || 'GCP upload failed');
-      }
-
-      const responseDynamic = response?.data?.responseDynamic;
-      const decodedResponse = typeof responseDynamic === 'string'
-        ? await new UtilService().unGZip(responseDynamic)
-        : responseDynamic;
-
-      const uploadedFile = Array.isArray(decodedResponse)
-        ? decodedResponse[0]
-        : decodedResponse;
-      const uploadedUrl =
-        uploadedFile?.gcsUrl ||
-        uploadedFile?.gcsURL ||
-        uploadedFile?.url ||
-        uploadedFile?.path;
-
-      if (!uploadedUrl) {
-        throw new Error('GCP upload completed but file URL was not returned');
-      }
-
-      return {
-        ...response.data,
-        url: uploadedUrl,
-        file: [
-          {
-            ...uploadedFile,
-            gcsUrl: uploadedUrl
-          }
-        ],
-        fileInfo: uploadedFile,
-        rawResponse: response.data
-      };
     } catch (error: any) {
       console.error(error);
       throw new Error(`Error uploading file to GCP: ${error.message}`);
