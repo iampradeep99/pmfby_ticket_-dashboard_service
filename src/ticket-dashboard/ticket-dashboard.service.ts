@@ -4345,7 +4345,9 @@ export class TicketDashboardService {
     toDate,
     zipFileName,
     downloadUrl,
-    db
+    db,
+    status = 'Completed',
+    statusMessage = 'Report generated successfully'
   ) {
     await db.collection('support_ticket_download_logs').updateOne(
       {
@@ -4360,10 +4362,34 @@ export class TicketDashboardService {
         $set: {
           zipFileName,
           downloadUrl,
-          createdAt: new Date()
-        }
+          status,
+          statusMessage,
+          updatedAt: new Date(),
+          ...(status === 'Completed' ? { completedAt: new Date() } : {}),
+          ...(status === 'Failed' ? { failedAt: new Date() } : {}),
+          ...(status === 'Processing' ? { startedAt: new Date() } : {})
+        },
+        $setOnInsert: { createdAt: new Date() }
       },
       { upsert: true } // Insert if not found, update if exists
+    );
+  }
+
+  async createOrUpdateDownloadRequestStatus(ticketPayload: any, status = 'Queued', statusMessage = 'Request accepted and waiting for processing') {
+    const ticketHeaderId = Number(ticketPayload?.SPTicketHeaderID);
+
+    await this.insertOrUpdateDownloadLog(
+      ticketPayload?.SPUserID,
+      ticketPayload?.SPInsuranceCompanyID,
+      ticketPayload?.SPStateID,
+      ticketHeaderId,
+      ticketPayload?.SPFROMDATE,
+      ticketPayload?.SPTODATE,
+      ticketPayload?.zipFileName || '',
+      ticketPayload?.downloadUrl || '',
+      this.db,
+      status,
+      statusMessage
     );
   }
 
@@ -5044,6 +5070,7 @@ export class TicketDashboardService {
       },
       {
         $project: {
+          RequestID: { $toString: "$_id" },
           ReqestorUserID: "$userId",
           RequestedParamsTicketHeaderID: "$ticketHeaderId",
           RequestedParamsInsuranceCompany: "$insuranceCompanyId",
@@ -5052,6 +5079,12 @@ export class TicketDashboardService {
           RequestedParamsToDate: "$toDate",
           ZippedFileName: "$zipFileName",
           DownloadURL: "$downloadUrl",
+          Status: "$status",
+          StatusMessage: "$statusMessage",
+          RequestUpdatedDate: "$updatedAt",
+          RequestStartedDate: "$startedAt",
+          RequestCompletedDate: "$completedAt",
+          RequestFailedDate: "$failedAt",
           RequestCreationDate: "$createdAt",
           RequestorUserName: "$data.AppAccessUserName",
           RequestorRole: "$data.BRHeadTypeID"
@@ -11104,6 +11137,4 @@ async AgeingGrievanceService(payload: any) {
 
 
 }
-
-
 

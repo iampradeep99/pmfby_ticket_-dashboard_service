@@ -174,6 +174,12 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async sendToQueue(message: any) {
+    await this.ticketDashboardService.createOrUpdateDownloadRequestStatus(
+      message,
+      'Queued',
+      'Request accepted and waiting for processing'
+    );
+
     this.producerChannel.sendToQueue(
       this.QUEUE_NAME,
       Buffer.from(JSON.stringify(message)),
