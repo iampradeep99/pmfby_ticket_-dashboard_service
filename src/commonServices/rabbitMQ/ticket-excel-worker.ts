@@ -540,6 +540,8 @@ async function insertOrUpdateDownloadLog(
   zipFileName: string,
   downloadUrl: string,
   db: Db,
+  status = "Completed",
+  statusMessage = "Report generated successfully",
 ): Promise<void> {
   await db.collection(DOWNLOAD_LOG_COLLECTION).updateOne(
     { userId, insuranceCompanyId, stateId, ticketHeaderId, fromDate, toDate },
@@ -547,10 +549,40 @@ async function insertOrUpdateDownloadLog(
       $set: {
         zipFileName,
         downloadUrl,
-        createdAt: new Date(),
+        status,
+        statusMessage,
+        updatedAt: new Date(),
+        ...(status === "Completed" ? { completedAt: new Date() } : {}),
+        ...(status === "Failed" ? { failedAt: new Date() } : {}),
+        ...(status === "Processing" ? { startedAt: new Date() } : {}),
       },
+      $setOnInsert: { createdAt: new Date() },
     },
     { upsert: true },
+  )
+}
+
+async function updateDownloadStatusFromPayload(
+  ticketPayload: any,
+  status: string,
+  statusMessage: string,
+  zipFileName = "",
+  downloadUrl = "",
+): Promise<void> {
+  const db = await connectToDatabase(DB_URI, DB_NAME)
+
+  await insertOrUpdateDownloadLog(
+    ticketPayload?.SPUserID,
+    ticketPayload?.SPInsuranceCompanyID,
+    ticketPayload?.SPStateID,
+    Number(ticketPayload?.SPTicketHeaderID),
+    ticketPayload?.SPFROMDATE,
+    ticketPayload?.SPTODATE,
+    zipFileName,
+    downloadUrl,
+    db,
+    status,
+    statusMessage,
   )
 }
 
@@ -636,11 +668,15 @@ async function processTicketHistory(ticketPayload: any) {
   SPTicketHeaderID = Number(SPTicketHeaderID)
 
   if (!SPInsuranceCompanyID) {
+    await updateDownloadStatusFromPayload(ticketPayload, "Failed", "InsuranceCompanyID Missing!")
     return { rcode: 0, rmessage: "InsuranceCompanyID Missing!" }
   }
   if (!SPStateID) {
+    await updateDownloadStatusFromPayload(ticketPayload, "Failed", "StateID Missing!")
     return { rcode: 0, rmessage: "StateID Missing!" }
   }
+
+  await updateDownloadStatusFromPayload(ticketPayload, "Processing", "Report generation started")
 
   const folderPath = path.join(process.cwd(), "downloads")
   await fs.promises.mkdir(folderPath, { recursive: true })
@@ -650,6 +686,7 @@ async function processTicketHistory(ticketPayload: any) {
   const item = (responseInfo.data as any)?.user?.[0]
 
   if (!item) {
+    await updateDownloadStatusFromPayload(ticketPayload, "Failed", "User details not found.")
     return { rcode: 0, rmessage: "User details not found." }
   }
 
@@ -663,6 +700,7 @@ async function processTicketHistory(ticketPayload: any) {
 
   const permissionCheck = await validateUserPermissions(userDetail, SPInsuranceCompanyID, SPStateID)
   if (!permissionCheck.valid) {
+    await updateDownloadStatusFromPayload(ticketPayload, "Failed", permissionCheck.error || "Unauthorized request.")
     return { rcode: 0, rmessage: permissionCheck.error }
   }
 
@@ -692,6 +730,8 @@ const excelFileName =
     "",
     "",
     db,
+    "Processing",
+    "Report generation started",
   )
 
   await processDateRange(db, baseMatch, new Date(SPFROMDATE), new Date(SPTODATE), worksheet)
@@ -718,6 +758,8 @@ const excelFileName =
     zipFileName,
     gcpDownloadUrl,
     db,
+    "Completed",
+    "Report generated successfully",
   )
 
   const responsePayload = {
@@ -734,4 +776,7 @@ const excelFileName =
 
 processTicketHistory(workerData)
   .then((result) => parentPort?.postMessage({ success: true, result }))
-  .catch((err) => parentPort?.postMessage({ success: false, error: err.message }))
+  .catch(async (err) => {
+    await updateDownloadStatusFromPayload(workerData, "Failed", err.message || "Report generation failed").catch(console.error)
+    parentPort?.postMessage({ success: false, error: err.message })
+  })
