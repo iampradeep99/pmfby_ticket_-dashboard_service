@@ -4346,9 +4346,12 @@ export class TicketDashboardService {
     zipFileName,
     downloadUrl,
     db,
-    status = 'Completed',
-    statusMessage = 'Report generated successfully'
+    status = '',
+    statusMessage = ''
   ) {
+    const finalStatus = status || (downloadUrl ? 'Completed' : 'Processing');
+    const finalStatusMessage = statusMessage || (downloadUrl ? 'Report generated successfully' : 'Report generation started');
+
     await db.collection('support_ticket_download_logs').updateOne(
       {
         userId,
@@ -4362,12 +4365,12 @@ export class TicketDashboardService {
         $set: {
           zipFileName,
           downloadUrl,
-          status,
-          statusMessage,
+          status: finalStatus,
+          statusMessage: finalStatusMessage,
           updatedAt: new Date(),
-          ...(status === 'Completed' ? { completedAt: new Date() } : {}),
-          ...(status === 'Failed' ? { failedAt: new Date() } : {}),
-          ...(status === 'Processing' ? { startedAt: new Date() } : {})
+          ...(finalStatus === 'Completed' ? { completedAt: new Date() } : {}),
+          ...(finalStatus === 'Failed' ? { failedAt: new Date() } : {}),
+          ...(finalStatus === 'Processing' ? { startedAt: new Date() } : {})
         },
         $setOnInsert: { createdAt: new Date() }
       },
@@ -5005,17 +5008,19 @@ export class TicketDashboardService {
     await fs.remove(zipFilePath);
 
     // Log download
-    await db.collection('support_ticket_download_logs').insertOne({
-      userId: SPUserID,
-      insuranceCompanyId: SPInsuranceCompanyID,
-      stateId: SPStateID,
-      ticketHeaderId: SPTicketHeaderID,
-      fromDate: SPFROMDATE,
-      toDate: SPTODATE,
+    await this.insertOrUpdateDownloadLog(
+      SPUserID,
+      SPInsuranceCompanyID,
+      SPStateID,
+      SPTicketHeaderID,
+      SPFROMDATE,
+      SPTODATE,
       zipFileName,
-      downloadUrl: gcpDownloadUrl,
-      createdAt: new Date(),
-    });
+      gcpDownloadUrl,
+      db,
+      'Completed',
+      'Report generated successfully'
+    );
 
     // Send email
     const supportTicketTemplate = await generateSupportTicketEmailHTML(
@@ -5079,8 +5084,20 @@ export class TicketDashboardService {
           RequestedParamsToDate: "$toDate",
           ZippedFileName: "$zipFileName",
           DownloadURL: "$downloadUrl",
-          Status: "$status",
-          StatusMessage: "$statusMessage",
+          Status: {
+            $cond: [
+              { $gt: [{ $strLenCP: { $ifNull: ["$downloadUrl", ""] } }, 0] },
+              "Completed",
+              { $ifNull: ["$status", "Queued"] }
+            ]
+          },
+          StatusMessage: {
+            $cond: [
+              { $gt: [{ $strLenCP: { $ifNull: ["$downloadUrl", ""] } }, 0] },
+              "Report generated successfully",
+              { $ifNull: ["$statusMessage", "Request accepted and waiting for processing"] }
+            ]
+          },
           RequestUpdatedDate: "$updatedAt",
           RequestStartedDate: "$startedAt",
           RequestCompletedDate: "$completedAt",
@@ -11137,4 +11154,3 @@ async AgeingGrievanceService(payload: any) {
 
 
 }
-
