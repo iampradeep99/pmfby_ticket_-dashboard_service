@@ -5098,6 +5098,43 @@ export class TicketDashboardService {
               { $ifNull: ["$statusMessage", "Request accepted and waiting for processing"] }
             ]
           },
+          status: {
+            $cond: [
+              { $gt: [{ $strLenCP: { $ifNull: ["$downloadUrl", ""] } }, 0] },
+              "COMPLETED",
+              { $toUpper: { $ifNull: ["$status", "QUEUED"] } }
+            ]
+          },
+          progressStage: {
+            $cond: [
+              { $gt: [{ $strLenCP: { $ifNull: ["$downloadUrl", ""] } }, 0] },
+              "COMPLETED",
+              { $toUpper: { $ifNull: ["$status", "QUEUED"] } }
+            ]
+          },
+          progressPercentage: {
+            $switch: {
+              branches: [
+                {
+                  case: { $gt: [{ $strLenCP: { $ifNull: ["$downloadUrl", ""] } }, 0] },
+                  then: 100
+                },
+                {
+                  case: { $eq: [{ $toUpper: { $ifNull: ["$status", ""] } }, "COMPLETED"] },
+                  then: 100
+                },
+                {
+                  case: { $eq: [{ $toUpper: { $ifNull: ["$status", ""] } }, "PROCESSING"] },
+                  then: 50
+                },
+                {
+                  case: { $eq: [{ $toUpper: { $ifNull: ["$status", ""] } }, "FAILED"] },
+                  then: 100
+                }
+              ],
+              default: 10
+            }
+          },
           RequestUpdatedDate: "$updatedAt",
           RequestStartedDate: "$startedAt",
           RequestCompletedDate: "$completedAt",
