@@ -4388,8 +4388,8 @@ export class TicketDashboardService {
       ticketHeaderId,
       ticketPayload?.SPFROMDATE,
       ticketPayload?.SPTODATE,
-      ticketPayload?.zipFileName || '',
-      ticketPayload?.downloadUrl || '',
+      status === 'Queued' ? '' : ticketPayload?.zipFileName || '',
+      status === 'Queued' ? '' : ticketPayload?.downloadUrl || '',
       this.db,
       status,
       statusMessage
