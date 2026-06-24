@@ -290,7 +290,28 @@ export class TicketDashboardService {
 
 
   async convertStringToArray(str) {
-    return str.split(",").map(Number);
+    if (Array.isArray(str)) {
+      return str.map(Number).filter((id) => Number.isFinite(id));
+    }
+
+    if (str === undefined || str === null) {
+      return [];
+    }
+
+    return String(str)
+      .split(",")
+      .map((id) => Number(String(id).trim()))
+      .filter((id) => Number.isFinite(id));
+  }
+
+  private hasAllAccess(value: any): boolean {
+    if (Array.isArray(value)) {
+      return value.some((item) => String(item).trim().toUpperCase() === "#ALL");
+    }
+
+    return String(value || "")
+      .split(",")
+      .some((item) => item.trim().toUpperCase() === "#ALL");
   }
 
 
@@ -677,10 +698,12 @@ export class TicketDashboardService {
       InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
       StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
       BRHeadTypeID: item.BRHeadTypeID,
-      LocationTypeID: item.LocationTypeID,
+      LocationTypeID: Number(item.LocationTypeID),
     }
 
     const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail
+    const hasAllInsuranceAccess = this.hasAllAccess(item.InsuranceCompanyID)
+    const hasAllStateAccess = this.hasAllAccess(item.StateMasterID)
 
     let locationFilter: any = {}
 
@@ -699,7 +722,9 @@ export class TicketDashboardService {
     if (SPInsuranceCompanyID && SPInsuranceCompanyID !== "#ALL") {
       const requestedInsuranceIDs = SPInsuranceCompanyID.split(",").map((id) => Number(id.trim()))
       const allowedInsuranceIDs = InsuranceCompanyID.map(Number)
-      const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id))
+      const validInsuranceIDs = hasAllInsuranceAccess
+        ? requestedInsuranceIDs
+        : requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id))
 
       if (validInsuranceIDs.length === 0) {
         return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." }
@@ -707,21 +732,23 @@ export class TicketDashboardService {
 
       match.InsuranceCompanyID = { $in: validInsuranceIDs }
     } else {
-      if (InsuranceCompanyID?.length) {
+      if (!hasAllInsuranceAccess && InsuranceCompanyID?.length) {
         match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }
       }
     }
 
     if (SPStateID && SPStateID !== "#ALL") {
       const requestedStateIDs = SPStateID.split(",").map((id) => Number(id.trim()))
-      const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.map(Number).includes(id))
+      const validStateIDs = hasAllStateAccess
+        ? requestedStateIDs
+        : requestedStateIDs.filter((id) => StateMasterID.map(Number).includes(id))
 
       if (validStateIDs.length === 0) {
         return { rcode: 0, rmessage: "Unauthorized StateID(s)." }
       }
 
       match.FilterStateID = { $in: validStateIDs }
-    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+    } else if (!hasAllStateAccess && StateMasterID?.length && LocationTypeID !== 2) {
       match.FilterStateID = { $in: StateMasterID.map(Number) }
     }
 
@@ -1003,10 +1030,15 @@ export class TicketDashboardService {
       InsuranceCompanyID: item.InsuranceCompanyID ? await this.convertStringToArray(item.InsuranceCompanyID) : [],
       StateMasterID: item.StateMasterID ? await this.convertStringToArray(item.StateMasterID) : [],
       BRHeadTypeID: item.BRHeadTypeID,
-      LocationTypeID: item.LocationTypeID,
+      LocationTypeID: Number(item.LocationTypeID),
     }
 
+    console.log(userDetail, "userDetail"  )
+    // return
+
     const { InsuranceCompanyID, StateMasterID, LocationTypeID } = userDetail
+    const hasAllInsuranceAccess = this.hasAllAccess(item.InsuranceCompanyID)
+    const hasAllStateAccess = this.hasAllAccess(item.StateMasterID)
 
     let locationFilter: any = {}
 
@@ -1025,7 +1057,9 @@ export class TicketDashboardService {
     if (SPInsuranceCompanyID && SPInsuranceCompanyID !== "#ALL") {
       const requestedInsuranceIDs = SPInsuranceCompanyID.split(",").map((id) => Number(id.trim()))
       const allowedInsuranceIDs = InsuranceCompanyID.map(Number)
-      const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id))
+      const validInsuranceIDs = hasAllInsuranceAccess
+        ? requestedInsuranceIDs
+        : requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id))
 
       if (validInsuranceIDs.length === 0) {
         return { rcode: 0, rmessage: "Unauthorized InsuranceCompanyID(s)." }
@@ -1033,21 +1067,23 @@ export class TicketDashboardService {
 
       match.InsuranceCompanyID = { $in: validInsuranceIDs }
     } else {
-      if (InsuranceCompanyID?.length) {
+      if (!hasAllInsuranceAccess && InsuranceCompanyID?.length) {
         match.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }
       }
     }
 
     if (SPStateID && SPStateID !== "#ALL") {
       const requestedStateIDs = SPStateID.split(",").map((id) => Number(id.trim()))
-      const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.map(Number).includes(id))
+      const validStateIDs = hasAllStateAccess
+        ? requestedStateIDs
+        : requestedStateIDs.filter((id) => StateMasterID.map(Number).includes(id))
 
       if (validStateIDs.length === 0) {
         return { rcode: 0, rmessage: "Unauthorized StateID(s)." }
       }
 
       match.FilterStateID = { $in: validStateIDs }
-    } else if (StateMasterID?.length && LocationTypeID !== 2) {
+    } else if (!hasAllStateAccess && StateMasterID?.length && LocationTypeID !== 2) {
       match.FilterStateID = { $in: StateMasterID.map(Number) }
     }
 
@@ -1068,8 +1104,8 @@ export class TicketDashboardService {
       { $count: "total" },
     ]
 
-    // const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
-    const countResult = await db.collection("SLA_KRPH_SupportTickets_Records").aggregate(countPipeline).toArray()
+    const supportTicketListingCollection = "SLA_Ticket_listing"
+    const countResult = await db.collection(supportTicketListingCollection).aggregate(countPipeline).toArray()
 
     const totalCount = countResult?.[0]?.total || 0
     const totalPages = Math.ceil(totalCount / limit)
@@ -1219,7 +1255,7 @@ export class TicketDashboardService {
 
     console.log(JSON.stringify(pipeline), "testpipeline")
     let results = await db
-      .collection("SLA_KRPH_SupportTickets_Records")
+      .collection(supportTicketListingCollection)
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray()
 
