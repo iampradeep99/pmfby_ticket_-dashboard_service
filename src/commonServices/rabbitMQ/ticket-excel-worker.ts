@@ -116,7 +116,20 @@ async function getSupportTicketUserDetail(userID: string): Promise<any> {
 }
 
 async function convertStringToArray(str: string): Promise<number[]> {
-  return str.split(",").map(Number)
+  return str
+    .split(",")
+    .map((id) => Number(String(id).trim()))
+    .filter((id) => Number.isFinite(id))
+}
+
+function hasAllAccess(value: any): boolean {
+  if (Array.isArray(value)) {
+    return value.some((item) => String(item).trim().toUpperCase() === "#ALL")
+  }
+
+  return String(value || "")
+    .split(",")
+    .some((item) => item.trim().toUpperCase() === "#ALL")
 }
 
 function formatToDDMMYYYY(dateString: string | null | undefined): string {
@@ -492,6 +505,23 @@ async function processDateRange(db: Db, baseMatch: any, startDate: Date, endDate
   }
 }
 
+async function processMatchedRange(db: Db, baseMatch: any, worksheet: any): Promise<number> {
+  let skip = 0
+  let hasMore = true
+  let totalProcessed = 0
+
+  while (hasMore) {
+    const { hasMore: hasMoreResults, processedCount } = await processChunk(db, baseMatch, skip, worksheet)
+    hasMore = hasMoreResults
+    skip += CHUNK_SIZE
+    totalProcessed += processedCount
+
+    console.log(`Processed ${processedCount} documents for export`)
+  }
+
+  return totalProcessed
+}
+
 async function createExcelFile(
   folderPath: string,
   fileName: string,
@@ -608,11 +638,14 @@ async function validateUserPermissions(
   spInsuranceCompanyId: string,
   spStateId: string,
 ): Promise<{ valid: boolean; baseMatch?: any; error?: string }> {
-  const { InsuranceCompanyID, StateMasterID, LocationTypeID, DistrictIDs } = userDetail
+  const { InsuranceCompanyID, StateMasterID, LocationTypeID, DistrictIDs, rawInsuranceCompanyID, rawStateMasterID } =
+    userDetail
+  const hasAllInsuranceAccess = hasAllAccess(rawInsuranceCompanyID)
+  const hasAllStateAccess = hasAllAccess(rawStateMasterID)
 
   let locationFilter: any = {}
   if (LocationTypeID === 1 && StateMasterID?.length) {
-    locationFilter = { FilterStateID: { $in: StateMasterID } }
+    locationFilter = { FilterStateID: { $in: StateMasterID.map(Number) } }
   } else if (LocationTypeID === 2 && DistrictIDs?.length) {
     locationFilter = { FilterDistrictRequestorID: { $in: DistrictIDs } }
   }
@@ -622,24 +655,28 @@ async function validateUserPermissions(
   if (spInsuranceCompanyId && spInsuranceCompanyId !== "#ALL") {
     const requestedInsuranceIDs = spInsuranceCompanyId.split(",").map((id) => Number(id.trim()))
     const allowedInsuranceIDs = InsuranceCompanyID.map(Number)
-    const validInsuranceIDs = requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id))
+    const validInsuranceIDs = hasAllInsuranceAccess
+      ? requestedInsuranceIDs
+      : requestedInsuranceIDs.filter((id) => allowedInsuranceIDs.includes(id))
     if (!validInsuranceIDs.length) {
       return { valid: false, error: "Unauthorized InsuranceCompanyID(s)." }
     }
     baseMatch.InsuranceCompanyID = { $in: validInsuranceIDs }
-  } else if (InsuranceCompanyID?.length) {
+  } else if (!hasAllInsuranceAccess && InsuranceCompanyID?.length) {
     baseMatch.InsuranceCompanyID = { $in: InsuranceCompanyID.map(Number) }
   }
 
   if (spStateId && spStateId !== "#ALL") {
-    const requestedStateIDs = spStateId.split(",").map((id) => id.trim())
-    const validStateIDs = requestedStateIDs.filter((id) => StateMasterID.includes(id))
+    const requestedStateIDs = spStateId.split(",").map((id) => Number(id.trim()))
+    const validStateIDs = hasAllStateAccess
+      ? requestedStateIDs
+      : requestedStateIDs.filter((id) => StateMasterID.map(Number).includes(id))
     if (!validStateIDs.length) {
       return { valid: false, error: "Unauthorized StateID(s)." }
     }
     baseMatch.FilterStateID = { $in: validStateIDs }
-  } else if (StateMasterID?.length && LocationTypeID !== 2) {
-    baseMatch.FilterStateID = { $in: StateMasterID }
+  } else if (!hasAllStateAccess && StateMasterID?.length && LocationTypeID !== 2) {
+    baseMatch.FilterStateID = { $in: StateMasterID.map(Number) }
   }
 
   return { valid: true, baseMatch }
@@ -688,8 +725,10 @@ async function processTicketHistory(ticketPayload: any) {
     InsuranceCompanyID: item.InsuranceCompanyID ? await convertStringToArray(item.InsuranceCompanyID) : [],
     StateMasterID: item.StateMasterID ? await convertStringToArray(item.StateMasterID) : [],
     BRHeadTypeID: item.BRHeadTypeID,
-    LocationTypeID: item.LocationTypeID,
+    LocationTypeID: Number(item.LocationTypeID),
     DistrictIDs: item.DistrictIDs || [],
+    rawInsuranceCompanyID: item.InsuranceCompanyID,
+    rawStateMasterID: item.StateMasterID,
   }
 
   const permissionCheck = await validateUserPermissions(userDetail, SPInsuranceCompanyID, SPStateID)
@@ -701,6 +740,12 @@ async function processTicketHistory(ticketPayload: any) {
   const baseMatch = permissionCheck.baseMatch
   if (SPTicketHeaderID && SPTicketHeaderID !== 0) {
     baseMatch.TicketHeaderID = SPTicketHeaderID
+  }
+
+  if (SPFROMDATE || SPTODATE) {
+    baseMatch.InsertDateTime = {}
+    if (SPFROMDATE) baseMatch.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
+    if (SPTODATE) baseMatch.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
   }
 
   const ticketTypeName = TICKET_TYPE_MAP[SPTicketHeaderID] || "General"
@@ -728,7 +773,8 @@ const excelFileName =
     "Report generation started",
   )
 
-  await processDateRange(db, baseMatch, new Date(SPFROMDATE), new Date(SPTODATE), worksheet)
+  const processedCount = await processMatchedRange(db, baseMatch, worksheet)
+  console.log(`Total export documents processed: ${processedCount}`)
 
   await workbook.commit()
   console.log(`Excel file created at: ${excelFilePath}`)
