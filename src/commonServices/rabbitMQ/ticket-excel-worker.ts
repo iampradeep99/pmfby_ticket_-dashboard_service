@@ -23,8 +23,8 @@ const DB_NAME = "krph_db"
 const API_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk"
 const API_URL = "https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail"
-const TICKET_COLLECTION = "SLA_KRPH_SupportTickets_Records"
-// const TICKET_COLLECTION = "SLA_Ticket_listing";
+const TICKET_COLLECTION = "SLA_Ticket_listing"
+const TICKET_HISTORY_COLLECTION = "SLA_KRPH_SupportTicketsHistory_Records"
 const DOWNLOAD_LOG_COLLECTION = "support_ticket_download_logs"
 
 const TICKET_TYPE_MAP: Record<number, string> = {
@@ -175,7 +175,7 @@ function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: numb
     { $replaceRoot: { newRoot: "$doc" } },
     {
       $lookup: {
-        from: "SLA_KRPH_SupportTicketsHistory_Records",
+        from: TICKET_HISTORY_COLLECTION,
         let: { ticketId: "$SupportTicketID" },
         pipeline: [
           {
@@ -247,7 +247,7 @@ function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: numb
     { $replaceRoot: { newRoot: "$doc" } },
     {
       $lookup: {
-        from: "SLA_KRPH_SupportTicketsHistory_Records",
+        from: TICKET_HISTORY_COLLECTION,
         let: { ticketId: "$SupportTicketID" },
         pipeline: [
           {
