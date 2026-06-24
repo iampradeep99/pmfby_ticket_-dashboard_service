@@ -9,6 +9,7 @@ import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from "../
 import { UtilService } from "../../commonServices/utilService"
 import { RedisWrapper } from "../../commonServices/redisWrapper"
 import { MailService } from "../../mail/mail.service"
+import config from "../../environment/config"
 import * as moment from "moment"
 import { MongoClient, type Db } from "mongodb"
 
@@ -18,7 +19,7 @@ let cachedDb: Db | null = null
 
 const CHUNK_SIZE = 10000
 const MAX_JOURNEY_INDICES = 3
-const DB_URI = "mongodb://10.128.60.45:27017"
+const DB_URI = config.mongodb
 const DB_NAME = "krph_db"
 const API_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk"
@@ -154,6 +155,41 @@ function formatDate(inputDate: string | Date): string {
   return `${year}-${month}-${day}:${hours}:${minutes}`
 }
 
+function parsePayloadDate(dateValue: string, endOfDay = false): Date | null {
+  if (!dateValue) return null
+
+  const value = String(dateValue).trim()
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const slashMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+
+  let year: number
+  let month: number
+  let day: number
+
+  if (isoMatch) {
+    year = Number(isoMatch[1])
+    month = Number(isoMatch[2])
+    day = Number(isoMatch[3])
+  } else if (slashMatch) {
+    year = Number(slashMatch[3])
+    month = Number(slashMatch[1])
+    day = Number(slashMatch[2])
+  } else {
+    const parsed = new Date(value)
+    if (isNaN(parsed.getTime())) return null
+    year = parsed.getUTCFullYear()
+    month = parsed.getUTCMonth() + 1
+    day = parsed.getUTCDate()
+  }
+
+  const time = endOfDay ? "23:59:59.999Z" : "00:00:00.000Z"
+  const monthText = String(month).padStart(2, "0")
+  const dayText = String(day).padStart(2, "0")
+  const parsedDate = new Date(`${year}-${monthText}-${dayText}T${time}`)
+
+  return isNaN(parsedDate.getTime()) ? null : parsedDate
+}
+
 function stripHtmlTags(text: string | null | undefined): string {
   if (!text) return "NA"
   return text.replace(/<\/?[^>]+(>|$)/g, "").trim()
@@ -176,7 +212,7 @@ function buildDynamicColumns(maxIndices: number = MAX_JOURNEY_INDICES): any[] {
 }
 
 function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: number = CHUNK_SIZE): any[] {
-  console.log(JSON.stringify([
+  const pipeline = [
     { $match: baseMatch },
     { $sort: { InsertDateTime: -1 } },
     {
@@ -186,25 +222,8 @@ function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: numb
       },
     },
     { $replaceRoot: { newRoot: "$doc" } },
-    {
-      $lookup: {
-        from: TICKET_HISTORY_COLLECTION,
-        let: { ticketId: "$SupportTicketID" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [{ $eq: ["$SupportTicketID", "$$ticketId"] }, { $eq: ["$TicketStatusID", 109304] }],
-              },
-            },
-          },
-          { $sort: { TicketHistoryID: -1 } },
-          { $limit: 1 },
-        ],
-        as: "ticketHistory",
-      },
-    },
-    { $unwind: { path: "$ticketHistory", preserveNullAndEmptyArrays: true } },
+    { $skip: skip },
+    { $limit: fetchLimit },
     {
       $lookup: {
         from: "support_ticket_claim_intimation_report_history",
@@ -245,81 +264,65 @@ function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: numb
         ],
       },
     },
-    { $skip: skip },
-    { $limit: fetchLimit },
-  ]))
-  return [
-    { $match: baseMatch },
-    { $sort: { InsertDateTime: -1 } },
     {
-      $group: {
-        _id: "$SupportTicketNo",
-        doc: { $first: "$$ROOT" },
+      $project: {
+        SupportTicketID: 1,
+        SupportTicketNo: 1,
+        InsertUserID: 1,
+        Created: 1,
+        StatusUpdateTime: 1,
+        TicketStatusID: 1,
+        TicketStatus: 1,
+        ApplicationNo: 1,
+        InsurancePolicyNo: 1,
+        CallerContactNumber: 1,
+        RequestorName: 1,
+        RequestorMobileNo: 1,
+        StateMasterName: 1,
+        DistrictMasterName: 1,
+        SubDistrictName: 1,
+        TicketHeadName: 1,
+        TicketCategoryName: 1,
+        RequestSeason: 1,
+        RequestYear: 1,
+        CropSeasonName: 1,
+        ApplicationCropName: 1,
+        Relation: 1,
+        RelativeName: 1,
+        PolicyPremium: 1,
+        PolicyArea: 1,
+        PolicyType: 1,
+        LandSurveyNumber: 1,
+        LandDivisionNumber: 1,
+        IsSos: 1,
+        PlotStateName: 1,
+        PlotDistrictName: 1,
+        PlotVillageName: 1,
+        ApplicationSource: 1,
+        CropShare: 1,
+        IFSCCode: 1,
+        FarmerShare: 1,
+        SowingDate: 1,
+        LossDate: 1,
+        CreatedBY: 1,
+        InsertDateTime: 1,
+        Sos: 1,
+        TicketNCIPDocketNo: 1,
+        TicketDescription: 1,
+        CallingUniqueID: 1,
+        TicketTypeName: 1,
+        TicketReOpenDate: 1,
+        InsuranceCompany: 1,
+        SchemeName: 1,
+        claimInfo: 1,
+        agentInfo: 1,
+        ticket_comment_journey: 1,
       },
     },
-    { $replaceRoot: { newRoot: "$doc" } },
-    {
-      $lookup: {
-        from: TICKET_HISTORY_COLLECTION,
-        let: { ticketId: "$SupportTicketID" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [{ $eq: ["$SupportTicketID", "$$ticketId"] }, { $eq: ["$TicketStatusID", 109304] }],
-              },
-            },
-          },
-          { $sort: { TicketHistoryID: -1 } },
-          { $limit: 1 },
-        ],
-        as: "ticketHistory",
-      },
-    },
-    { $unwind: { path: "$ticketHistory", preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: "support_ticket_claim_intimation_report_history",
-        let: { ticketNo: "$SupportTicketNo" },
-        pipeline: [
-          { $match: { $expr: { $eq: ["$SupportTicketNo", "$$ticketNo"] } } },
-          { $sort: { InsertDateTime: -1 } },
-          { $limit: 1 },
-        ],
-        as: "claimInfo",
-      },
-    },
-    { $unwind: { path: "$claimInfo", preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: "csc_agent_master",
-        let: { userLoginId: "$InsertUserID" },
-        pipeline: [{ $match: { $expr: { $eq: ["$UserLoginID", "$$userLoginId"] } } }, { $limit: 1 }],
-        as: "agentInfo",
-      },
-    },
-    { $unwind: { path: "$agentInfo", preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: "ticket_comment_journey",
-        localField: "SupportTicketNo",
-        foreignField: "SupportTicketNo",
-        as: "ticket_comment_journey",
-        pipeline: [
-          { $sort: { CreatedDate: -1 } },
-          {
-            $group: {
-              _id: "$ResolvedComment",
-              unique_comments: { $first: "$$ROOT" },
-            },
-          },
-          { $replaceRoot: { newRoot: "$unique_comments" } },
-        ],
-      },
-    },
-    { $skip: skip },
-    { $limit: fetchLimit },
   ]
+
+  console.log(JSON.stringify(pipeline), "workerExportPipeline")
+  return pipeline
 }
 
 function buildTicketCommentJourney(source: any, maxIndices: number = MAX_JOURNEY_INDICES): any[] {
@@ -744,14 +747,26 @@ async function processTicketHistory(ticketPayload: any) {
 
   if (SPFROMDATE || SPTODATE) {
     baseMatch.InsertDateTime = {}
-    if (SPFROMDATE) baseMatch.InsertDateTime.$gte = new Date(`${SPFROMDATE}T00:00:00.000Z`)
-    if (SPTODATE) baseMatch.InsertDateTime.$lte = new Date(`${SPTODATE}T23:59:59.999Z`)
+    const fromDate = parsePayloadDate(SPFROMDATE)
+    const toDate = parsePayloadDate(SPTODATE, true)
+    if (SPFROMDATE && !fromDate) {
+      await updateDownloadStatusFromPayload(ticketPayload, "Failed", "Invalid from date format.")
+      return { rcode: 0, rmessage: "Invalid from date format." }
+    }
+    if (SPTODATE && !toDate) {
+      await updateDownloadStatusFromPayload(ticketPayload, "Failed", "Invalid to date format.")
+      return { rcode: 0, rmessage: "Invalid to date format." }
+    }
+    if (fromDate) baseMatch.InsertDateTime.$gte = fromDate
+    if (toDate) baseMatch.InsertDateTime.$lte = toDate
   }
 
   const ticketTypeName = TICKET_TYPE_MAP[SPTicketHeaderID] || "General"
   const currentDateStr = new Date().toLocaleDateString("en-GB").split("/").join("_")
-  const fromDateStr = new Date(SPFROMDATE).toLocaleDateString("en-GB").split("/").join("_")
-  const toDateStr = new Date(SPTODATE).toLocaleDateString("en-GB").split("/").join("_")
+  const fromDateForName = parsePayloadDate(SPFROMDATE) || new Date(SPFROMDATE)
+  const toDateForName = parsePayloadDate(SPTODATE) || new Date(SPTODATE)
+  const fromDateStr = fromDateForName.toLocaleDateString("en-GB").split("/").join("_")
+  const toDateStr = toDateForName.toLocaleDateString("en-GB").split("/").join("_")
   // const excelFileName = `${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}.xlsx`
 const excelFileName =
   `${ticketTypeName}_fromDate_${fromDateStr}_toDate_${toDateStr}_${Date.now()}.xlsx`;
