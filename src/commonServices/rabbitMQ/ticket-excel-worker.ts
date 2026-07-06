@@ -4,7 +4,7 @@ const path = require("path")
 const ExcelJS = require("exceljs")
 const archiver = require("archiver")
 const axios = require("axios")
-import { GCPServices } from "../GCSFileUpload"
+import * as FormData from "form-data"
 import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from "../../templates/mailTemplates"
 import { UtilService } from "../../commonServices/utilService"
 import { RedisWrapper } from "../../commonServices/redisWrapper"
@@ -25,6 +25,7 @@ const API_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk"
 const API_URL = "https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail"
 const TICKET_COLLECTION = "SLA_Ticket_listing"
+const FALLBACK_TICKET_COLLECTION = "SLA_KRPH_SupportTickets_Records"
 const TICKET_HISTORY_COLLECTION = "SLA_KRPH_SupportTicketsHistory_Records"
 const DOWNLOAD_LOG_COLLECTION = "support_ticket_download_logs"
 
@@ -97,6 +98,46 @@ async function connectToDatabase(uri: string, dbName: string): Promise<Db> {
   cachedDb = client.db(dbName)
   console.log(`MongoDB connected to database: ${dbName}`)
   return cachedDb
+}
+
+function getMongoHostForLog(uri: string): string {
+  try {
+    const parsed = new URL(uri)
+    return parsed.host
+  } catch {
+    return "unknown"
+  }
+}
+
+function findUrlInObject(value: any): string {
+  if (!value) return ""
+
+  if (typeof value === "string") {
+    return /^https?:\/\//i.test(value) ? value : ""
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findUrlInObject(item)
+      if (found) return found
+    }
+    return ""
+  }
+
+  if (typeof value === "object") {
+    const preferredKeys = ["gcsUrl", "GCSUrl", "url", "URL", "downloadUrl", "DownloadURL", "fileUrl", "fileURL"]
+    for (const key of preferredKeys) {
+      const found = findUrlInObject(value[key])
+      if (found) return found
+    }
+
+    for (const key of Object.keys(value)) {
+      const found = findUrlInObject(value[key])
+      if (found) return found
+    }
+  }
+
+  return ""
 }
 
 async function getSupportTicketUserDetail(userID: string): Promise<any> {
@@ -459,13 +500,14 @@ function mapDocumentToRow(doc: any, dynamicColumnsBatch: Record<string, any>): R
 
 async function processChunk(
   db: Db,
+  collectionName: string,
   baseMatch: any,
   skip: number,
   worksheet: any,
 ): Promise<{ hasMore: boolean; processedCount: number }> {
   const FETCH_LIMIT = CHUNK_SIZE + 1
   const pipeline = buildAggregationPipeline(baseMatch, skip, FETCH_LIMIT)
-  const cursor = db.collection(TICKET_COLLECTION).aggregate(pipeline, { allowDiskUse: true })
+  const cursor = db.collection(collectionName).aggregate(pipeline, { allowDiskUse: true })
   const docs = await cursor.toArray()
 
   const docsToProcess = docs.slice(0, CHUNK_SIZE)
@@ -497,7 +539,13 @@ async function processDateRange(db: Db, baseMatch: any, startDate: Date, endDate
     let hasMore = true
 
     while (hasMore) {
-      const { hasMore: hasMoreResults, processedCount } = await processChunk(db, dailyMatch, skip, worksheet)
+      const { hasMore: hasMoreResults, processedCount } = await processChunk(
+        db,
+        TICKET_COLLECTION,
+        dailyMatch,
+        skip,
+        worksheet,
+      )
       hasMore = hasMoreResults
       skip += CHUNK_SIZE
 
@@ -508,13 +556,19 @@ async function processDateRange(db: Db, baseMatch: any, startDate: Date, endDate
   }
 }
 
-async function processMatchedRange(db: Db, baseMatch: any, worksheet: any): Promise<number> {
+async function processMatchedRange(db: Db, collectionName: string, baseMatch: any, worksheet: any): Promise<number> {
   let skip = 0
   let hasMore = true
   let totalProcessed = 0
 
   while (hasMore) {
-    const { hasMore: hasMoreResults, processedCount } = await processChunk(db, baseMatch, skip, worksheet)
+    const { hasMore: hasMoreResults, processedCount } = await processChunk(
+      db,
+      collectionName,
+      baseMatch,
+      skip,
+      worksheet,
+    )
     hasMore = hasMoreResults
     skip += CHUNK_SIZE
     totalProcessed += processedCount
@@ -553,14 +607,25 @@ async function createZipFile(excelFilePath: string, zipFileName: string, folderP
 }
 
 async function uploadToGCP(zipFilePath: string, zipFileName: string): Promise<string> {
-  const gcpService = new GCPServices()
-  const fileBuffer = await fs.promises.readFile(zipFilePath)
-  const uploadResult = await gcpService.uploadFileToGCP({
-    filePath: "krph/reports/",
-    uploadedBy: "KRPH",
-    file: { buffer: fileBuffer, originalname: zipFileName },
+  const formData = new FormData()
+  formData.append("filePath", "krph/farmer/tickets-pdf/")
+  formData.append("uploadedBy", "KRPH")
+  formData.append("documents", fs.createReadStream(zipFilePath), zipFileName)
+
+  const response = await axios.post("https://pmfby.gov.in/krphapi/FGMS/GCPFileUploadForCDR", formData, {
+    headers: { ...formData.getHeaders() },
+    maxBodyLength: Infinity,
   })
-  return uploadResult?.file?.[0]?.gcsUrl || ""
+
+  const uploadResult = response.data
+  console.log("[TicketExcelWorker] CDN upload response:", JSON.stringify(uploadResult))
+
+  const downloadUrl = findUrlInObject(uploadResult)
+  if (!downloadUrl) {
+    throw new Error("CDN upload completed but no download URL was returned.")
+  }
+
+  return downloadUrl
 }
 
 async function insertOrUpdateDownloadLog(
@@ -761,6 +826,45 @@ async function processTicketHistory(ticketPayload: any) {
     if (toDate) baseMatch.InsertDateTime.$lte = toDate
   }
 
+  console.log(
+    "[TicketExcelWorker] Runtime:",
+    JSON.stringify({
+      nodeEnv: process.env.NODE_ENV || "uat",
+      mongoHost: getMongoHostForLog(DB_URI),
+      dbName: DB_NAME,
+      collection: TICKET_COLLECTION,
+      fallbackCollection: FALLBACK_TICKET_COLLECTION,
+      payload: {
+        SPFROMDATE,
+        SPTODATE,
+        SPInsuranceCompanyID,
+        SPStateID,
+        SPTicketHeaderID,
+        SPUserID,
+      },
+      baseMatch,
+    }),
+  )
+
+  let selectedCollection = TICKET_COLLECTION
+  let matchedCount = await db.collection(selectedCollection).countDocuments(baseMatch)
+  console.log(`[TicketExcelWorker] Matched documents in ${selectedCollection}: ${matchedCount}`)
+
+  if (matchedCount === 0) {
+    const fallbackMatchedCount = await db.collection(FALLBACK_TICKET_COLLECTION).countDocuments(baseMatch)
+    console.log(`[TicketExcelWorker] Matched documents in ${FALLBACK_TICKET_COLLECTION}: ${fallbackMatchedCount}`)
+
+    if (fallbackMatchedCount > 0) {
+      selectedCollection = FALLBACK_TICKET_COLLECTION
+      matchedCount = fallbackMatchedCount
+    }
+  }
+
+  if (matchedCount === 0) {
+    await updateDownloadStatusFromPayload(ticketPayload, "Failed", "No records found for download filters.")
+    return { rcode: 0, rmessage: "No records found for download filters." }
+  }
+
   const ticketTypeName = TICKET_TYPE_MAP[SPTicketHeaderID] || "General"
   const currentDateStr = new Date().toLocaleDateString("en-GB").split("/").join("_")
   const fromDateForName = parsePayloadDate(SPFROMDATE) || new Date(SPFROMDATE)
@@ -788,8 +892,8 @@ const excelFileName =
     "Report generation started",
   )
 
-  const processedCount = await processMatchedRange(db, baseMatch, worksheet)
-  console.log(`Total export documents processed: ${processedCount}`)
+  const processedCount = await processMatchedRange(db, selectedCollection, baseMatch, worksheet)
+  console.log(`Total export documents processed from ${selectedCollection}: ${processedCount}`)
 
   await workbook.commit()
   console.log(`Excel file created at: ${excelFilePath}`)
@@ -801,6 +905,11 @@ const excelFileName =
   const gcpDownloadUrl = await uploadToGCP(zipFilePath, zipFileName)
   if (gcpDownloadUrl) {
     await fs.promises.unlink(zipFilePath).catch(console.error)
+  }
+
+  if (!gcpDownloadUrl) {
+    await updateDownloadStatusFromPayload(ticketPayload, "Failed", "CDN upload did not return a download URL.", zipFileName)
+    return { rcode: 0, rmessage: "CDN upload did not return a download URL.", zipFileName }
   }
 
   await insertOrUpdateDownloadLog(
