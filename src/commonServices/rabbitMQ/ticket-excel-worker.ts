@@ -25,7 +25,6 @@ const API_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk"
 const API_URL = "https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail"
 const TICKET_COLLECTION = "SLA_Ticket_listing"
-const FALLBACK_TICKET_COLLECTION = "SLA_KRPH_SupportTickets_Records"
 const TICKET_HISTORY_COLLECTION = "SLA_KRPH_SupportTicketsHistory_Records"
 const DOWNLOAD_LOG_COLLECTION = "support_ticket_download_logs"
 
@@ -833,7 +832,6 @@ async function processTicketHistory(ticketPayload: any) {
       mongoHost: getMongoHostForLog(DB_URI),
       dbName: DB_NAME,
       collection: TICKET_COLLECTION,
-      fallbackCollection: FALLBACK_TICKET_COLLECTION,
       payload: {
         SPFROMDATE,
         SPTODATE,
@@ -846,19 +844,8 @@ async function processTicketHistory(ticketPayload: any) {
     }),
   )
 
-  let selectedCollection = TICKET_COLLECTION
-  let matchedCount = await db.collection(selectedCollection).countDocuments(baseMatch)
-  console.log(`[TicketExcelWorker] Matched documents in ${selectedCollection}: ${matchedCount}`)
-
-  if (matchedCount === 0) {
-    const fallbackMatchedCount = await db.collection(FALLBACK_TICKET_COLLECTION).countDocuments(baseMatch)
-    console.log(`[TicketExcelWorker] Matched documents in ${FALLBACK_TICKET_COLLECTION}: ${fallbackMatchedCount}`)
-
-    if (fallbackMatchedCount > 0) {
-      selectedCollection = FALLBACK_TICKET_COLLECTION
-      matchedCount = fallbackMatchedCount
-    }
-  }
+  const matchedCount = await db.collection(TICKET_COLLECTION).countDocuments(baseMatch)
+  console.log(`[TicketExcelWorker] Matched documents in ${TICKET_COLLECTION}: ${matchedCount}`)
 
   if (matchedCount === 0) {
     await updateDownloadStatusFromPayload(ticketPayload, "Failed", "No records found for download filters.")
@@ -892,8 +879,8 @@ const excelFileName =
     "Report generation started",
   )
 
-  const processedCount = await processMatchedRange(db, selectedCollection, baseMatch, worksheet)
-  console.log(`Total export documents processed from ${selectedCollection}: ${processedCount}`)
+  const processedCount = await processMatchedRange(db, TICKET_COLLECTION, baseMatch, worksheet)
+  console.log(`Total export documents processed from ${TICKET_COLLECTION}: ${processedCount}`)
 
   await workbook.commit()
   console.log(`Excel file created at: ${excelFilePath}`)
