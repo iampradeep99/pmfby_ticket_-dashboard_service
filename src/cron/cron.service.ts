@@ -7,6 +7,8 @@ import { QueryTypes } from 'sequelize'; // ✅ import QueryTypes
 
 @Injectable()
 export class CronService {
+  private isTicketCommentSyncRunning = false;
+
   constructor(
     @Inject('SEQUELIZE') private readonly sequelize: Sequelize,
     @Inject('MONGO_DB') private readonly db: Db,
@@ -55,6 +57,18 @@ async handleCronUpdateDocketNumber() {
       console.log(response);
     } catch (err) {
       console.error('❌ Cron failed:', err);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleTicketCommentJourneySync() {
+    console.log('⏰ Cron running ticket comment journey sync');
+
+    try {
+      const response = await this.syncTicketComments();
+      console.log(response);
+    } catch (err) {
+      console.error('❌ Ticket comment journey sync cron failed:', err);
     }
   }
 
@@ -594,6 +608,11 @@ Your Automation System
 
 
   async syncTicketComments(): Promise<string> {
+  if (this.isTicketCommentSyncRunning) {
+    return 'Ticket comment journey sync is already running.';
+  }
+
+  this.isTicketCommentSyncRunning = true;
   const MYSQL_BATCH_SIZE = 100000;
   const CHUNK_SIZE = 1000;
 
@@ -633,26 +652,70 @@ Your Automation System
         for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
           const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
 
-          for (const record of chunk) {
-            const result = await collection.findOneAndUpdate(
-              { SupportTicketID: record.SupportTicketID },
-              {
-                $set: {
-                  InsertDateTime: record.InsertDateTime,
-                  StatusUpdateTime: record.StatusUpdateTime,
-                  TicketStatus: record.TicketStatus,
-                  TicketStatusID: record.TicketStatusID,
-                  TicketReOpenDate: record.TicketReOpenDate,
-                  TicketNCIPDocketNo: record.TicketNCIPDocketNo,
-                  SupportTicketNo: record.SupportTicketNo
-                }
+          const operations = chunk
+            .filter((record) => record.SupportTicketNo)
+            .map((record) => ({
+              updateOne: {
+                filter: { SupportTicketNo: record.SupportTicketNo },
+                update: {
+                  $set: {
+                    SupportTicketNo: record.SupportTicketNo,
+                    NCIPDocketNo: record.NCIPDocketNo,
+                    CreatedDate: record.CreatedDate,
+                    AgentName: record.AgentName,
+                    CreatedBY: record.CreatedBY,
+                    SupportTicketID: record.SupportTicketID,
+                    InprogressDate: record.InprogressDate,
+                    InprogressComment: record.InprogressComment,
+                    InprogressUpdatedBy: record.InprogressUpdatedBy,
+                    InprogressUpdatedUser: record.InprogressUpdatedUser,
+                    ResolvedDate: record.ResolvedDate,
+                    ResolvedComment: record.ResolvedComment,
+                    ResolvedUpdatedBy: record.ResolvedUpdatedBy,
+                    ResolvedUpdatedUser: record.ResolvedUpdatedUser,
+                    ReOpenDate: record.ReOpenDate,
+                    ReOpenComment: record.ReOpenComment,
+                    ReOpenUpdatedBy: record.ReOpenUpdatedBy,
+                    ReOpenUpdatedUser: record.ReOpenUpdatedUser,
+                    Inprogress1Date: record.Inprogress1Date,
+                    Inprogress1Comment: record.Inprogress1Comment,
+                    Inprogress1UpdatedBy: record.Inprogress1UpdatedBy,
+                    Inprogress1UpdatedUser: record.Inprogress1UpdatedUser,
+                    Resolved1Date: record.Resolved1Date,
+                    Resolved1Comment: record.Resolved1Comment,
+                    Resolved1UpdatedBy: record.Resolved1UpdatedBy,
+                    Resolved1UpdatedUser: record.Resolved1UpdatedUser,
+                    ReOpen1Date: record.ReOpen1Date,
+                    ReOpen1Comment: record.ReOpen1Comment,
+                    ReOpen1UpdatedBy: record.ReOpen1UpdatedBy,
+                    ReOpen1UpdatedUser: record.ReOpen1UpdatedUser,
+                    Inprogress2Date: record.Inprogress2Date,
+                    Inprogress2Comment: record.Inprogress2Comment,
+                    Inprogress2UpdatedBy: record.Inprogress2UpdatedBy,
+                    Inprogress2UpdatedUser: record.Inprogress2UpdatedUser,
+                    Resolved2Date: record.Resolved2Date,
+                    Resolved2Comment: record.Resolved2Comment,
+                    Resolved2UpdatedBy: record.Resolved2UpdatedBy,
+                    Resolved2UpdatedUser: record.Resolved2UpdatedUser,
+                    ReOpen2Date: record.ReOpen2Date,
+                    ReOpen2Comment: record.ReOpen2Comment,
+                    ReOpen2UpdatedBy: record.ReOpen2UpdatedBy,
+                    ReOpen2UpdatedUser: record.ReOpen2UpdatedUser,
+                    syncedAt: new Date(),
+                  },
+                  $setOnInsert: {
+                    insertedAt: new Date(),
+                  },
+                },
+                upsert: true,
               },
-              { returnDocument: 'after' }
-            );
-            console.log(result)
+            }));
 
-            if (result) totalUpdated++;
-            else totalMissing++;
+          totalMissing += chunk.length - operations.length;
+
+          if (operations.length) {
+            const result = await collection.bulkWrite(operations, { ordered: false });
+            totalUpdated += result.modifiedCount + result.upsertedCount;
           }
 
           if (global.gc) global.gc();
@@ -665,39 +728,30 @@ Your Automation System
 
       await processBatch();
 
-      console.log('🎉 Support ticket listing sync completed.');
+      console.log('🎉 Ticket comment journey sync completed.');
       console.log(`🟢 Total Updated: ${totalUpdated}`);
-      console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
+      console.log(`🔴 Total Missing (without SupportTicketNo): ${totalMissing}`);
 
       const to = ['pmfbysystems@gmail.com'];
-      const subject = 'Support Ticket listing Data Update Completed';
+      const subject = 'Ticket Comment Journey Sync Completed';
       const text = `
 Hello,
 
-The Support Ticket listing data update process has completed.
-
-Criteria:
-- InsertDateTime ≠ Today
-- StatusUpdateTime = Today
+The ticket comment journey sync process has completed.
 
 Total Rows from MySQL: ${totalRows}
-Total Existing Documents Updated: ${totalUpdated}
-Total Missing (not updated): ${totalMissing}
+Total Mongo Documents Upserted/Updated: ${totalUpdated}
+Total Missing SupportTicketNo: ${totalMissing}
 
 Regards,
 Your Automation System
       `;
       const html = `
 <p>Hello,</p>
-<p><strong>The Support Ticket listing data update process has completed.</strong></p>
-<p><strong>Criteria:</strong></p>
-<ul>
-  <li><code>InsertDateTime</code> ≠ Today</li>
-  <li><code>StatusUpdateTime</code> = Today</li>
-</ul>
+<p><strong>The ticket comment journey sync process has completed.</strong></p>
 <p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
-<p><strong>Total Existing Documents Updated:</strong> ${totalUpdated}</p>
-<p><strong>Total Missing (not updated):</strong> ${totalMissing}</p>
+<p><strong>Total Mongo Documents Upserted/Updated:</strong> ${totalUpdated}</p>
+<p><strong>Total Missing SupportTicketNo:</strong> ${totalMissing}</p>
 <p>Regards,<br/>Your Automation System</p>
       `;
 
@@ -708,6 +762,8 @@ Your Automation System
     } catch (err: any) {
       console.error('❌ Error during supportTicketSyncing:', err);
       reject(err);
+    } finally {
+      this.isTicketCommentSyncRunning = false;
     }
   });
 }

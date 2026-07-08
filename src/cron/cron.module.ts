@@ -32,6 +32,7 @@ import { MailModule } from 'src/mail/mail.module';
 import { TicketEscalationCron } from './ticketEscalationCron';
 import { UtilModule } from 'src/commonServices/util.module';
 import { DocketUpdateCron } from './docketUpdateCron';
+import { CronController } from './cron.controller';
 
 @Module({
   imports: [
@@ -45,6 +46,9 @@ import { DocketUpdateCron } from './docketUpdateCron';
     CronService,
     TicketEscalationCron,
     DocketUpdateCron, // ✅ MUST be here
+  ],
+  controllers: [
+    CronController,
   ],
   exports: [
     TicketEscalationCron,
