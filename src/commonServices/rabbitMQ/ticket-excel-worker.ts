@@ -4,6 +4,7 @@ const path = require("path")
 const ExcelJS = require("exceljs")
 const archiver = require("archiver")
 const axios = require("axios")
+const mysql = require("mysql2/promise")
 import * as FormData from "form-data"
 import { generateSupportTicketEmailHTML, getCurrentFormattedDateTime } from "../../templates/mailTemplates"
 import { UtilService } from "../../commonServices/utilService"
@@ -16,6 +17,7 @@ import { MongoClient, type Db } from "mongodb"
 const redisWrapper = new RedisWrapper()
 const mailService = new MailService()
 let cachedDb: Db | null = null
+let cachedMysqlPool: any = null
 
 const CHUNK_SIZE = 10000
 const MAX_JOURNEY_INDICES = 3
@@ -27,6 +29,8 @@ const API_URL = "https://pmfby.gov.in/krphapi/FGMS/GetSupportTicketUserDetail"
 const TICKET_COLLECTION = "SLA_Ticket_listing"
 const TICKET_HISTORY_COLLECTION = "SLA_KRPH_SupportTicketsHistory_Records"
 const DOWNLOAD_LOG_COLLECTION = "support_ticket_download_logs"
+const MYSQL_TICKET_JOURNEY_TABLE = "krishi_rakshak_pro.krph_ticketjourney"
+const MYSQL_IN_CLAUSE_BATCH_SIZE = 1000
 
 const TICKET_TYPE_MAP: Record<number, string> = {
   1: "Grievance",
@@ -97,6 +101,28 @@ async function connectToDatabase(uri: string, dbName: string): Promise<Db> {
   cachedDb = client.db(dbName)
   console.log(`MongoDB connected to database: ${dbName}`)
   return cachedDb
+}
+
+async function connectToMysql(): Promise<any> {
+  if (cachedMysqlPool) return cachedMysqlPool
+
+  const mysqlConfig = config.mysql
+  if (!mysqlConfig?.host) throw new Error("MySQL host is required")
+
+  cachedMysqlPool = mysql.createPool({
+    host: mysqlConfig.host,
+    port: mysqlConfig.port,
+    user: mysqlConfig.user,
+    password: mysqlConfig.password,
+    database: mysqlConfig.database,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+  })
+
+  await cachedMysqlPool.query("SELECT 1")
+  console.log(`MySQL connected to database: ${mysqlConfig.database}`)
+  return cachedMysqlPool
 }
 
 function getMongoHostForLog(uri: string): string {
@@ -287,24 +313,6 @@ function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: numb
     },
     { $unwind: { path: "$agentInfo", preserveNullAndEmptyArrays: true } },
     {
-      $lookup: {
-        from: "ticket_comment_journey",
-        localField: "SupportTicketNo",
-        foreignField: "SupportTicketNo",
-        as: "ticket_comment_journey",
-        pipeline: [
-          { $sort: { CreatedDate: -1 } },
-          {
-            $group: {
-              _id: "$ResolvedComment",
-              unique_comments: { $first: "$$ROOT" },
-            },
-          },
-          { $replaceRoot: { newRoot: "$unique_comments" } },
-        ],
-      },
-    },
-    {
       $project: {
         SupportTicketID: 1,
         SupportTicketNo: 1,
@@ -356,7 +364,6 @@ function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: numb
         SchemeName: 1,
         claimInfo: 1,
         agentInfo: 1,
-        ticket_comment_journey: 1,
       },
     },
   ]
@@ -399,12 +406,60 @@ function buildTicketCommentJourney(source: any, maxIndices: number = MAX_JOURNEY
   return journey
 }
 
-function extractJourneyFromDoc(doc: any): any[] {
-  if (Array.isArray(doc.ticket_comment_journey) && doc.ticket_comment_journey.length > 0) {
-    return buildTicketCommentJourney(doc.ticket_comment_journey[0])
-  } else {
-    return buildTicketCommentJourney(doc)
+async function fetchTicketJourneysByTicketNos(ticketNos: string[]): Promise<Map<string, any>> {
+  const uniqueTicketNos = Array.from(new Set(ticketNos.filter(Boolean)))
+  const journeyMap = new Map<string, any>()
+
+  if (!uniqueTicketNos.length) return journeyMap
+
+  const mysqlPool = await connectToMysql()
+  const columns = [
+    "SupportTicketNo",
+    "CreatedDate",
+    "InprogressDate",
+    "InprogressComment",
+    "ResolvedDate",
+    "ResolvedComment",
+    "ReOpenDate",
+    "ReOpenComment",
+    "Inprogress1Date",
+    "Inprogress1Comment",
+    "Resolved1Date",
+    "Resolved1Comment",
+    "ReOpen1Date",
+    "ReOpen1Comment",
+    "Inprogress2Date",
+    "Inprogress2Comment",
+    "Resolved2Date",
+    "Resolved2Comment",
+    "ReOpen2Date",
+    "ReOpen2Comment",
+  ].join(", ")
+
+  for (let i = 0; i < uniqueTicketNos.length; i += MYSQL_IN_CLAUSE_BATCH_SIZE) {
+    const batch = uniqueTicketNos.slice(i, i + MYSQL_IN_CLAUSE_BATCH_SIZE)
+    const placeholders = batch.map(() => "?").join(",")
+    const [rows] = await mysqlPool.query(
+      `SELECT ${columns}
+       FROM ${MYSQL_TICKET_JOURNEY_TABLE}
+       WHERE SupportTicketNo IN (${placeholders})
+       ORDER BY CreatedDate DESC`,
+      batch,
+    )
+
+    for (const row of rows as any[]) {
+      const ticketNo = String(row.SupportTicketNo || "")
+      if (ticketNo && !journeyMap.has(ticketNo)) {
+        journeyMap.set(ticketNo, row)
+      }
+    }
   }
+
+  return journeyMap
+}
+
+function extractJourneyFromDoc(doc: any, mysqlJourney?: any): any[] {
+  return buildTicketCommentJourney(mysqlJourney || doc)
 }
 
 function buildDynamicColumnsBatch(journey: any[], maxIndices: number = MAX_JOURNEY_INDICES): Record<string, any> {
@@ -511,9 +566,12 @@ async function processChunk(
 
   const docsToProcess = docs.slice(0, CHUNK_SIZE)
   const hasMoreRecords = docs.length > CHUNK_SIZE
+  const ticketNos = docsToProcess.map((doc) => String(doc.SupportTicketNo || "")).filter(Boolean)
+  const ticketJourneyMap = await fetchTicketJourneysByTicketNos(ticketNos)
 
   for (const doc of docsToProcess) {
-    const journey = extractJourneyFromDoc(doc)
+    const mysqlJourney = ticketJourneyMap.get(String(doc.SupportTicketNo || ""))
+    const journey = extractJourneyFromDoc(doc, mysqlJourney)
     const dynamicColumnsBatch = buildDynamicColumnsBatch(journey)
     const row = mapDocumentToRow(doc, dynamicColumnsBatch)
     worksheet.addRow(row).commit()
