@@ -254,7 +254,7 @@ function buildDynamicColumns(maxIndices: number = MAX_JOURNEY_INDICES): any[] {
 function buildAggregationPipeline(baseMatch: any, skip: number, fetchLimit: number = CHUNK_SIZE): any[] {
   const pipeline = [
     { $match: baseMatch },
-    { $sort: { InsertDateTime: -1 } },
+    { $sort: { StatusUpdateTime: -1, InsertDateTime: -1 } },
     {
       $group: {
         _id: "$SupportTicketNo",
