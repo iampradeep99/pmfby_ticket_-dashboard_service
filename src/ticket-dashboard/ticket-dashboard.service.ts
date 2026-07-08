@@ -4426,6 +4426,50 @@ export class TicketDashboardService {
 
   async createOrUpdateDownloadRequestStatus(ticketPayload: any, status = 'Queued', statusMessage = 'Request accepted and waiting for processing') {
     const ticketHeaderId = Number(ticketPayload?.SPTicketHeaderID);
+
+    if (status === 'Queued' && !ticketPayload.downloadRequestId) {
+      const processingRequest = await this.db.collection('support_ticket_download_logs').findOne(
+        {
+          userId: ticketPayload?.SPUserID,
+          insuranceCompanyId: ticketPayload?.SPInsuranceCompanyID,
+          stateId: ticketPayload?.SPStateID,
+          ticketHeaderId,
+          fromDate: ticketPayload?.SPFROMDATE,
+          toDate: ticketPayload?.SPTODATE,
+          status: 'Processing',
+          downloadUrl: { $in: ['', null] }
+        },
+        { sort: { createdAt: -1 } }
+      );
+
+      if (processingRequest?._id) {
+        ticketPayload.downloadRequestId = processingRequest._id.toString();
+        return {
+          downloadRequestId: ticketPayload.downloadRequestId,
+          shouldQueue: false,
+          message: 'A request with the same filters is already processing'
+        };
+      }
+
+      const queuedRequest = await this.db.collection('support_ticket_download_logs').findOne(
+        {
+          userId: ticketPayload?.SPUserID,
+          insuranceCompanyId: ticketPayload?.SPInsuranceCompanyID,
+          stateId: ticketPayload?.SPStateID,
+          ticketHeaderId,
+          fromDate: ticketPayload?.SPFROMDATE,
+          toDate: ticketPayload?.SPTODATE,
+          status: 'Queued',
+          downloadUrl: { $in: ['', null] }
+        },
+        { sort: { createdAt: -1 } }
+      );
+
+      if (queuedRequest?._id) {
+        ticketPayload.downloadRequestId = queuedRequest._id.toString();
+      }
+    }
+
     if (!ticketPayload.downloadRequestId) {
       ticketPayload.downloadRequestId = new ObjectId().toString();
     }
@@ -4444,6 +4488,12 @@ export class TicketDashboardService {
       statusMessage,
       ticketPayload.downloadRequestId
     );
+
+    return {
+      downloadRequestId: ticketPayload.downloadRequestId,
+      shouldQueue: true,
+      message: statusMessage
+    };
   }
 
 

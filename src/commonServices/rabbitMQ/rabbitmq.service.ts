@@ -174,18 +174,32 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async sendToQueue(message: any) {
-    await this.ticketDashboardService.createOrUpdateDownloadRequestStatus(
+    const requestStatus = await this.ticketDashboardService.createOrUpdateDownloadRequestStatus(
       message,
       'Queued',
       'Request accepted and waiting for processing'
     );
 
-    this.producerChannel.sendToQueue(
-      this.QUEUE_NAME,
-      Buffer.from(JSON.stringify(message)),
-      { persistent: true }
-    );
-    console.log('[RabbitMQ] Message sent:', message);
+    if (requestStatus?.shouldQueue === false) {
+      console.log('[RabbitMQ] Duplicate active request skipped:', requestStatus);
+      return;
+    }
+
+    try {
+      this.producerChannel.sendToQueue(
+        this.QUEUE_NAME,
+        Buffer.from(JSON.stringify(message)),
+        { persistent: true }
+      );
+      console.log('[RabbitMQ] Message sent:', message);
+    } catch (err) {
+      await this.ticketDashboardService.createOrUpdateDownloadRequestStatus(
+        message,
+        'Failed',
+        'Failed to queue request for processing'
+      );
+      throw err;
+    }
   }
 
   private consumeMessages() {
