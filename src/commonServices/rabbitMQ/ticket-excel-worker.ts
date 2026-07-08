@@ -11,7 +11,7 @@ import { RedisWrapper } from "../../commonServices/redisWrapper"
 import { MailService } from "../../mail/mail.service"
 import config from "../../environment/config"
 import * as moment from "moment"
-import { MongoClient, type Db } from "mongodb"
+import { MongoClient, ObjectId, type Db } from "mongodb"
 
 const redisWrapper = new RedisWrapper()
 const mailService = new MailService()
@@ -639,11 +639,22 @@ async function insertOrUpdateDownloadLog(
   db: Db,
   status = "Completed",
   statusMessage = "Report generated successfully",
+  requestId = "",
 ): Promise<void> {
+  const requestFilter = requestId
+    ? { _id: new ObjectId(requestId) }
+    : { userId, insuranceCompanyId, stateId, ticketHeaderId, fromDate, toDate }
+
   await db.collection(DOWNLOAD_LOG_COLLECTION).updateOne(
-    { userId, insuranceCompanyId, stateId, ticketHeaderId, fromDate, toDate },
+    requestFilter,
     {
       $set: {
+        userId,
+        insuranceCompanyId,
+        stateId,
+        ticketHeaderId,
+        fromDate,
+        toDate,
         zipFileName,
         downloadUrl,
         status,
@@ -680,6 +691,7 @@ async function updateDownloadStatusFromPayload(
     db,
     status,
     statusMessage,
+    ticketPayload?.downloadRequestId,
   )
 }
 
@@ -877,6 +889,7 @@ const excelFileName =
     db,
     "Processing",
     "Report generation started",
+    ticketPayload?.downloadRequestId,
   )
 
   const processedCount = await processMatchedRange(db, TICKET_COLLECTION, baseMatch, worksheet)
@@ -911,6 +924,7 @@ const excelFileName =
     db,
     "Completed",
     "Report generated successfully",
+    ticketPayload?.downloadRequestId,
   )
 
   const responsePayload = {
