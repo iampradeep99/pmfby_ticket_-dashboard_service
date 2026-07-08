@@ -1,6 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import * as streamBuffers from 'stream-buffers';
-import { Db, Collection } from 'mongodb';
+import { Db, Collection, ObjectId } from 'mongodb';
 import * as NodeCache from 'node-cache';
 import axios from 'axios'
 import { UtilService } from "../commonServices/utilService";
@@ -4383,22 +4383,32 @@ export class TicketDashboardService {
     downloadUrl,
     db,
     status = '',
-    statusMessage = ''
+    statusMessage = '',
+    requestId = ''
   ) {
     const finalStatus = status || (downloadUrl ? 'Completed' : 'Processing');
     const finalStatusMessage = statusMessage || (downloadUrl ? 'Report generated successfully' : 'Report generation started');
+    const requestFilter = requestId
+      ? { _id: new ObjectId(requestId) }
+      : {
+          userId,
+          insuranceCompanyId,
+          stateId,
+          ticketHeaderId,
+          fromDate,
+          toDate
+        };
 
     await db.collection('support_ticket_download_logs').updateOne(
-      {
-        userId,
-        insuranceCompanyId,
-        stateId,
-        ticketHeaderId,
-        fromDate,
-        toDate
-      },
+      requestFilter,
       {
         $set: {
+          userId,
+          insuranceCompanyId,
+          stateId,
+          ticketHeaderId,
+          fromDate,
+          toDate,
           zipFileName,
           downloadUrl,
           status: finalStatus,
@@ -4416,6 +4426,9 @@ export class TicketDashboardService {
 
   async createOrUpdateDownloadRequestStatus(ticketPayload: any, status = 'Queued', statusMessage = 'Request accepted and waiting for processing') {
     const ticketHeaderId = Number(ticketPayload?.SPTicketHeaderID);
+    if (!ticketPayload.downloadRequestId) {
+      ticketPayload.downloadRequestId = new ObjectId().toString();
+    }
 
     await this.insertOrUpdateDownloadLog(
       ticketPayload?.SPUserID,
@@ -4428,7 +4441,8 @@ export class TicketDashboardService {
       status === 'Queued' ? '' : ticketPayload?.downloadUrl || '',
       this.db,
       status,
-      statusMessage
+      statusMessage,
+      ticketPayload.downloadRequestId
     );
   }
 
