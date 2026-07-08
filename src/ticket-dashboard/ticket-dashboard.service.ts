@@ -455,7 +455,7 @@ export class TicketDashboardService {
 
     const pipeline: any[] = [
       { $match: match },
-      { $sort: { InsertDateTime: -1 } },
+      { $sort: { StatusUpdateTime: -1, InsertDateTime: -1 } },
       { $skip: (page - 1) * limit },
       { $limit: limit },
       {
@@ -774,7 +774,7 @@ export class TicketDashboardService {
 
     const pipeline: any[] = [
       { $match: match },
-      { $sort: { InsertDateTime: -1 } },
+      { $sort: { StatusUpdateTime: -1, InsertDateTime: -1 } },
       { $skip: (page - 1) * limit },
       { $limit: limit },
       {
