@@ -18,7 +18,7 @@ let cachedDb: Db | null = null
 
 const CHUNK_SIZE = 10000
 const MAX_JOURNEY_INDICES = 3
-const DB_URI = "mongodb://10.128.60.45:27017"
+const DB_URI = "mongodb://10.128.60.39:27017"
 const DB_NAME = "krph_db"
 const API_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmVzSW4iOiIyMDI0LTEwLTA5VDE4OjA4OjA4LjAyOFoiLCJpYXQiOjE3Mjg0NjEyODguMDI4LCJpZCI6NzA5LCJ1c2VybmFtZSI6InJhamVzaF9iYWcifQ.niMU8WnJCK5SOCpNOCXMBeDrsr2ZqC96LUzQ5Z9MoBk"

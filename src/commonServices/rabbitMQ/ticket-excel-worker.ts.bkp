@@ -52,7 +52,7 @@ async function processTicketHistory(ticketPayload: any) {
     userEmail,
   } = ticketPayload;
 
-  const db = await connectToDatabase('mongodb://10.128.60.45:27017', 'krph_db')
+  const db = await connectToDatabase('mongodb://10.128.60.39:27017', 'krph_db')
     SPTicketHeaderID = Number(SPTicketHeaderID);
 
      if (!SPInsuranceCompanyID) return { rcode: 0, rmessage: 'InsuranceCompanyID Missing!' };
