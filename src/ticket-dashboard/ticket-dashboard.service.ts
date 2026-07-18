@@ -10319,7 +10319,7 @@ Your Automation System
     toDate: string,
     chunkSize: number = 1000
   ): Promise<string> {
-    const PROD_URI = "mongodb://10.128.60.45:27017/krph_db";
+    const PROD_URI = "mongodb://10.128.60.39:27017/krph_db";
     const UAT_URI = "mongodb://10.128.60.46:27017/krph_db";
     const MAX_RETRIES = 3;
 
