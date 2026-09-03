@@ -1937,215 +1937,185 @@ export class TicketEscalationService {
 
       TicketHeaderID = TicketHeaderID ? Number(TicketHeaderID) : null;
 
-      const collection = db.collection("Ticket_Assignment_History");
+      const collection = db.collection("SLA_Ticket_listing");
       if (!collection) {
         return { data: [], message: { msg: "Collection not found", code: "0" } };
       }
 
       const fromDateISO = fromDate ? moment(fromDate, "YYYY-MM-DD").startOf("day").toDate() : null;
       const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
+      const minimumCreatedDate = moment("2026-08-01", "YYYY-MM-DD").startOf("day").toDate();
+      const effectiveFromDate = fromDateISO && fromDateISO > minimumCreatedDate ? fromDateISO : minimumCreatedDate;
+      const pageNumber = Math.max(Number(page) || 1, 1);
+      const limitNumber = Math.max(Number(limit) || 20, 1);
+      const loggedInUserNumericId = Number(loggedInUserId);
+      const assignedTicketValues = Number.isNaN(loggedInUserNumericId)
+        ? [loggedInUserId]
+        : [loggedInUserId, loggedInUserNumericId];
+
+      const match: any = {
+        IsAssignedTicket: { $in: assignedTicketValues },
+        Created: { $gte: effectiveFromDate },
+      };
+
+      if (toDateISO) {
+        match.Created.$lte = toDateISO;
+      }
+
+      if (SupportTicketNo) {
+        match.SupportTicketNo = SupportTicketNo;
+      }
+
+      if (ApplicationNo) {
+        match.ApplicationNo = ApplicationNo;
+      }
+
+      if (TicketHeaderID) {
+        match.TicketHeaderID = TicketHeaderID;
+      }
 
       const pipeline: any[] = [
-
-        // 🔑 1. Always resolve LATEST assignment first
         {
-          $sort: { AssignedDate: -1, _id: -1 }
+          $match: match
         },
         {
-          $group: {
-            _id: "$SupportTicketID",
-            latestAssignment: { $first: "$$ROOT" }
-          }
+          $sort: { Created: -1, _id: -1 }
         },
         {
-          $replaceRoot: { newRoot: "$latestAssignment" }
-        },
-
-        // 🔑 2. Now filter by logged-in user
-        {
-          $match: { assignedTo: loggedInUserId }
-        },
-
-        {
-          $lookup: {
-            from: "SLA_Ticket_listing",
-            localField: "SupportTicketID",
-            foreignField: "SupportTicketID",
-            as: "TicketRecords",
-          },
-        },
-
-        {
-          $addFields: {
-            TicketRecords: {
-              $filter: {
-                input: "$TicketRecords",
-                as: "ticket",
-                cond: {
-                  $and: [
-                    SupportTicketNo ? { $eq: ["$$ticket.SupportTicketNo", SupportTicketNo] } : {},
-                    ApplicationNo ? { $eq: ["$$ticket.ApplicationNo", ApplicationNo] } : {},
-                    TicketHeaderID ? { $eq: ["$$ticket.TicketHeaderID", TicketHeaderID] } : {},
-                    fromDateISO ? { $gte: ["$$ticket.Created", fromDateISO] } : {},
-                    toDateISO ? { $lte: ["$$ticket.Created", toDateISO] } : {},
-                  ],
-                },
-              },
-            },
-          },
-        },
-
-        {
-          $group: {
-            _id: "$assignedTo",
-            TicketRecords: { $push: "$TicketRecords" },
-          },
-        },
-
-        {
-          $project: {
-            _id: 0,
-            userID: "$_id",
-            TicketRecords: {
-              $map: {
-                input: {
-                  $reduce: {
-                    input: "$TicketRecords",
-                    initialValue: [],
-                    in: { $concatArrays: ["$$value", { $ifNull: ["$$this", []] }] },
-                  },
-                },
-                as: "record",
-                in: {
-                  SupportTicketID: "$$record.SupportTicketID",
-                  CallerContactNumber: "$$record.CallerContactNumber",
-                  CallingAudioFile: "$$record.CallingAudioFile",
-                  TicketRequestorID: "$$record.TicketRequestorID",
-                  StateCodeAlpha: "$$record.StateCodeAlpha",
-                  StateMasterID: "$$record.StateMasterID",
-                  DistrictMasterID: "$$record.DistrictMasterID",
-                  VillageRequestorID: "$$record.VillageRequestorID",
-                  NyayPanchayatID: "$$record.NyayPanchayatID",
-                  NyayPanchayat: "$$record.NyayPanchayat",
-                  GramPanchayatID: "$$record.GramPanchayatID",
-                  GramPanchayat: "$$record.GramPanchayat",
-                  CallerID: "$$record.CallerID",
-                  CreationMode: "$$record.CreationMode",
-                  SupportTicketNo: "$$record.SupportTicketNo",
-                  RequestorUniqueNo: "$$record.RequestorUniqueNo",
-                  RequestorName: "$$record.RequestorName",
-                  RequestorMobileNo: "$$record.RequestorMobileNo",
-                  RequestorAccountNo: "$$record.RequestorAccountNo",
-                  RequestorAadharNo: "$$record.RequestorAadharNo",
-                  TicketCategoryID: "$$record.TicketCategoryID",
-                  CropCategoryOthers: "$$record.CropCategoryOthers",
-                  CropStageMaster: "$$record.CropStageMaster",
-                  CropStageMasterID: "$$record.CropStageMasterID",
-                  TicketHeaderID: "$$record.TicketHeaderID",
-                  SupportTicketTypeID: "$$record.SupportTicketTypeID",
-                  RequestYear: "$$record.RequestYear",
-                  RequestSeason: "$$record.RequestSeason",
-                  TicketSourceID: "$$record.TicketSourceID",
-                  TicketDescription: "$$record.TicketDescription",
-                  LossDate: "$$record.LossDate",
-                  LossTime: "$$record.LossTime",
-                  OnTimeIntimationFlag: "$$record.OnTimeIntimationFlag",
-                  VillageName: "$$record.VillageName",
-                  ApplicationCropName: "$$record.ApplicationCropName",
-                  CropName: "$$record.CropName",
-                  AREA: "$$record.AREA",
-                  DistrictRequestorID: "$$record.DistrictRequestorID",
-                  PostHarvestDate: "$$record.PostHarvestDate",
-                  TicketStatusID: "$$record.TicketStatusID",
-                  StatusUpdateTime: "$$record.StatusUpdateTime",
-                  StatusUpdateUserID: "$$record.StatusUpdateUserID",
-                  ApplicationNo: "$$record.ApplicationNo",
-                  InsuranceCompanyCode: "$$record.InsuranceCompanyCode",
-                  InsuranceCompanyID: "$$record.InsuranceCompanyID",
-                  InsurancePolicyNo: "$$record.InsurancePolicyNo",
-                  InsurancePolicyDate: "$$record.InsurancePolicyDate",
-                  InsuranceExpiryDate: "$$record.InsuranceExpiryDate",
-                  BankMasterID: "$$record.BankMasterID",
-                  AgentUserID: "$$record.AgentUserID",
-                  SchemeID: "$$record.SchemeID",
-                  AttachmentPath: "$$record.AttachmentPath",
-                  HasDocument: "$$record.HasDocument",
-                  Relation: "$$record.Relation",
-                  RelativeName: "$$record.RelativeName",
-                  SubDistrictID: "$$record.SubDistrictID",
-                  SubDistrictName: "$$record.SubDistrictName",
-                  PolicyPremium: "$$record.PolicyPremium",
-                  PolicyArea: "$$record.PolicyArea",
-                  PolicyType: "$$record.PolicyType",
-                  LandSurveyNumber: "$$record.LandSurveyNumber",
-                  LandDivisionNumber: "$$record.LandDivisionNumber",
-                  PlotVillageName: "$$record.PlotVillageName",
-                  PlotDistrictName: "$$record.PlotDistrictName",
-                  PlotStateName: "$$record.PlotStateName",
-                  ApplicationSource: "$$record.ApplicationSource",
-                  CropShare: "$$record.CropShare",
-                  IFSCCode: "$$record.IFSCCode",
-                  FarmerShare: "$$record.FarmerShare",
-                  CropSeasonName: "$$record.CropSeasonName",
-                  TicketSourceName: "$$record.TicketSourceName",
-                  TicketCategoryName: "$$record.TicketCategoryName",
-                  TicketStatus: "$$record.TicketStatus",
-                  InsuranceCompany: "$$record.InsuranceCompany",
-                  TicketTypeName: "$$record.TicketTypeName",
-                  StateMasterName: "$$record.StateMasterName",
-                  DistrictMasterName: "$$record.DistrictMasterName",
-                  TicketHeadName: "$$record.TicketHeadName",
-                  BMCGCode: "$$record.BMCGCode",
-                  BusinessRelationName: "$$record.BusinessRelationName",
-                  CropLossDetailID: "$$record.CropLossDetailID",
-                  CallingUniqueID: "$$record.CallingUniqueID",
-                  CallingInsertUserID: "$$record.CallingInsertUserID",
-                  CropStage: "$$record.CropStage",
-                  CategoryHeadID: "$$record.CategoryHeadID",
-                  Sos: "$$record.Sos",
-                  IsSos: "$$record.IsSos",
-                  TicketNCIPDocketNo: "$$record.TicketNCIPDocketNo",
-                  FilterDistrictRequestorID: "$$record.FilterDistrictRequestorID",
-                  FilterStateID: "$$record.FilterStateID",
-                  SchemeName: "$$record.SchemeName",
-                  InsertUserID: "$$record.InsertUserID",
-                  InsertIPAddress: "$$record.InsertIPAddress",
-                  UpdateUserID: "$$record.UpdateUserID",
-                  AgentName: "$$record.AgentName",
-                  CreatedBY: "$$record.CreatedBY",
-                  CallingUserID: "$$record.CallingUserID",
+          $facet: {
+            TicketRecords: [
+              { $skip: (pageNumber - 1) * limitNumber },
+              { $limit: limitNumber },
+              {
+                $project: {
+                  _id: 0,
+                  SupportTicketID: 1,
+                  CallerContactNumber: 1,
+                  CallingAudioFile: 1,
+                  TicketRequestorID: 1,
+                  StateCodeAlpha: 1,
+                  StateMasterID: 1,
+                  DistrictMasterID: 1,
+                  VillageRequestorID: 1,
+                  NyayPanchayatID: 1,
+                  NyayPanchayat: 1,
+                  GramPanchayatID: 1,
+                  GramPanchayat: 1,
+                  CallerID: 1,
+                  CreationMode: 1,
+                  SupportTicketNo: 1,
+                  RequestorUniqueNo: 1,
+                  RequestorName: 1,
+                  RequestorMobileNo: 1,
+                  RequestorAccountNo: 1,
+                  RequestorAadharNo: 1,
+                  TicketCategoryID: 1,
+                  CropCategoryOthers: 1,
+                  CropStageMaster: 1,
+                  CropStageMasterID: 1,
+                  TicketHeaderID: 1,
+                  SupportTicketTypeID: 1,
+                  RequestYear: 1,
+                  RequestSeason: 1,
+                  TicketSourceID: 1,
+                  TicketDescription: 1,
+                  LossDate: 1,
+                  LossTime: 1,
+                  OnTimeIntimationFlag: 1,
+                  VillageName: 1,
+                  ApplicationCropName: 1,
+                  CropName: 1,
+                  AREA: 1,
+                  DistrictRequestorID: 1,
+                  PostHarvestDate: 1,
+                  TicketStatusID: 1,
+                  StatusUpdateTime: 1,
+                  StatusUpdateUserID: 1,
+                  ApplicationNo: 1,
+                  InsuranceCompanyCode: 1,
+                  InsuranceCompanyID: 1,
+                  InsurancePolicyNo: 1,
+                  InsurancePolicyDate: 1,
+                  InsuranceExpiryDate: 1,
+                  BankMasterID: 1,
+                  AgentUserID: 1,
+                  SchemeID: 1,
+                  AttachmentPath: 1,
+                  HasDocument: 1,
+                  Relation: 1,
+                  RelativeName: 1,
+                  SubDistrictID: 1,
+                  SubDistrictName: 1,
+                  PolicyPremium: 1,
+                  PolicyArea: 1,
+                  PolicyType: 1,
+                  LandSurveyNumber: 1,
+                  LandDivisionNumber: 1,
+                  PlotVillageName: 1,
+                  PlotDistrictName: 1,
+                  PlotStateName: 1,
+                  ApplicationSource: 1,
+                  CropShare: 1,
+                  IFSCCode: 1,
+                  FarmerShare: 1,
+                  CropSeasonName: 1,
+                  TicketSourceName: 1,
+                  TicketCategoryName: 1,
+                  TicketStatus: 1,
+                  InsuranceCompany: 1,
+                  TicketTypeName: 1,
+                  StateMasterName: 1,
+                  DistrictMasterName: 1,
+                  TicketHeadName: 1,
+                  BMCGCode: 1,
+                  BusinessRelationName: 1,
+                  CropLossDetailID: 1,
+                  CallingUniqueID: 1,
+                  CallingInsertUserID: 1,
+                  CropStage: 1,
+                  CategoryHeadID: 1,
+                  Sos: 1,
+                  IsSos: 1,
+                  TicketNCIPDocketNo: 1,
+                  FilterDistrictRequestorID: 1,
+                  FilterStateID: 1,
+                  SchemeName: 1,
+                  InsertUserID: 1,
+                  InsertIPAddress: 1,
+                  UpdateUserID: 1,
+                  AgentName: 1,
+                  CreatedBY: 1,
+                  CallingUserID: 1,
+                  IsAssignedTicket: { $ifNull: ["$IsAssignedTicket", null] },
                   CreatedAt: {
                     $dateToString: {
-                      date: { $toDate: "$$record.Created" },
+                      date: { $toDate: "$Created" },
                       format: "%Y-%m-%dT%H:%M:%S",
                       timezone: "Asia/Kolkata",
                     },
                   },
                 },
               },
-            },
-          },
-        },
-
-        {
-          $addFields: {
-            TicketCount: { $size: { $ifNull: ["$TicketRecords", []] } },
+            ],
+            totalCount: [{ $count: "count" }],
           },
         },
         {
-          $addFields: {
-            TicketRecords: {
-              $slice: ["$TicketRecords", (Number(page) - 1) * Number(limit), Number(limit)],
-            },
+          $project: {
+            _id: 0,
+            userID: loggedInUserId,
+            TicketRecords: 1,
+            TicketCount: { $ifNull: [{ $arrayElemAt: ["$totalCount.count", 0] }, 0] },
           },
         },
       ];
 
-      const data = await collection.aggregate(pipeline).toArray();
+      const data = await collection.aggregate(pipeline, { allowDiskUse: true }).toArray();
+      const result = data?.[0];
 
       return {
-        data: Array.isArray(data) && data.length ? data : [],
-        message: Array.isArray(data) && data.length
+        data: result?.TicketCount ? [result] : [],
+        message: result?.TicketCount
           ? { msg: "Success", code: "1" }
           : { msg: "No Record Found", code: "0" },
       };
@@ -3316,9 +3286,6 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
 
 }
-
-
-
 
 
 
