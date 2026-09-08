@@ -1937,33 +1937,58 @@ export class TicketEscalationService {
 
       TicketHeaderID = TicketHeaderID ? Number(TicketHeaderID) : null;
 
-      const collection = db.collection("Ticket_Assignment_History");
-      if (!collection) {
-        return { data: [], message: { msg: "Collection not found", code: "0" } };
-      }
+      const collection = db.collection("support_ticket_assigned_review_master");
 
       const fromDateISO = fromDate ? moment(fromDate, "YYYY-MM-DD").startOf("day").toDate() : null;
       const toDateISO = toDate ? moment(toDate, "YYYY-MM-DD").endOf("day").toDate() : null;
 
       const pipeline: any[] = [
 
-        // 🔑 1. Always resolve LATEST assignment first
+        // Resolve latest assigned review for every ticket first.
         {
-          $sort: { AssignedDate: -1, _id: -1 }
+          $match: { IsTicketAssigned: 1 }
+        },
+        {
+          $sort: { TicketHistoryDate: -1, InsertDateTime: -1, _id: -1 }
         },
         {
           $group: {
             _id: "$SupportTicketID",
-            latestAssignment: { $first: "$$ROOT" }
+            latestAssignedReview: { $first: "$$ROOT" }
           }
         },
         {
-          $replaceRoot: { newRoot: "$latestAssignment" }
+          $replaceRoot: { newRoot: "$latestAssignedReview" }
         },
 
-        // 🔑 2. Now filter by logged-in user
+        // Match the logged-in user from the role-user assignment for that review.
         {
-          $match: { assignedTo: loggedInUserId }
+          $lookup: {
+            from: "support_ticket_assigned_role_user_master",
+            let: {
+              supportTicketID: "$SupportTicketID",
+              ticketAssignedReviewHistoryID: "$TicketAssignedReviewHistoryID",
+              toRole: "$ToRole",
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$SupportTicketID", "$$supportTicketID"] },
+                      { $eq: ["$TicketAssignedReviewHistoryID", "$$ticketAssignedReviewHistoryID"] },
+                      { $eq: ["$ToRole", "$$toRole"] },
+                      { $eq: ["$UserID", loggedInUserId] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: "AssignedUsers",
+          }
+        },
+        {
+          $unwind: "$AssignedUsers"
         },
 
         {
@@ -1997,7 +2022,7 @@ export class TicketEscalationService {
 
         {
           $group: {
-            _id: "$assignedTo",
+            _id: "$AssignedUsers.UserID",
             TicketRecords: { $push: "$TicketRecords" },
           },
         },
@@ -3316,7 +3341,6 @@ Status              : ${syncedCount > 0 && failedCount > 0 ? "PARTIAL" : failedC
 
 
 }
-
 
 
 
