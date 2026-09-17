@@ -9546,6 +9546,43 @@ if (
   console.log(`Index ${escalCreatedIndexName} already exists.`);
 }
 
+// =========================================================
+// 11. Ticket listing state/company/header filters with status,
+//     created date, sort, and ticket reference fields
+// =========================================================
+
+const listingStateStatusCreatedRefsIndexName = 'idx_listing_state_company_header_status_created_sort_refs';
+
+const listingStateStatusCreatedRefsIndexKey = {
+  FilterStateID: 1,
+  InsuranceCompanyID: 1,
+  TicketHeaderID: 1,
+  TicketStatusID: 1,
+  Created: 1,
+  InsertDateTime: -1,
+  SupportTicketID: 1,
+  SupportTicketNo: 1,
+  InsertUserID: 1
+};
+
+if (
+  !allIndexes.some(
+    idx =>
+      idx.name === listingStateStatusCreatedRefsIndexName &&
+      JSON.stringify(idx.key) ===
+        JSON.stringify(listingStateStatusCreatedRefsIndexKey)
+  )
+) {
+  await collection.createIndex(listingStateStatusCreatedRefsIndexKey, {
+    name: listingStateStatusCreatedRefsIndexName,
+    background: true
+  });
+
+  console.log(`Created index: ${listingStateStatusCreatedRefsIndexName}`);
+} else {
+  console.log(`Index ${listingStateStatusCreatedRefsIndexName} already exists.`);
+}
+
       console.log('✅ Index setup completed successfully.');
     } catch (err) {
       console.error('❌ Error creating indexes:', err);
