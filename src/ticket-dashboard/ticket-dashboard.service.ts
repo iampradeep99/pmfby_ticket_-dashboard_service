@@ -9227,7 +9227,18 @@ if (
 
 
       console.log(JSON.stringify(pipeline), "testdd");
-      const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipeline, { allowDiskUse: true }).toArray();
+      const aggregateOptions: any = { allowDiskUse: true };
+      if (
+        match.FilterStateID &&
+        match.InsuranceCompanyID &&
+        match.TicketHeaderID &&
+        match.TicketStatusID &&
+        match.Created
+      ) {
+        aggregateOptions.hint = 'idx_listing_state_company_header_status_created_sort_refs';
+      }
+
+      const aggResult = await db.collection("SLA_Ticket_listing").aggregate(pipeline, aggregateOptions).toArray();
       const result = aggResult[0] || { data: [], totalCount: [], ticketStatusSummary: [] };
 
       if (result.data.length === 0) {
