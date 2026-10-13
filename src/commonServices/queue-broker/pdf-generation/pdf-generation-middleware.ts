@@ -1,5 +1,7 @@
-const { parentPort, workerData } = require("worker_threads");
-const { PDFGenerationWorkerService } = require("../pdf-generation/pdf-generation-worker");
+const { parentPort, workerData } = require('worker_threads');
+const {
+  PDFGenerationWorkerService,
+} = require('../pdf-generation/pdf-generation-worker');
 
 async function run() {
   try {

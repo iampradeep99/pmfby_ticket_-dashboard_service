@@ -1,4 +1,3 @@
-
 // import { Injectable, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
 // import * as amqp from 'amqplib';
 // import { runWorker } from './pdf-worker-runner';
@@ -390,13 +389,15 @@
 //   }
 // }
 
-
-
-import { Injectable, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import * as amqp from 'amqplib';
 import { runWorker } from './pdf-worker-runner';
 import config from '../../../environment/config';
-const Logger = require("../../../commonServices/logger");
+const Logger = require('../../../commonServices/logger');
 
 interface ProcessingLog {
   SupportTicketNo: string;
@@ -418,7 +419,9 @@ interface MessageWithRetry {
 }
 
 @Injectable()
-export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown {
+export class PdfGenerationService
+  implements OnModuleInit, OnApplicationShutdown
+{
   private readonly logger = new Logger('pdf-generation-rmq.log');
   private readonly RABBITMQ_URL = config.rabbitmq;
   private readonly QUEUE_NAME = 'krph_support_ticket_pdf_generation_queue_1';
@@ -446,7 +449,9 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
   }
 
   private async initializeRabbitMQ(attempt = 1): Promise<void> {
-    console.log(`[PDF-Generation][RMQ-Init] Connecting to RabbitMQ ${this.RABBITMQ_URL} | Attempt: ${attempt}`);
+    console.log(
+      `[PDF-Generation][RMQ-Init] Connecting to RabbitMQ ${this.RABBITMQ_URL} | Attempt: ${attempt}`,
+    );
 
     if (attempt > this.MAX_RETRIES) {
       console.log(`[PDF-Generation][RMQ-Init] Max connection retries exceeded`);
@@ -468,12 +473,18 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
       });
 
       this.producerChannel = await this.connection.createChannel();
-      await this.producerChannel.assertQueue(this.QUEUE_NAME, { durable: true });
+      await this.producerChannel.assertQueue(this.QUEUE_NAME, {
+        durable: true,
+      });
       await this.producerChannel.assertQueue(this.DLQ_NAME, { durable: true });
-      console.log(`[PDF-Generation][RMQ-Producer] Producer channel ready with DLQ`);
+      console.log(
+        `[PDF-Generation][RMQ-Producer] Producer channel ready with DLQ`,
+      );
 
       this.consumerChannel = await this.connection.createChannel();
-      await this.consumerChannel.assertQueue(this.QUEUE_NAME, { durable: true });
+      await this.consumerChannel.assertQueue(this.QUEUE_NAME, {
+        durable: true,
+      });
       await this.consumerChannel.assertQueue(this.DLQ_NAME, { durable: true });
       this.consumerChannel.prefetch(this.PREFETCH);
       console.log(`[PDF-Generation][RMQ-Consumer] Consumer channel ready`);
@@ -481,14 +492,18 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
       this.monitorChannel = await this.connection.createChannel();
       console.log(`[PDF-Generation][RMQ-Monitor] Monitoring channel ready`);
 
-      console.log(`[PDF-Generation][RMQ-Init] Listening on queue "${this.QUEUE_NAME}"`);
+      console.log(
+        `[PDF-Generation][RMQ-Init] Listening on queue "${this.QUEUE_NAME}"`,
+      );
 
       this.consumeMessages();
       this.consumeDLQMessages(); // Added DLQ consumer
       this.monitorQueueAndAdjustConcurrency();
       this.initialized = true;
     } catch (err) {
-      console.log(`[PDF-Generation][RMQ-Init] Connection failed. Retrying in ${this.RECONNECT_DELAY}ms`);
+      console.log(
+        `[PDF-Generation][RMQ-Init] Connection failed. Retrying in ${this.RECONNECT_DELAY}ms`,
+      );
       await new Promise((r) => setTimeout(r, this.RECONNECT_DELAY));
       await this.initializeRabbitMQ(attempt + 1);
     }
@@ -518,21 +533,21 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
         retryCount: 0,
         maxRetries: this.MESSAGE_MAX_RETRIES,
         originalMessageId: this.generateMessageId(),
-        firstAttemptTime: new Date().toISOString()
+        firstAttemptTime: new Date().toISOString(),
       };
 
       const payload = JSON.stringify(wrappedMessage);
-      this.producerChannel.sendToQueue(
-        this.QUEUE_NAME,
-        Buffer.from(payload),
-        {
-          persistent: true,
-          messageId: wrappedMessage.originalMessageId
-        }
+      this.producerChannel.sendToQueue(this.QUEUE_NAME, Buffer.from(payload), {
+        persistent: true,
+        messageId: wrappedMessage.originalMessageId,
+      });
+      console.log(
+        `[PDF-Generation][RMQ-Producer] Message dispatched: ${message.SupportTicketNo}`,
       );
-      console.log(`[PDF-Generation][RMQ-Producer] Message dispatched: ${message.SupportTicketNo}`);
     } catch (err) {
-      console.log(`[PDF-Generation][RMQ-Producer] Error sending message ${err}`);
+      console.log(
+        `[PDF-Generation][RMQ-Producer] Error sending message ${err}`,
+      );
     }
   }
 
@@ -561,12 +576,15 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
               payload: parsed,
               retryCount: 0,
               maxRetries: this.MESSAGE_MAX_RETRIES,
-              originalMessageId: msg.properties.messageId || this.generateMessageId(),
-              firstAttemptTime: new Date().toISOString()
+              originalMessageId:
+                msg.properties.messageId || this.generateMessageId(),
+              firstAttemptTime: new Date().toISOString(),
             };
           }
         } catch {
-          console.log(`[PDF-Generation][Worker] Invalid JSON payload discarded`);
+          console.log(
+            `[PDF-Generation][Worker] Invalid JSON payload discarded`,
+          );
           this.consumerChannel.nack(msg, false, false);
           return;
         }
@@ -575,7 +593,9 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
         const ticketNo = wrappedMessage.payload.SupportTicketNo;
         const currentAttempt = wrappedMessage.retryCount + 1;
 
-        console.log(`[PDF-Generation][Worker] Processing ${ticketNo} | Attempt ${currentAttempt}/${this.MESSAGE_MAX_RETRIES} | Active: ${this.activeJobs}`);
+        console.log(
+          `[PDF-Generation][Worker] Processing ${ticketNo} | Attempt ${currentAttempt}/${this.MESSAGE_MAX_RETRIES} | Active: ${this.activeJobs}`,
+        );
 
         await this.logProcessingAttempt(ticketNo, currentAttempt, 'processing');
 
@@ -585,26 +605,42 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
           const result = await runWorker(wrappedMessage.payload);
           const processingTime = Date.now() - startTime;
 
-          console.log(`[PDF-Generation][Worker] ✓ Completed ${ticketNo} in ${processingTime}ms`);
+          console.log(
+            `[PDF-Generation][Worker] ✓ Completed ${ticketNo} in ${processingTime}ms`,
+          );
 
-          await this.logProcessingAttempt(ticketNo, currentAttempt, 'success', undefined, processingTime, result?.gcsUrl);
+          await this.logProcessingAttempt(
+            ticketNo,
+            currentAttempt,
+            'success',
+            undefined,
+            processingTime,
+            result?.gcsUrl,
+          );
 
           this.consumerChannel.ack(msg);
-
         } catch (err) {
           const processingTime = Date.now() - startTime;
           const errorMessage = err?.message || 'Unknown error';
 
-          console.log(`[PDF-Generation][Worker] ✗ Failed ${ticketNo}: ${errorMessage}`);
+          console.log(
+            `[PDF-Generation][Worker] ✗ Failed ${ticketNo}: ${errorMessage}`,
+          );
 
-          await this.handleFailedMessage(msg, wrappedMessage, errorMessage, processingTime);
-
+          await this.handleFailedMessage(
+            msg,
+            wrappedMessage,
+            errorMessage,
+            processingTime,
+          );
         } finally {
           this.activeJobs--;
-          console.log(`[PDF-Generation][Worker] Job finished | Active: ${this.activeJobs}`);
+          console.log(
+            `[PDF-Generation][Worker] Job finished | Active: ${this.activeJobs}`,
+          );
         }
       },
-      { noAck: false }
+      { noAck: false },
     );
   }
 
@@ -630,19 +666,24 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
           if (parsed.payload && parsed.retryCount !== undefined) {
             wrappedMessage = parsed;
             // Reset retry count for DLQ messages to give them fresh attempts
-            console.log(`[PDF-Generation][DLQ] Reprocessing message from DLQ, resetting retry count`);
+            console.log(
+              `[PDF-Generation][DLQ] Reprocessing message from DLQ, resetting retry count`,
+            );
             wrappedMessage.retryCount = 0;
           } else {
             wrappedMessage = {
               payload: parsed,
               retryCount: 0,
               maxRetries: this.MESSAGE_MAX_RETRIES,
-              originalMessageId: msg.properties.messageId || this.generateMessageId(),
-              firstAttemptTime: new Date().toISOString()
+              originalMessageId:
+                msg.properties.messageId || this.generateMessageId(),
+              firstAttemptTime: new Date().toISOString(),
             };
           }
         } catch {
-          console.log(`[PDF-Generation][DLQ-Worker] Invalid JSON payload discarded from DLQ`);
+          console.log(
+            `[PDF-Generation][DLQ-Worker] Invalid JSON payload discarded from DLQ`,
+          );
           this.consumerChannel.nack(msg, false, false);
           return;
         }
@@ -651,7 +692,9 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
         const ticketNo = wrappedMessage.payload.SupportTicketNo;
         const currentAttempt = wrappedMessage.retryCount + 1;
 
-        console.log(`[PDF-Generation][DLQ-Worker] Processing ${ticketNo} | Attempt ${currentAttempt}/${this.MESSAGE_MAX_RETRIES} | Active: ${this.activeJobs}`);
+        console.log(
+          `[PDF-Generation][DLQ-Worker] Processing ${ticketNo} | Attempt ${currentAttempt}/${this.MESSAGE_MAX_RETRIES} | Active: ${this.activeJobs}`,
+        );
 
         await this.logProcessingAttempt(ticketNo, currentAttempt, 'processing');
 
@@ -661,26 +704,42 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
           const result = await runWorker(wrappedMessage.payload);
           const processingTime = Date.now() - startTime;
 
-          console.log(`[PDF-Generation][DLQ-Worker] ✓ Completed ${ticketNo} in ${processingTime}ms`);
+          console.log(
+            `[PDF-Generation][DLQ-Worker] ✓ Completed ${ticketNo} in ${processingTime}ms`,
+          );
 
-          await this.logProcessingAttempt(ticketNo, currentAttempt, 'success', undefined, processingTime, result?.gcsUrl);
+          await this.logProcessingAttempt(
+            ticketNo,
+            currentAttempt,
+            'success',
+            undefined,
+            processingTime,
+            result?.gcsUrl,
+          );
 
           this.consumerChannel.ack(msg);
-
         } catch (err) {
           const processingTime = Date.now() - startTime;
           const errorMessage = err?.message || 'Unknown error';
 
-          console.log(`[PDF-Generation][DLQ-Worker] ✗ Failed ${ticketNo}: ${errorMessage}`);
+          console.log(
+            `[PDF-Generation][DLQ-Worker] ✗ Failed ${ticketNo}: ${errorMessage}`,
+          );
 
-          await this.handleFailedMessage(msg, wrappedMessage, errorMessage, processingTime);
-
+          await this.handleFailedMessage(
+            msg,
+            wrappedMessage,
+            errorMessage,
+            processingTime,
+          );
         } finally {
           this.activeJobs--;
-          console.log(`[PDF-Generation][DLQ-Worker] Job finished | Active: ${this.activeJobs}`);
+          console.log(
+            `[PDF-Generation][DLQ-Worker] Job finished | Active: ${this.activeJobs}`,
+          );
         }
       },
-      { noAck: false }
+      { noAck: false },
     );
   }
 
@@ -688,7 +747,7 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
     msg: amqp.Message,
     wrappedMessage: MessageWithRetry,
     errorMessage: string,
-    processingTime: number
+    processingTime: number,
   ) {
     const ticketNo = wrappedMessage.payload.SupportTicketNo;
     const currentAttempt = wrappedMessage.retryCount + 1;
@@ -698,11 +757,13 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
       currentAttempt,
       currentAttempt < this.MESSAGE_MAX_RETRIES ? 'retry' : 'failed',
       errorMessage,
-      processingTime
+      processingTime,
     );
 
     if (currentAttempt < this.MESSAGE_MAX_RETRIES) {
-      console.log(`[PDF-Generation][Retry] ⚠ Retry ${currentAttempt + 1}/${this.MESSAGE_MAX_RETRIES} for ${ticketNo}`);
+      console.log(
+        `[PDF-Generation][Retry] ⚠ Retry ${currentAttempt + 1}/${this.MESSAGE_MAX_RETRIES} for ${ticketNo}`,
+      );
 
       wrappedMessage.retryCount = currentAttempt;
 
@@ -714,8 +775,8 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
               Buffer.from(JSON.stringify(wrappedMessage)),
               {
                 persistent: true,
-                messageId: wrappedMessage.originalMessageId
-              }
+                messageId: wrappedMessage.originalMessageId,
+              },
             );
             console.log(`[PDF-Generation][Retry] ✓ Requeued ${ticketNo}`);
             this.consumerChannel.ack(msg);
@@ -723,35 +784,39 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
             this.consumerChannel.nack(msg, false, false);
           }
         } catch (requeueError) {
-          console.log(`[PDF-Generation][Retry] ✗ Requeue failed: ${requeueError}`);
+          console.log(
+            `[PDF-Generation][Retry] ✗ Requeue failed: ${requeueError}`,
+          );
           this.consumerChannel.nack(msg, false, false);
         }
       }, this.RETRY_DELAY);
-
     } else {
-      console.log(`[PDF-Generation][DLQ] ✗ Max retries for ${ticketNo}. Moving to DLQ.`);
+      console.log(
+        `[PDF-Generation][DLQ] ✗ Max retries for ${ticketNo}. Moving to DLQ.`,
+      );
 
       try {
         const dlqPayload = {
           ...wrappedMessage,
           finalError: errorMessage,
           failedAt: new Date().toISOString(),
-          totalAttempts: currentAttempt
+          totalAttempts: currentAttempt,
         };
 
         if (this.producerChannel) {
           this.producerChannel.sendToQueue(
             this.DLQ_NAME,
             Buffer.from(JSON.stringify(dlqPayload)),
-            { persistent: true }
+            { persistent: true },
           );
           console.log(`[PDF-Generation][DLQ] ✓ Moved ${ticketNo} to DLQ`);
         }
 
         await this.sendFailureAlert(ticketNo, errorMessage, currentAttempt);
-
       } catch (dlqError) {
-        console.log(`[PDF-Generation][DLQ] ✗ Failed to move to DLQ: ${dlqError}`);
+        console.log(
+          `[PDF-Generation][DLQ] ✗ Failed to move to DLQ: ${dlqError}`,
+        );
       } finally {
         this.consumerChannel.ack(msg);
       }
@@ -764,7 +829,7 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
     status: 'processing' | 'success' | 'failed' | 'retry',
     errorMessage?: string,
     processingTime?: number,
-    gcsUrl?: string
+    gcsUrl?: string,
   ): Promise<void> {
     try {
       const logEntry: ProcessingLog = {
@@ -775,12 +840,15 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
         ProcessingTime: processingTime,
         GCSUrl: gcsUrl,
         CreatedAt: new Date(),
-        UpdatedAt: new Date()
+        UpdatedAt: new Date(),
       };
 
-      console.log(`[PDF-Generation][Log] ${status} | ${ticketNo} | Attempt ${attemptNumber}`);
-      this.logger.info(`Ticket: ${ticketNo} | Attempt: ${attemptNumber} | Status: ${status} | Error: ${errorMessage || 'N/A'}`);
-
+      console.log(
+        `[PDF-Generation][Log] ${status} | ${ticketNo} | Attempt ${attemptNumber}`,
+      );
+      this.logger.info(
+        `Ticket: ${ticketNo} | Attempt: ${attemptNumber} | Status: ${status} | Error: ${errorMessage || 'N/A'}`,
+      );
     } catch (logError) {
       console.log(`[PDF-Generation][Log] Logging failed: ${logError}`);
     }
@@ -789,10 +857,12 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
   private async sendFailureAlert(
     ticketNo: string,
     errorMessage: string,
-    totalAttempts: number
+    totalAttempts: number,
   ): Promise<void> {
     try {
-      console.log(`[PDF-Generation][Alert] CRITICAL: ${ticketNo} failed after ${totalAttempts} attempts`);
+      console.log(
+        `[PDF-Generation][Alert] CRITICAL: ${ticketNo} failed after ${totalAttempts} attempts`,
+      );
       console.log(`[PDF-Generation][Alert] Error: ${errorMessage}`);
     } catch (alertError) {
       console.log(`[PDF-Generation][Alert] Alert failed: ${alertError}`);
@@ -805,7 +875,8 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
 
   private monitorQueueAndAdjustConcurrency() {
     setInterval(async () => {
-      if (!this.monitorChannel || !this.consumerChannel || this.shuttingDown) return;
+      if (!this.monitorChannel || !this.consumerChannel || this.shuttingDown)
+        return;
 
       try {
         const q = await this.monitorChannel.checkQueue(this.QUEUE_NAME);
@@ -813,20 +884,25 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
         const pending = q.messageCount;
         const dlqCount = dlq.messageCount;
 
-        console.log(`[PDF-Generation][Monitor] Queue: ${pending} | Active: ${this.activeJobs} | DLQ: ${dlqCount}`);
+        console.log(
+          `[PDF-Generation][Monitor] Queue: ${pending} | Active: ${this.activeJobs} | DLQ: ${dlqCount}`,
+        );
 
-        let newPrefetch = pending >= 100 ? 10 : 5;
+        const newPrefetch = pending >= 100 ? 10 : 5;
 
         if (newPrefetch !== this.PREFETCH) {
-          console.log(`[PDF-Generation][Monitor] Updating prefetch to ${newPrefetch}`);
+          console.log(
+            `[PDF-Generation][Monitor] Updating prefetch to ${newPrefetch}`,
+          );
           this.consumerChannel.prefetch(newPrefetch);
           this.PREFETCH = newPrefetch;
         }
 
         if (dlqCount > 10) {
-          console.log(`[PDF-Generation][Monitor] WARNING: DLQ has ${dlqCount} messages`);
+          console.log(
+            `[PDF-Generation][Monitor] WARNING: DLQ has ${dlqCount} messages`,
+          );
         }
-
       } catch (err) {
         console.log(`[PDF-Generation][Monitor] Check failed: ${err}`);
       }
@@ -837,21 +913,33 @@ export class PdfGenerationService implements OnModuleInit, OnApplicationShutdown
     console.log(`[PDF-Generation][Shutdown] Shutdown initiated`);
     this.shuttingDown = true;
 
-    console.log(`[PDF-Generation][Shutdown] Waiting for ${this.activeJobs} jobs...`);
+    console.log(
+      `[PDF-Generation][Shutdown] Waiting for ${this.activeJobs} jobs...`,
+    );
     while (this.activeJobs > 0) {
       await new Promise((r) => setTimeout(r, 100));
     }
 
-    console.log(`[PDF-Generation][Shutdown] All tasks done. Closing connections`);
+    console.log(
+      `[PDF-Generation][Shutdown] All tasks done. Closing connections`,
+    );
     await this.cleanupConnections();
   }
 
   private async cleanupConnections() {
     console.log(`[PDF-Generation][Cleanup] Cleaning up RabbitMQ connections`);
-    try { await this.consumerChannel?.close(); } catch {}
-    try { await this.producerChannel?.close(); } catch {}
-    try { await this.monitorChannel?.close(); } catch {}
-    try { await this.connection?.close(); } catch {}
+    try {
+      await this.consumerChannel?.close();
+    } catch {}
+    try {
+      await this.producerChannel?.close();
+    } catch {}
+    try {
+      await this.monitorChannel?.close();
+    } catch {}
+    try {
+      await this.connection?.close();
+    } catch {}
 
     this.consumerChannel = null;
     this.producerChannel = null;

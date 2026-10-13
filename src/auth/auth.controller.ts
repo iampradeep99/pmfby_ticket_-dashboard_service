@@ -5,28 +5,38 @@ import { Request, Response } from 'express';
 import { UtilService } from '../commonServices/utilService';
 import {
   jsonErrorHandler,
-  jsonResponseHandler, jsonResponseHandlerCopy,jsonResponseHandlerReport
+  jsonResponseHandler,
+  jsonResponseHandlerCopy,
+  jsonResponseHandlerReport,
 } from '../commonServices/responseHandler';
-
-
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService,private readonly utilService: UtilService,) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly utilService: UtilService,
+  ) {}
 
   @Post('register')
   async register(
-    @Body() payload: { name: string; email: string; password: string; mobile: string; role: UserRole },
+    @Body()
+    payload: {
+      name: string;
+      email: string;
+      password: string;
+      mobile: string;
+      role: UserRole;
+    },
     @Req() req: Request,
-    @Res({ passthrough: false }) res: Response
+    @Res({ passthrough: false }) res: Response,
   ) {
     try {
-      let {data,message} = await this.authService.register(
+      let { data, message } = await this.authService.register(
         payload.name,
         payload.email,
         payload.password,
         payload.mobile,
-        payload.role
+        payload.role,
       );
       if (data) data = await this.utilService.GZip(data);
 
@@ -40,10 +50,13 @@ export class AuthController {
   async login(
     @Body() payload: { email: string; password: string },
     @Req() req: Request,
-    @Res({ passthrough: false }) res: Response
+    @Res({ passthrough: false }) res: Response,
   ) {
     try {
-      let {data, message} = await this.authService.login(payload.email, payload.password);
+      let { data, message } = await this.authService.login(
+        payload.email,
+        payload.password,
+      );
       if (data) data = await this.utilService.GZip(data);
       return jsonResponseHandler(data, message, req, res, () => {});
     } catch (err) {
@@ -51,17 +64,17 @@ export class AuthController {
     }
   }
 
-
-  
-
   @Post('update-password')
   async updatePassword(
     @Body() payload: { email: string; newPassword: string },
     @Req() req: Request,
-    @Res({ passthrough: false }) res: Response
+    @Res({ passthrough: false }) res: Response,
   ) {
     try {
-      let {data, message} = await this.authService.updatePassword(payload.email, payload.newPassword);
+      let { data, message } = await this.authService.updatePassword(
+        payload.email,
+        payload.newPassword,
+      );
       if (data) data = await this.utilService.GZip(data);
 
       return jsonResponseHandler(data, message, req, res, () => {});
@@ -74,10 +87,16 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async protected(
     @Req() req: Request,
-    @Res({ passthrough: false }) res: Response
+    @Res({ passthrough: false }) res: Response,
   ) {
     try {
-      return jsonResponseHandler({ message: 'This is a protected route' }, 'Success', req, res, () => {});
+      return jsonResponseHandler(
+        { message: 'This is a protected route' },
+        'Success',
+        req,
+        res,
+        () => {},
+      );
     } catch (err) {
       return jsonErrorHandler(err, req, res, () => {});
     }

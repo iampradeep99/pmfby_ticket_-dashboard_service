@@ -1,16 +1,16 @@
-import { Injectable, Inject } from "@nestjs/common";
-import { Cron, CronExpression } from "@nestjs/schedule";
-import { Db, Collection } from "mongodb";
-import { Sequelize } from "sequelize-typescript";
-import { MailService } from "../mail/mail.service";
-import { QueryTypes } from "sequelize"; // ✅ import QueryTypes
+import { Injectable, Inject } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { Db, Collection } from 'mongodb';
+import { Sequelize } from 'sequelize-typescript';
+import { MailService } from '../mail/mail.service';
+import { QueryTypes } from 'sequelize'; // ✅ import QueryTypes
 
 @Injectable()
 export class DocketUpdateCron {
   constructor(
-    @Inject("SEQUELIZE") private readonly sequelize: Sequelize,
-    @Inject("MONGO_DB") private readonly db: Db,
-    private mailService: MailService
+    @Inject('SEQUELIZE') private readonly sequelize: Sequelize,
+    @Inject('MONGO_DB') private readonly db: Db,
+    private mailService: MailService,
   ) {}
 
   @Cron(CronExpression.EVERY_4_HOURS)
@@ -18,22 +18,21 @@ export class DocketUpdateCron {
   //   console.log("⏰ Docket Update Cron Triggered");
   //   await this.docketUpdateTickets();
   // }
-
   async docketUpdateTickets() {
-    const sourceCollection = "SLA_Ticket_listing";
+    const sourceCollection = 'SLA_Ticket_listing';
     const BATCH_SIZE = 500;
 
     const query = {
       TicketHeaderID: 4,
-      $or: [{ TicketNCIPDocketNo: "" }, { TicketNCIPDocketNo: null }],
+      $or: [{ TicketNCIPDocketNo: '' }, { TicketNCIPDocketNo: null }],
       InsertDateTime: {
         $gte: new Date(new Date().setMonth(new Date().getMonth() - 3)),
       },
     };
 
     const startTime = Date.now();
-    console.log("🚀 docketUpdateTickets started");
-    console.log("📌 Mongo Query:", JSON.stringify(query));
+    console.log('🚀 docketUpdateTickets started');
+    console.log('📌 Mongo Query:', JSON.stringify(query));
 
     try {
       const totalRecords = await this.db
@@ -41,7 +40,7 @@ export class DocketUpdateCron {
         .countDocuments(query);
 
       if (!totalRecords) {
-        console.log("ℹ️ No tickets found without docket number");
+        console.log('ℹ️ No tickets found without docket number');
         return;
       }
 
@@ -74,7 +73,7 @@ export class DocketUpdateCron {
         if (batch.length === BATCH_SIZE) {
           batchCount++;
           console.log(
-            `\n▶️ Starting batch ${batchCount}/${totalBatches} | Records: ${batch.length}`
+            `\n▶️ Starting batch ${batchCount}/${totalBatches} | Records: ${batch.length}`,
           );
 
           await this.processBatch(batch, batchCount, totalRecords, processed);
@@ -82,7 +81,7 @@ export class DocketUpdateCron {
           processed += batch.length;
           const progress = ((processed / totalRecords) * 100).toFixed(2);
           console.log(
-            `📈 Overall Progress: ${processed}/${totalRecords} (${progress}%)`
+            `📈 Overall Progress: ${processed}/${totalRecords} (${progress}%)`,
           );
 
           batch = [];
@@ -92,7 +91,7 @@ export class DocketUpdateCron {
       if (batch.length) {
         batchCount++;
         console.log(
-          `\n▶️ Starting FINAL batch ${batchCount}/${totalBatches} | Records: ${batch.length}`
+          `\n▶️ Starting FINAL batch ${batchCount}/${totalBatches} | Records: ${batch.length}`,
         );
 
         await this.processBatch(batch, batchCount, totalRecords, processed);
@@ -101,12 +100,12 @@ export class DocketUpdateCron {
 
       const timeTaken = ((Date.now() - startTime) / 1000).toFixed(2);
 
-      console.log("\n🏁 docketUpdateTickets completed");
+      console.log('\n🏁 docketUpdateTickets completed');
       console.log(`📦 Total batches processed: ${batchCount}`);
       console.log(`📊 Total tickets processed: ${processed}`);
       console.log(`⏱️ Time taken: ${timeTaken}s`);
     } catch (err) {
-      console.error("❌ docketUpdateTickets error:", err);
+      console.error('❌ docketUpdateTickets error:', err);
       throw err;
     }
   }
@@ -115,7 +114,7 @@ export class DocketUpdateCron {
     tickets: any[],
     batchNo: number,
     totalRecords: number,
-    processedSoFar: number
+    processedSoFar: number,
   ) {
     try {
       console.log(`\n   📤 Batch ${batchNo}: Preparing MySQL query`);
@@ -125,7 +124,7 @@ export class DocketUpdateCron {
         ...new Set(tickets.map((t) => t.SupportTicketNo)),
       ];
       console.log(
-        `   📤 Batch ${batchNo}: Unique ticketNos = ${supportTicketNos.length}`
+        `   📤 Batch ${batchNo}: Unique ticketNos = ${supportTicketNos.length}`,
       );
 
       // Fetch docket numbers from MySQL
@@ -140,11 +139,11 @@ export class DocketUpdateCron {
         {
           replacements: { ticketNos: supportTicketNos },
           type: QueryTypes.SELECT,
-        }
+        },
       );
 
       console.log(
-        `   📥 Batch ${batchNo}: MySQL rows fetched = ${rows.length}`
+        `   📥 Batch ${batchNo}: MySQL rows fetched = ${rows.length}`,
       );
 
       if (!rows.length) {
@@ -154,7 +153,7 @@ export class DocketUpdateCron {
 
       // Map SupportTicketNo -> DocketNo
       const docketMap = new Map(
-        (rows as any[]).map((r) => [r.SupportTicketNo, r.TicketNCIPDocketNo])
+        (rows as any[]).map((r) => [r.SupportTicketNo, r.TicketNCIPDocketNo]),
       );
 
       // Prepare MongoDB bulk updates
@@ -164,7 +163,7 @@ export class DocketUpdateCron {
           updateOne: {
             filter: {
               SupportTicketNo: t.SupportTicketNo,
-              $or: [{ TicketNCIPDocketNo: "" }, { TicketNCIPDocketNo: null }],
+              $or: [{ TicketNCIPDocketNo: '' }, { TicketNCIPDocketNo: null }],
             },
             update: {
               $set: {
@@ -176,16 +175,16 @@ export class DocketUpdateCron {
         }));
 
       console.log(
-        `   🛠️ Batch ${batchNo}: Mongo updates prepared = ${bulkUpdate.length}`
+        `   🛠️ Batch ${batchNo}: Mongo updates prepared = ${bulkUpdate.length}`,
       );
 
       if (bulkUpdate.length > 0) {
         const result = await this.db
-          .collection("SLA_Ticket_listing")
+          .collection('SLA_Ticket_listing')
           .bulkWrite(bulkUpdate, { ordered: false });
 
         console.log(
-          `   ✅ Batch ${batchNo}: Mongo updated | matched=${result.matchedCount}, modified=${result.modifiedCount}`
+          `   ✅ Batch ${batchNo}: Mongo updated | matched=${result.matchedCount}, modified=${result.modifiedCount}`,
         );
       } else {
         console.log(`   ⚠️ Batch ${batchNo}: Nothing to update in Mongo`);
@@ -195,7 +194,7 @@ export class DocketUpdateCron {
       const processedAfterBatch = processedSoFar + tickets.length;
       const progress = ((processedAfterBatch / totalRecords) * 100).toFixed(2);
       console.log(
-        `📈 Overall Progress after batch ${batchNo}: ${processedAfterBatch}/${totalRecords} (${progress}%)`
+        `📈 Overall Progress after batch ${batchNo}: ${processedAfterBatch}/${totalRecords} (${progress}%)`,
       );
     } catch (err) {
       console.error(`❌ Batch ${batchNo} failed`, err);

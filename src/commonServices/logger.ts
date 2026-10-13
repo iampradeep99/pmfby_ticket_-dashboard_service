@@ -1,7 +1,7 @@
-import fs = require("fs");
-import path = require("path");
+import fs = require('fs');
+import path = require('path');
 
-const logDirectory = path.join(__dirname, "logs");
+const logDirectory = path.join(__dirname, 'logs');
 if (!fs.existsSync(logDirectory)) {
   fs.mkdirSync(logDirectory, { recursive: true });
 }
@@ -16,7 +16,7 @@ class Logger {
   }
 
   private getDateString() {
-    return new Date().toISOString().split("T")[0];
+    return new Date().toISOString().split('T')[0];
   }
 
   private getLogFilePath() {
@@ -38,16 +38,22 @@ class Logger {
       const timestamp = new Date().toISOString();
       const logMessage = `${timestamp} [${level}] ${message}\n`;
 
-      fs.appendFileSync(this.logFile, logMessage, { encoding: "utf8" });
+      fs.appendFileSync(this.logFile, logMessage, { encoding: 'utf8' });
     } catch (err) {
-      console.error("Logger failed:", err);
+      console.error('Logger failed:', err);
       console.log(`${level}:`, message);
     }
   }
 
-  info(message: string) { this.writeLog("INFO", message); }
-  warn(message: string) { this.writeLog("WARN", message); }
-  error(message: string) { this.writeLog("ERROR", message); }
+  info(message: string) {
+    this.writeLog('INFO', message);
+  }
+  warn(message: string) {
+    this.writeLog('WARN', message);
+  }
+  error(message: string) {
+    this.writeLog('ERROR', message);
+  }
 }
 
 export = Logger;

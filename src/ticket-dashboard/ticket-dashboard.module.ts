@@ -14,11 +14,11 @@ import { MysqlModule } from 'src/database/mysql.module';
     RedisModule,
     UtilModule,
     MailModule,
-    forwardRef(() => RabbitMQModule), 
-    MysqlModule // Use forwardRef here
+    forwardRef(() => RabbitMQModule),
+    MysqlModule, // Use forwardRef here
   ],
   controllers: [TicketDashboardController],
   providers: [TicketDashboardService],
-  exports: [TicketDashboardService],  // Ensure it's exported for RabbitMQService
+  exports: [TicketDashboardService], // Ensure it's exported for RabbitMQService
 })
 export class TicketDashboardModule {}

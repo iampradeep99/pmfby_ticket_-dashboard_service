@@ -8,17 +8,16 @@ import { UtilModule } from 'src/commonServices/util.module';
 import { RedisModule } from 'src/commonServices/redis.module';
 import { DatabaseModule } from 'src/database/database.module';
 
-
 @Module({
   imports: [
-      DatabaseModule,
-      RedisModule,
-      UtilModule,
-      MailModule,
-      forwardRef(() => RabbitMQModule),
-      MysqlModule,
-    ],
+    DatabaseModule,
+    RedisModule,
+    UtilModule,
+    MailModule,
+    forwardRef(() => RabbitMQModule),
+    MysqlModule,
+  ],
   controllers: [BillingDashboardController],
-  providers: [BillingDashboardService]
+  providers: [BillingDashboardService],
 })
 export class BillingDashboardModule {}

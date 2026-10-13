@@ -11,13 +11,13 @@ import { MysqlModule } from 'src/database/mysql.module';
 
 @Module({
   imports: [
-    forwardRef(() => TicketEscalationModule), 
-      DatabaseModule,
-        RedisModule,
-        UtilModule,
-        MailModule,
-        forwardRef(() => RabbitMQModule), 
-        MysqlModule // Use forwardRef here
+    forwardRef(() => TicketEscalationModule),
+    DatabaseModule,
+    RedisModule,
+    UtilModule,
+    MailModule,
+    forwardRef(() => RabbitMQModule),
+    MysqlModule, // Use forwardRef here
   ],
   controllers: [TicketEscalationController],
   providers: [TicketEscalationService],

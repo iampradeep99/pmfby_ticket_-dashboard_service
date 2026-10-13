@@ -1,18 +1,13 @@
-
-
-
 // import { Injectable, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
 // import * as amqp from 'amqplib';
 // import { TicketDashboardService } from '../../ticket-dashboard/ticket-dashboard.service';
-// import { runWorker } from './worker-runner'; 
+// import { runWorker } from './worker-runner';
 
 // @Injectable()
 // export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
 // // private readonly RABBITMQ_URL = 'amqp://user:password@10.128.60.11:5672';
 // // private readonly RABBITMQ_URL = 'amqp://myuser:mypassword@localhost:5672';
 //  private readonly RABBITMQ_URL = process.env.RabbitmqURL;
-
-
 
 //   private readonly QUEUE_NAME = 'support_ticket_download';
 
@@ -89,7 +84,6 @@
 //   );
 // }
 
-
 //   private async monitorQueueAndAdjustConcurrency() {
 //     setInterval(async () => {
 //       try {
@@ -120,8 +114,11 @@
 //   }
 // }
 
-
-import { Injectable, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import * as amqp from 'amqplib';
 import { TicketDashboardService } from '../../ticket-dashboard/ticket-dashboard.service';
 import { runWorker } from './worker-runner';
@@ -131,8 +128,6 @@ import config from '../../environment/config'; // import dynamic config
 export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
   // Dynamically pick RabbitMQ URL from config based on NODE_ENV
   private readonly RABBITMQ_URL = config.rabbitmq;
-
- 
 
   private readonly QUEUE_NAME = 'support_ticket_download';
 
@@ -146,8 +141,10 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
 
   private readonly PREFETCH = 5; // keep concurrency safe for heavy jobs
 
-  constructor(private readonly ticketDashboardService: TicketDashboardService) {}
-  
+  constructor(
+    private readonly ticketDashboardService: TicketDashboardService,
+  ) {}
+
   async onModuleInit() {
     try {
       console.log('[RabbitMQ] Connecting to:', this.RABBITMQ_URL);
@@ -155,11 +152,15 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
 
       // Producer channel
       this.producerChannel = await this.connection.createChannel();
-      await this.producerChannel.assertQueue(this.QUEUE_NAME, { durable: true });
+      await this.producerChannel.assertQueue(this.QUEUE_NAME, {
+        durable: true,
+      });
 
       // Consumer channel
       this.consumerChannel = await this.connection.createChannel();
-      await this.consumerChannel.assertQueue(this.QUEUE_NAME, { durable: true });
+      await this.consumerChannel.assertQueue(this.QUEUE_NAME, {
+        durable: true,
+      });
       this.consumerChannel.prefetch(this.PREFETCH);
       this.consumeMessages();
 
@@ -174,14 +175,18 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async sendToQueue(message: any) {
-    const requestStatus = await this.ticketDashboardService.createOrUpdateDownloadRequestStatus(
-      message,
-      'Queued',
-      'Request accepted and waiting for processing'
-    );
+    const requestStatus =
+      await this.ticketDashboardService.createOrUpdateDownloadRequestStatus(
+        message,
+        'Queued',
+        'Request accepted and waiting for processing',
+      );
 
     if (requestStatus?.shouldQueue === false) {
-      console.log('[RabbitMQ] Duplicate active request skipped:', requestStatus);
+      console.log(
+        '[RabbitMQ] Duplicate active request skipped:',
+        requestStatus,
+      );
       return;
     }
 
@@ -189,14 +194,14 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
       this.producerChannel.sendToQueue(
         this.QUEUE_NAME,
         Buffer.from(JSON.stringify(message)),
-        { persistent: true }
+        { persistent: true },
       );
       console.log('[RabbitMQ] Message sent:', message);
     } catch (err) {
       await this.ticketDashboardService.createOrUpdateDownloadRequestStatus(
         message,
         'Failed',
-        'Failed to queue request for processing'
+        'Failed to queue request for processing',
       );
       throw err;
     }
@@ -224,7 +229,7 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
           this.activeJobs--;
         }
       },
-      { noAck: false }
+      { noAck: false },
     );
   }
 
@@ -233,7 +238,7 @@ export class RabbitMQService implements OnModuleInit, OnApplicationShutdown {
       try {
         const q = await this.monitorChannel.checkQueue(this.QUEUE_NAME);
         console.log(
-          `[RabbitMQ] Queue check | Pending: ${q.messageCount} | Active: ${this.activeJobs}`
+          `[RabbitMQ] Queue check | Pending: ${q.messageCount} | Active: ${this.activeJobs}`,
         );
       } catch (err) {
         console.error('[RabbitMQ] Monitor error:', err);

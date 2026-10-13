@@ -56,6 +56,6 @@ import { AverageHandlingTimeService } from './AverageHandlingTimeService';
 })
 export class AgentPerformanceModule {
   constructor() {
-    console.log("AgentPerformanceModule loaded");
+    console.log('AgentPerformanceModule loaded');
   }
 }

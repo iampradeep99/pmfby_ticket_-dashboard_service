@@ -2,17 +2,16 @@
 //     import { ScheduleModule } from '@nestjs/schedule';
 //     import { CronService } from './cron.service';
 //     import { MysqlModule } from 'src/database/mysql.module';
-//     import { DatabaseModule } from 'src/database/database.module'; 
+//     import { DatabaseModule } from 'src/database/database.module';
 // import { MailModule } from 'src/mail/mail.module';
 // import { TicketEscalationCron } from './ticketEscalationCron';
 // import { UtilModule } from 'src/commonServices/util.module';
 // import { DocketUpdateCron } from './docketUpdateCron';
 
-
 //     @Module({
 //         imports: [
 //         ScheduleModule.forRoot(),
-//         MysqlModule, 
+//         MysqlModule,
 //         DatabaseModule,
 //         MailModule,
 //         UtilModule
@@ -22,12 +21,11 @@
 //     })
 //     export class CronModule {}
 
-
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CronService } from './cron.service';
 import { MysqlModule } from 'src/database/mysql.module';
-import { DatabaseModule } from 'src/database/database.module'; 
+import { DatabaseModule } from 'src/database/database.module';
 import { MailModule } from 'src/mail/mail.module';
 import { TicketEscalationCron } from './ticketEscalationCron';
 import { UtilModule } from 'src/commonServices/util.module';
@@ -47,9 +45,7 @@ import { CronController } from './cron.controller';
     TicketEscalationCron,
     DocketUpdateCron, // ✅ MUST be here
   ],
-  controllers: [
-    CronController,
-  ],
+  controllers: [CronController],
   exports: [
     TicketEscalationCron,
     DocketUpdateCron, // ✅ now valid
