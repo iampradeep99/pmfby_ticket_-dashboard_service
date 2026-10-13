@@ -219,36 +219,59 @@ export class PDFGenerationWorkerService {
       if (requestorMobileNo && !requestorMobileNo.startsWith('91')) {
         requestorMobileNo = `91${requestorMobileNo}`;
       }
-      // requestorMobileNo = "919810110521"
+      const pinbotApiUrl =
+        process.env.PINBOT_PDF_MESSAGE_URL ||
+        'https://partnersv1.pinbot.ai/v3/1252952031227289/messages';
+      const pinbotApiKey =
+        process.env.PINBOT_API_KEY || '458a3a21-7f3c-11f1-894a-02c8a5e042bd';
+
       const requestData = {
-        userid: config.gupshupConfig.userid,
-        password: config.gupshupConfig.password,
-        send_to: requestorMobileNo,
-        v: config.gupshupConfig.version,
-        format: config.gupshupConfig.format,
-        msg_type: config.gupshupConfig.msg_type,
-        method: config.gupshupConfig.method,
-        caption: config.gupshupConfig.caption,
-        media_url: `${payload?.TicketFileURl}`,
-        filename: `${payload?.fileName}`,
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: requestorMobileNo,
+        type: 'template',
+        template: {
+          name: 'invoice_detail',
+          language: {
+            code: 'en_us',
+          },
+          components: [
+            {
+              type: 'header',
+              parameters: [
+                {
+                  type: 'document',
+                  document: {
+                    link: `${payload?.TicketFileURl}`,
+                    filename: `${payload?.fileName || 'Ticket PDF'}`,
+                  },
+                },
+              ],
+            },
+            {
+              type: 'body',
+              parameters: [
+                {
+                  type: 'text',
+                  text: payload?.SupportTicketNo || 'Ticket PDF',
+                },
+              ],
+            },
+          ],
+        },
       };
 
-      let apiUrl = config.gupshupConfig.gupshupAPIUrl;
-
-      console.log(apiUrl);
-
-      apiUrl = 'https://mediaapi.smsgupshup.com/GatewayAPI/rest';
-
-      const response = await this.client.post(apiUrl, requestData, {
+      const response = await axios.post(pinbotApiUrl, requestData, {
         headers: {
           'Content-Type': 'application/json',
+          apikey: pinbotApiKey,
         },
       });
 
-      console.log('Response:', response.data);
+      console.log('Pinbot PDF send response:', response.data);
       return response.data;
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Pinbot PDF send error:', err);
     }
   }
 
@@ -506,10 +529,12 @@ export class PDFGenerationWorkerService {
             payload,
             selectedData,
           );
+          const claimDetails = await this.fetchClaimDetails(selectedData);
 
           const prinHTML = await this.renderPMFBYTemplate(
             selectedData,
             ticketListDetails,
+            claimDetails,
           );
 
           browser = await chromium.launch({ headless: true });
@@ -579,7 +604,7 @@ export class PDFGenerationWorkerService {
           if (savedInfo?._id) {
             await this.gupshupCallForPDFSend(finalPayloadToSave).catch((err) =>
               console.log(
-                `Gupshup call failed for ${payload.SupportTicketNo}:`,
+                `Pinbot PDF send failed for ${payload.SupportTicketNo}:`,
                 err,
               ),
             );
@@ -731,6 +756,57 @@ export class PDFGenerationWorkerService {
         'Content-Type': 'application/json',
       },
     });
+  }
+
+  private async fetchClaimDetails(selectedData: any): Promise<any[]> {
+    const farmerID = selectedData?.TicketRequestorID;
+    if (
+      !farmerID ||
+      !selectedData?.RequestSeason ||
+      !selectedData?.RequestYear
+    ) {
+      return [];
+    }
+
+    const payload = {
+      year: String(selectedData.RequestYear),
+      season: String(selectedData.RequestSeason),
+      searchType: 'farmerID',
+      applicationNumber: '',
+      branchID: '',
+      bankID: '',
+      accountNumber: '',
+      aadharNumber: '',
+      farmerID: String(farmerID),
+    };
+
+    try {
+      const response = await axios.post(
+        'https://pmfby.gov.in/krphapi/FGMS/GetClaimDetail',
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          timeout: 30000,
+        },
+      );
+
+      if (!response?.data?.responseDynamic) {
+        return [];
+      }
+
+      const decodedResponse = await this.decompressResponse(
+        response.data.responseDynamic,
+      );
+
+      return Array.isArray(decodedResponse) ? decodedResponse : [];
+    } catch (err) {
+      logger.warn(`Claim details fetch failed: ${getErrorMessage(err)}`);
+      return [];
+    }
   }
 
   private async decompressResponse(
@@ -1255,12 +1331,38 @@ export class PDFGenerationWorkerService {
 
   private async dateToSpecificFormat(date: any, format = 'DD-MM-YYYY HH:mm') {
     try {
-      const d = new Date(date);
-      const convertedDate = moment(d).format(format);
-      return convertedDate;
+      const normalizedDate = this.normalizeDateValue(date);
+      const convertedDate = moment(normalizedDate);
+      return convertedDate.isValid() ? convertedDate.format(format) : '';
     } catch {
-      return null;
+      return '';
     }
+  }
+
+  private normalizeDateValue(date: any) {
+    if (date && typeof date === 'object' && date.$date) {
+      return date.$date;
+    }
+
+    return date;
+  }
+
+  private async getFirstFormattedDate(
+    values: any[],
+    format = 'DD-MM-YYYY HH:mm',
+  ) {
+    for (const value of values) {
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+
+      const formattedDate = await this.dateToSpecificFormat(value, format);
+      if (formattedDate) {
+        return formattedDate;
+      }
+    }
+
+    return '';
   }
 
   private async Convert24FourHourAndMinute(timeString = '') {
@@ -1390,7 +1492,7 @@ export class PDFGenerationWorkerService {
   async renderPMFBYTemplate(
     selectedData: any = {},
     ticketListDetails: any[] = [],
-    helpers: any = {},
+    claimDetails: any[] = [],
   ) {
     const s = (path: any, def: any = '') => {
       try {
@@ -1801,17 +1903,10 @@ export class PDFGenerationWorkerService {
         '<hr />';
     }
 
-    let createdAtOfSelectedFormatted = '';
-    if (selectedData && selectedData.CreatedAt) {
-      const parts = (selectedData.CreatedAt || '').split('T');
-      const datePart = parts[0] || '';
-      const timePartRaw = parts[1] || '';
-      const timePart = await this.Convert24FourHourAndMinute(timePartRaw);
-      createdAtOfSelectedFormatted = await this.dateToSpecificFormat(
-        datePart + ' ' + timePart,
-        'DD-MM-YYYY HH:mm',
-      );
-    }
+    const createdAtOfSelectedFormatted = await this.getFirstFormattedDate([
+      selectedData?.InsertDateTime,
+      selectedData?.Created,
+    ]);
 
     let selectedSeasonLabel = '';
     if (selectedData && selectedData.RequestSeason === 1) {
@@ -1821,6 +1916,8 @@ export class PDFGenerationWorkerService {
     } else {
       selectedSeasonLabel = '';
     }
+
+    const claimInformationHtml = this.buildClaimInformationHtml(claimDetails);
 
     const html =
       '' +
@@ -1866,6 +1963,14 @@ export class PDFGenerationWorkerService {
       '  .summary-table.no-inner-border { border: 1px solid #000; border-collapse: collapse; margin-bottom: 15px; }' +
       '  .summary-table.no-inner-border td { border: none; padding: 6px 10px; text-align: left; }' +
       '  .summary-table.no-inner-border tr td:first-child { border-right: 1px solid transparent; }' +
+      '  .claim-section { margin: 8px 0 10px 0; }' +
+      '  .claim-title { font-weight: 700; font-size: 13px; text-decoration: underline; margin: 6px 0 6px 0; }' +
+      '  .claim-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9px; margin-bottom: 5px; page-break-inside: auto; }' +
+      '  .claim-table th, .claim-table td { border: 1px solid #000; padding: 3px 4px; text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15; }' +
+      '  .claim-table th { font-weight: 700; text-align: center; background: #f7f7f7; }' +
+      '  .claim-total-table { width: 100%; border-collapse: collapse; font-size: 10px; margin: 3px 0 7px 0; page-break-inside: avoid; }' +
+      '  .claim-total-table td { border: 1px solid #000; padding: 4px 6px; text-align: left; }' +
+      '  .claim-total-table td:first-child { width: 68%; font-weight: 700; }' +
       "  .currency { font-family: 'DejaVu Sans', Arial, sans-serif; }" +
       '  .h6Tag { font-weight: 600; font-size: 14px; }' +
       '  .pTag { font-size: 13.5px; text-align: left; }' +
@@ -2131,6 +2236,7 @@ export class PDFGenerationWorkerService {
       '        <td><b>Total Sum Insured:</b><br/><span class="currency">₹</span></td>' +
       '      </tr>' +
       '    </table>' +
+      claimInformationHtml +
       ticketHtml +
       '    <br />' +
       '    <div>' +
@@ -2145,6 +2251,136 @@ export class PDFGenerationWorkerService {
       '</html>';
 
     return html;
+  }
+
+  private buildClaimInformationHtml(claimDetails: any[] = []) {
+    if (!Array.isArray(claimDetails) || claimDetails.length === 0) {
+      return '';
+    }
+
+    const groupedClaims = claimDetails.reduce((acc, claim) => {
+      const applicationNo = claim?.applicationNo || claim?.ApplicationNo || '-';
+      if (!acc[applicationNo]) {
+        acc[applicationNo] = [];
+      }
+      acc[applicationNo].push(claim);
+      return acc;
+    }, {});
+
+    let html = '<div class="claim-section">';
+
+    for (const applicationNo of Object.keys(groupedClaims)) {
+      const claims = groupedClaims[applicationNo];
+      const totalClaimPaid = claims.reduce((sum, claim) => {
+        const amount = Number(claim?.amount || claim?.Amount || 0);
+        return sum + (Number.isFinite(amount) ? amount : 0);
+      }, 0);
+
+      html +=
+        '<div class="claim-title">Claim Information:</div>' +
+        '<table class="claim-table">' +
+        '<thead>' +
+        '<tr>' +
+        '<th style="width:18%;">Application No</th>' +
+        '<th style="width:10%;">Status</th>' +
+        '<th style="width:15%;">UTR Number</th>' +
+        '<th style="width:11%;">Claim Date</th>' +
+        '<th style="width:9%;">Amount</th>' +
+        '<th style="width:11%;">Claim Type</th>' +
+        '<th style="width:10%;">Claim Status</th>' +
+        '<th style="width:10%;">Bank Account No.</th>' +
+        '<th style="width:6%;">IFSC Code</th>' +
+        '</tr>' +
+        '</thead>' +
+        '<tbody>';
+
+      for (const claim of claims) {
+        html +=
+          '<tr>' +
+          '<td>' +
+          this.escapeHtml(claim?.applicationNo || claim?.ApplicationNo || '-') +
+          '</td>' +
+          '<td>' +
+          this.escapeHtml(claim?.Status || claim?.status || '-') +
+          '</td>' +
+          '<td>' +
+          this.escapeHtml(claim?.UtrNumber || claim?.utrNumber || '-') +
+          '</td>' +
+          '<td>' +
+          this.escapeHtml(claim?.claimDate || claim?.ClaimDate || '-') +
+          '</td>' +
+          '<td>' +
+          this.escapeHtml(this.formatClaimAmount(claim?.amount)) +
+          '</td>' +
+          '<td>' +
+          this.escapeHtml(claim?.ClaimType || claim?.claimType || '-') +
+          '</td>' +
+          '<td>' +
+          this.escapeHtml(
+            claim?.ClaimStatus || claim?.claimPaymentStatus || '-',
+          ) +
+          '</td>' +
+          '<td>' +
+          this.escapeHtml(this.maskBankAccountNumber(claim?.accountNumber)) +
+          '</td>' +
+          '<td>' +
+          this.escapeHtml(claim?.ifsc || '-') +
+          '</td>' +
+          '</tr>';
+      }
+
+      html +=
+        '</tbody>' +
+        '</table>' +
+        '<table class="claim-total-table">' +
+        '<tr>' +
+        '<td>Total Claim Paid:</td>' +
+        '<td>' +
+        this.escapeHtml(this.formatClaimAmount(totalClaimPaid)) +
+        '</td>' +
+        '</tr>' +
+        '</table>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  private formatClaimAmount(amount: any) {
+    const numericAmount = Number(amount || 0);
+    if (!Number.isFinite(numericAmount)) {
+      return '-';
+    }
+    return `Rs. ${numericAmount.toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  private maskBankAccountNumber(accountNumber: any) {
+    if (!accountNumber) {
+      return '-';
+    }
+
+    const account = String(accountNumber).trim();
+    if (account.length <= 4) {
+      return account;
+    }
+
+    return `${'*'.repeat(account.length - 4)}${account.slice(-4)}`;
+  }
+
+  private escapeHtml(value: any) {
+    if (value === undefined || value === null || value === '') {
+      return '-';
+    }
+
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   async parseHtml(str = '') {
