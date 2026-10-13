@@ -12,7 +12,7 @@ export enum UserRole {
 export class AuthService {
   constructor(
     @Inject('MONGO_DB') private readonly db: Db,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
   ) {}
 
   private validatePasswordStrength(password: string) {
@@ -21,12 +21,18 @@ export class AuthService {
 
     if (!rule.test(password)) {
       throw new Error(
-        'Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.'
+        'Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.',
       );
     }
   }
 
-  async register(name: string, email: string, password: string, mobile: string, role: UserRole) {
+  async register(
+    name: string,
+    email: string,
+    password: string,
+    mobile: string,
+    role: UserRole,
+  ) {
     try {
       if (!name || !email || !password || !mobile || !role) {
         return {
@@ -95,12 +101,12 @@ export class AuthService {
             token,
             updatedAt: new Date(),
           },
-        }
+        },
       );
 
       return {
-        data: {access_token:token},
-        message: { msg: "Login Successful", code: 1 },
+        data: { access_token: token },
+        message: { msg: 'Login Successful', code: 1 },
       };
     } catch (error: any) {
       return {
@@ -126,7 +132,7 @@ export class AuthService {
 
       const allPasswords = [user.password, ...(user.previousPasswords || [])];
       const match = await Promise.all(
-        allPasswords.map((oldPass) => bcrypt.compare(newPassword, oldPass))
+        allPasswords.map((oldPass) => bcrypt.compare(newPassword, oldPass)),
       );
 
       if (match.includes(true)) {
@@ -137,7 +143,10 @@ export class AuthService {
       }
 
       const hashed = await bcrypt.hash(newPassword, 10);
-      const updatedPrevious = [user.password, ...(user.previousPasswords || [])];
+      const updatedPrevious = [
+        user.password,
+        ...(user.previousPasswords || []),
+      ];
       if (updatedPrevious.length > 3) updatedPrevious.pop();
 
       await users.updateOne(
@@ -148,7 +157,7 @@ export class AuthService {
             previousPasswords: updatedPrevious,
             updatedAt: new Date(),
           },
-        }
+        },
       );
 
       return {

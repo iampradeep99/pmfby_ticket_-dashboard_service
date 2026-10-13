@@ -4,8 +4,8 @@ import { TicketDashboardModule } from 'src/ticket-dashboard/ticket-dashboard.mod
 import { NewTestBroker } from './NewTestBroker';
 
 @Module({
-  imports: [forwardRef(() => TicketDashboardModule)],  // Use forwardRef here
-  providers: [RabbitMQService,NewTestBroker],
-  exports: [RabbitMQService,NewTestBroker],
+  imports: [forwardRef(() => TicketDashboardModule)], // Use forwardRef here
+  providers: [RabbitMQService, NewTestBroker],
+  exports: [RabbitMQService, NewTestBroker],
 })
 export class RabbitMQModule {}

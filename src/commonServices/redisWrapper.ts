@@ -31,8 +31,6 @@
 //   }
 // }
 
-
-
 // redis Code
 import { Injectable } from '@nestjs/common';
 import * as Redis from 'lms-redis';
@@ -51,7 +49,11 @@ export class RedisWrapper {
     return redisLoader.getClient();
   }
 
-  async setRedisCache(key: string, value: any, ttlInSec: number = 3600): Promise<'OK' | null> {
+  async setRedisCache(
+    key: string,
+    value: any,
+    ttlInSec: number = 3600,
+  ): Promise<'OK' | null> {
     return redisLoader.setCache(key, value, ttlInSec);
   }
 
@@ -63,8 +65,6 @@ export class RedisWrapper {
     return redisLoader.deleteCache(key);
   }
 }
-
-
 
 // import { Injectable } from '@nestjs/common';
 // import * as NodeCache from 'node-cache';

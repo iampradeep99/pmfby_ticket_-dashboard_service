@@ -1,7 +1,3 @@
-
-
-
-
 import { Global, Module, Provider } from '@nestjs/common';
 import { Sequelize } from 'sequelize-typescript';
 import config from '../environment/config'; // dynamic config

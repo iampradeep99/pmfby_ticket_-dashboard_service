@@ -12,48 +12,47 @@ export class CronService {
   constructor(
     @Inject('SEQUELIZE') private readonly sequelize: Sequelize,
     @Inject('MONGO_DB') private readonly db: Db,
-    private mailService: MailService
+    private mailService: MailService,
   ) {}
 
- @Cron('0 */15 * * * *') // every 15 minutes
-async handleCron() {
-  console.log('⏰ Cron running every 15 minutes');
-  this.SupportTicketInsertCronForTicketListing()
-    .then((msg) => {
-      console.log(msg);
-    })
-    .catch(err => console.error('❌ Cron failed:', err));
-}
+  @Cron('0 */15 * * * *') // every 15 minutes
+  async handleCron() {
+    console.log('⏰ Cron running every 15 minutes');
+    this.SupportTicketInsertCronForTicketListing()
+      .then((msg) => {
+        console.log(msg);
+      })
+      .catch((err) => console.error('❌ Cron failed:', err));
+  }
 
   @Cron(CronExpression.EVERY_HOUR)
   async handleCronUpdate() {
     console.log('⏰ Cron running every 30s');
-    this.supportTicketSyncingUpdateForTicketListing().then((response)=>{
-            console.log(response)
-           
-        }) .catch(err => console.error('❌ Cron failed:', err));
-    
-   
+    this.supportTicketSyncingUpdateForTicketListing()
+      .then((response) => {
+        console.log(response);
+      })
+      .catch((err) => console.error('❌ Cron failed:', err));
   }
 
-@Cron('0 0-23/1 * * *')
-async handleCronUpdateDocketNumber() {
-  console.log('⏰ Cron running every 2 hours');
-  try {
-    const response = await this.supportTicketSyncingUpdateForDocketNumber();
-    console.log(response);
-  } catch (err) {
-    console.error('❌ Cron failed:', err);
+  @Cron('0 0-23/1 * * *')
+  async handleCronUpdateDocketNumber() {
+    console.log('⏰ Cron running every 2 hours');
+    try {
+      const response = await this.supportTicketSyncingUpdateForDocketNumber();
+      console.log(response);
+    } catch (err) {
+      console.error('❌ Cron failed:', err);
+    }
   }
-}
-
 
   @Cron('0 * * * *')
   async handleCronUpdateDocketNumberForTicketHistory() {
     console.log('⏰ Cron running every 15 minutes');
 
     try {
-      const response = await this.supportTicketSyncingUpdateForDocketNumberForTicketHistory();
+      const response =
+        await this.supportTicketSyncingUpdateForDocketNumberForTicketHistory();
       console.log(response);
     } catch (err) {
       console.error('❌ Cron failed:', err);
@@ -72,98 +71,97 @@ async handleCronUpdateDocketNumber() {
     }
   }
 
-  
+  async supportTicketSyncingUpdateForDocketNumber(): Promise<string> {
+    const MYSQL_BATCH_SIZE = 100000;
+    const CHUNK_SIZE = 1000;
 
+    try {
+      const collection: Collection<any> =
+        this.db.collection('SLA_Ticket_listing');
 
-
-
-
-
- async supportTicketSyncingUpdateForDocketNumber(): Promise<string> {
-  const MYSQL_BATCH_SIZE = 100000;
-  const CHUNK_SIZE = 1000;
-
-  try {
-    const collection: Collection<any> = this.db.collection('SLA_Ticket_listing');
-
-    // Step 1: Count rows in MySQL
-    const [countResult]: any = await this.sequelize.query(`
+      // Step 1: Count rows in MySQL
+      const [countResult]: any = await this.sequelize.query(
+        `
          SELECT COUNT(*) AS totalCount
 FROM mergeticketlisting
 WHERE TicketHeaderID = 4
   AND TicketNCIPDocketNo IS NOT NULL
   AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
   AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
-    `, { type: QueryTypes.SELECT });
+    `,
+        { type: QueryTypes.SELECT },
+      );
 
-    const totalRows: number = countResult?.totalCount || 0;
-    console.log(`📦 Total rows to sync: ${totalRows}`);
+      const totalRows: number = countResult?.totalCount || 0;
+      console.log(`📦 Total rows to sync: ${totalRows}`);
 
-    if (totalRows === 0) {
-      console.log('✅ No rows to sync today.');
-      return 'No rows to sync.';
-    }
+      if (totalRows === 0) {
+        console.log('✅ No rows to sync today.');
+        return 'No rows to sync.';
+      }
 
-    let offset = 0;
-    let totalUpdated = 0;
-    let totalMissing = 0;
+      let offset = 0;
+      let totalUpdated = 0;
+      let totalMissing = 0;
 
-    while (offset < totalRows) {
-      console.log("➡️ Processing batch with offset:", offset);
+      while (offset < totalRows) {
+        console.log('➡️ Processing batch with offset:', offset);
 
-      const rows: any[] = await this.sequelize.query(`
+        const rows: any[] = await this.sequelize.query(
+          `
         SELECT TicketNCIPDocketNo, TicketHeaderID, SupportTicketID
         FROM krishi_rakshak_pro.mergeticketlisting 
         WHERE TicketHeaderID = 4 AND TicketNCIPDocketNo IS NOT NULL
          AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
   AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
         LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
-      `, { type: QueryTypes.SELECT });
+      `,
+          { type: QueryTypes.SELECT },
+        );
 
-      console.log(`✅ Rows fetched in this batch: ${rows.length}`);
+        console.log(`✅ Rows fetched in this batch: ${rows.length}`);
 
-      if (!rows.length) break;
+        if (!rows.length) break;
 
-      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-        const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
+        for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+          const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
 
-        for (const record of chunk) {
-          const result = await collection.findOneAndUpdate(
-            {
-              TicketHeaderID: 4,
-              TicketNCIPDocketNo: { $ne: null },
-              SupportTicketID: record.SupportTicketID,
+          for (const record of chunk) {
+            const result = await collection.findOneAndUpdate(
+              {
+                TicketHeaderID: 4,
+                TicketNCIPDocketNo: { $ne: null },
+                SupportTicketID: record.SupportTicketID,
+              },
+              {
+                $set: {
+                  TicketNCIPDocketNo: record.TicketNCIPDocketNo,
+                },
+              },
+              { returnDocument: 'after' },
+            );
 
-            },
-            {
-              $set: {
-                TicketNCIPDocketNo: record.TicketNCIPDocketNo
-              }
-            },
-            { returnDocument: 'after' }
-          );
+            if (result?.value) totalUpdated++;
+            else totalMissing++;
+          }
 
-          if (result?.value) totalUpdated++;
-          else totalMissing++;
+          // Optional: Force garbage collection to prevent memory bloat
+          if (global.gc) global.gc();
         }
 
-        // Optional: Force garbage collection to prevent memory bloat
-        if (global.gc) global.gc();
+        offset += MYSQL_BATCH_SIZE;
+        console.log(`✅ Processed offset: ${offset}/${totalRows}`);
       }
 
-      offset += MYSQL_BATCH_SIZE;
-      console.log(`✅ Processed offset: ${offset}/${totalRows}`);
-    }
+      console.log('🎉 Support ticket listing sync completed.');
+      console.log(`🟢 Total Updated: ${totalUpdated}`);
+      console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
 
-    console.log('🎉 Support ticket listing sync completed.');
-    console.log(`🟢 Total Updated: ${totalUpdated}`);
-    console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
+      // Email report
+      const to = ['pmfbysystems@gmail.com'];
+      const subject = 'Docket Number Updation For SLA_ticket_listing';
 
-    // Email report
-    const to = ['pmfbysystems@gmail.com'];
-    const subject = 'Docket Number Updation For SLA_ticket_listing';
-
-    const text = `
+      const text = `
 Hello,
 Docket Number Updation For SLA_ticket_listing has completed.
 
@@ -175,7 +173,7 @@ Regards,
 Your Automation System
     `;
 
-    const html = `
+      const html = `
 <p>Hello,</p>
 <p><strong>Docket Number Updation For SLA_ticket_listing has completed.
 </strong></p>
@@ -185,55 +183,66 @@ Your Automation System
 <p>Regards,<br/>Your Automation System</p>
     `;
 
-    await this.mailService.sendMail({ to, subject, text, html });
+      await this.mailService.sendMail({ to, subject, text, html });
 
-    return '✅ Support ticket sync completed successfully.';
-
-  } catch (err: any) {
-    console.error('❌ Error during supportTicketSyncing:', err);
-    throw err;
+      return '✅ Support ticket sync completed successfully.';
+    } catch (err: any) {
+      console.error('❌ Error during supportTicketSyncing:', err);
+      throw err;
+    }
   }
-}
 
-async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<string> {
-  const MYSQL_BATCH_SIZE = 100000; // MySQL fetch size
-  const CHUNK_SIZE = 1000;         // Mongo bulk update size
+  async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<string> {
+    const MYSQL_BATCH_SIZE = 100000; // MySQL fetch size
+    const CHUNK_SIZE = 1000; // Mongo bulk update size
 
-  try {
-    console.log("🚀 Starting supportTicketSyncingUpdateForDocketNumberForTicketHistory...");
+    try {
+      console.log(
+        '🚀 Starting supportTicketSyncingUpdateForDocketNumberForTicketHistory...',
+      );
 
-    const collection: Collection<any> = this.db.collection('SLA_KRPH_SupportTickets_Records');
-    console.log("📂 Connected to MongoDB collection: SLA_KRPH_SupportTickets_Records");
+      const collection: Collection<any> = this.db.collection(
+        'SLA_KRPH_SupportTickets_Records',
+      );
+      console.log(
+        '📂 Connected to MongoDB collection: SLA_KRPH_SupportTickets_Records',
+      );
 
-    console.log("🧮 Counting total rows from MySQL...");
+      console.log('🧮 Counting total rows from MySQL...');
 
-    const [countResult]: any = await this.sequelize.query(`
+      const [countResult]: any = await this.sequelize.query(
+        `
       SELECT COUNT(*) AS totalCount
       FROM mergeticketlisting
       WHERE TicketHeaderID = 4
         AND TicketNCIPDocketNo IS NOT NULL
         AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
         AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
-    `, { type: QueryTypes.SELECT });
+    `,
+        { type: QueryTypes.SELECT },
+      );
 
-    const totalRows: number = countResult?.totalCount || 0;
-    console.log(`📦 Total rows to sync: ${totalRows}`);
+      const totalRows: number = countResult?.totalCount || 0;
+      console.log(`📦 Total rows to sync: ${totalRows}`);
 
-    if (totalRows === 0) {
-      console.log('✅ No rows to sync today.');
-      return 'No rows to sync.';
-    }
+      if (totalRows === 0) {
+        console.log('✅ No rows to sync today.');
+        return 'No rows to sync.';
+      }
 
-    let offset = 0;
-    let totalUpdated = 0;
-    let totalSkipped = 0;
+      let offset = 0;
+      let totalUpdated = 0;
+      let totalSkipped = 0;
 
-    console.log("🔁 Beginning main sync loop...");
+      console.log('🔁 Beginning main sync loop...');
 
-    while (offset < totalRows) {
-      console.log(`➡️ Fetching MySQL batch starting at offset: ${offset} (limit: ${MYSQL_BATCH_SIZE})`);
+      while (offset < totalRows) {
+        console.log(
+          `➡️ Fetching MySQL batch starting at offset: ${offset} (limit: ${MYSQL_BATCH_SIZE})`,
+        );
 
-      const rows: any[] = await this.sequelize.query(`
+        const rows: any[] = await this.sequelize.query(
+          `
         SELECT TicketNCIPDocketNo, TicketHeaderID, SupportTicketID
         FROM krishi_rakshak_pro.mergeticketlisting 
         WHERE TicketHeaderID = 4
@@ -241,66 +250,76 @@ async supportTicketSyncingUpdateForDocketNumberForTicketHistory(): Promise<strin
           AND InsertDateTime >= CURDATE() - INTERVAL 3 MONTH
           AND InsertDateTime < CURDATE() + INTERVAL 1 DAY
         LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
-      `, { type: QueryTypes.SELECT });
+      `,
+          { type: QueryTypes.SELECT },
+        );
 
-      if (!rows.length) {
-        console.log("⚠️ No more rows fetched, ending loop.");
-        break;
-      }
+        if (!rows.length) {
+          console.log('⚠️ No more rows fetched, ending loop.');
+          break;
+        }
 
-      console.log(`✅ Rows fetched in this batch: ${rows.length}`);
+        console.log(`✅ Rows fetched in this batch: ${rows.length}`);
 
-      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-        const chunk = rows.slice(i, i + CHUNK_SIZE);
-        console.log(`🧩 Processing chunk ${i / CHUNK_SIZE + 1} (${chunk.length} records)`);
+        for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+          const chunk = rows.slice(i, i + CHUNK_SIZE);
+          console.log(
+            `🧩 Processing chunk ${i / CHUNK_SIZE + 1} (${chunk.length} records)`,
+          );
 
-        const bulkOps = chunk.map(record => ({
-          updateOne: {
-            filter: {
-              TicketHeaderID: 4,
-              SupportTicketID: record.SupportTicketID,
-              TicketNCIPDocketNo: null // only update if null
+          const bulkOps = chunk.map((record) => ({
+            updateOne: {
+              filter: {
+                TicketHeaderID: 4,
+                SupportTicketID: record.SupportTicketID,
+                TicketNCIPDocketNo: null, // only update if null
+              },
+              update: {
+                $set: { TicketNCIPDocketNo: record.TicketNCIPDocketNo },
+              },
             },
-            update: {
-              $set: { TicketNCIPDocketNo: record.TicketNCIPDocketNo }
-            }
+          }));
+
+          try {
+            const result = await collection.bulkWrite(bulkOps, {
+              ordered: false,
+            });
+
+            const matched = result.matchedCount || 0; // documents found for update
+            const modified = result.modifiedCount || 0; // documents actually updated
+
+            totalUpdated += modified;
+            totalSkipped += chunk.length - matched;
+
+            console.log(
+              `✅ Chunk done → Matched: ${matched}, Updated: ${modified}, Skipped: ${chunk.length - matched}`,
+            );
+          } catch (bulkErr) {
+            console.error('❌ Bulk write error:', bulkErr.message);
           }
-        }));
 
-        try {
-          const result = await collection.bulkWrite(bulkOps, { ordered: false });
-
-          const matched = result.matchedCount || 0;   // documents found for update
-          const modified = result.modifiedCount || 0; // documents actually updated
-
-          totalUpdated += modified;
-          totalSkipped += chunk.length - matched;
-
-          console.log(`✅ Chunk done → Matched: ${matched}, Updated: ${modified}, Skipped: ${chunk.length - matched}`);
-        } catch (bulkErr) {
-          console.error("❌ Bulk write error:", bulkErr.message);
+          if (global.gc) {
+            global.gc();
+          }
         }
 
-        if (global.gc) {
-          global.gc();
-        }
+        offset += MYSQL_BATCH_SIZE;
+        console.log(`✅ Completed batch offset: ${offset}/${totalRows}`);
       }
 
-      offset += MYSQL_BATCH_SIZE;
-      console.log(`✅ Completed batch offset: ${offset}/${totalRows}`);
-    }
+      console.log('🎉 Sync completed successfully!');
+      console.log(`🟢 Total Updated (filled nulls): ${totalUpdated}`);
+      console.log(
+        `🔵 Total Skipped (already had docket or missing in Mongo): ${totalSkipped}`,
+      );
 
-    console.log("🎉 Sync completed successfully!");
-    console.log(`🟢 Total Updated (filled nulls): ${totalUpdated}`);
-    console.log(`🔵 Total Skipped (already had docket or missing in Mongo): ${totalSkipped}`);
+      // Email summary report
+      console.log('📧 Preparing email summary...');
 
-    // Email summary report
-    console.log("📧 Preparing email summary...");
+      const to = ['pradeep.meandev@gmail.com'];
+      const subject = 'Support Ticket Docket Number Update Report';
 
-    const to = ['pradeep.meandev@gmail.com'];
-    const subject = 'Support Ticket Docket Number Update Report';
-
-    const text = `
+      const text = `
 Hello Team,
 
 The Docket Number update for Ticket History has been completed.
@@ -314,7 +333,7 @@ Regards,
 Automation System
     `;
 
-    const html = `
+      const html = `
 <p>Hello Team,</p>
 <p><strong>The Docket Number update for Ticket History has been completed.</strong></p>
 <p><strong>Summary:</strong></p>
@@ -326,184 +345,189 @@ Automation System
 <p>Regards,<br/>Automation System</p>
     `;
 
-    console.log("📨 Sending email report...");
-    await this.mailService.sendMail({ to, subject, text, html });
-    console.log("✅ Email sent successfully!");
+      console.log('📨 Sending email report...');
+      await this.mailService.sendMail({ to, subject, text, html });
+      console.log('✅ Email sent successfully!');
 
-    return '✅ Support ticket sync completed successfully.';
-  } catch (err: any) {
-    console.error('❌ Error during supportTicketSyncingUpdateForDocketNumberForTicketHistory:', err);
-    throw err;
+      return '✅ Support ticket sync completed successfully.';
+    } catch (err: any) {
+      console.error(
+        '❌ Error during supportTicketSyncingUpdateForDocketNumberForTicketHistory:',
+        err,
+      );
+      throw err;
+    }
   }
-}
 
+  async SupportTicketInsertCronForTicketListing(): Promise<string> {
+    const MYSQL_BATCH_SIZE = 1000000;
+    const CHUNK_SIZE = 10000;
+    const collection: Collection<any> =
+      this.db.collection('SLA_Ticket_listing');
 
-  
- 
-
-
-async SupportTicketInsertCronForTicketListing(): Promise<string> {
-  const MYSQL_BATCH_SIZE = 1000000;
-  const CHUNK_SIZE = 10000;
-  const collection: Collection<any> = this.db.collection('SLA_Ticket_listing');
-
-  return new Promise((resolve, reject) => {
-    collection
-      .createIndex({ SupportTicketID: 1 }, { unique: true, name: 'uniq_ticket_no' })
-      .then(() =>
-        this.sequelize.query<any>(
-          `
+    return new Promise((resolve, reject) => {
+      collection
+        .createIndex(
+          { SupportTicketID: 1 },
+          { unique: true, name: 'uniq_ticket_no' },
+        )
+        .then(() =>
+          this.sequelize.query<any>(
+            `
           SELECT COUNT(*) as totalCount
           FROM mergeticketlisting
           WHERE DATE(InsertDateTime) = CURDATE()
         `,
-          { type: QueryTypes.SELECT }
+            { type: QueryTypes.SELECT },
+          ),
         )
-      )
-      .then((countResult: any[]) => {
-        const totalRows = parseInt(countResult[0]?.totalCount || 0, 10);
+        .then((countResult: any[]) => {
+          const totalRows = parseInt(countResult[0]?.totalCount || 0, 10);
 
-        if (totalRows === 0) {
-          return Promise.resolve({
-            totalInserted: 0,
-            totalSkipped: 0,
-            insertedTicketNos: [],
-          });
-        }
-
-        let offset = 0;
-        let totalInserted = 0;
-        let totalSkipped = 0;
-        const insertedTicketNos: any[] = [];
-
-        const processBatch = (): Promise<any> => {
-          if (offset >= totalRows) {
+          if (totalRows === 0) {
             return Promise.resolve({
-              totalInserted,
-              totalSkipped,
-              insertedTicketNos,
+              totalInserted: 0,
+              totalSkipped: 0,
+              insertedTicketNos: [],
             });
           }
 
-          return this.sequelize
-            .query<any>(
-              `
+          let offset = 0;
+          let totalInserted = 0;
+          let totalSkipped = 0;
+          const insertedTicketNos: any[] = [];
+
+          const processBatch = (): Promise<any> => {
+            if (offset >= totalRows) {
+              return Promise.resolve({
+                totalInserted,
+                totalSkipped,
+                insertedTicketNos,
+              });
+            }
+
+            return this.sequelize
+              .query<any>(
+                `
             SELECT * FROM mergeticketlisting
             WHERE DATE(InsertDateTime) = CURDATE()
             LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
           `,
-              { type: QueryTypes.SELECT }
-            )
-            .then((rows: any[]) => {
-              if (!rows.length)
-                return Promise.resolve({
-                  totalInserted,
-                  totalSkipped,
-                  insertedTicketNos,
-                });
-
-              return rows
-                .reduce((chunkPromise: Promise<any>, _: any, idx: number) => {
-                  if (idx % CHUNK_SIZE !== 0) return chunkPromise;
-
-                  const chunk = rows.slice(idx, idx + CHUNK_SIZE);
-
-                  return chunkPromise.then(() => {
-                    const ops = chunk.map((record: any) => {
-                      if ('id' in record) delete record.id;
-                      return {
-                        updateOne: {
-                          filter: { SupportTicketID: record.SupportTicketID },
-                          update: { $setOnInsert: record },
-                          upsert: true,
-                        },
-                      };
-                    });
-
-                    if (!ops.length) return Promise.resolve();
-
-                    return collection
-                      .bulkWrite(ops, { ordered: false })
-                      .then((result: any) => {
-                        const insertedCount = result.upsertedCount || 0;
-                        const skippedCount = ops.length - insertedCount;
-
-                        totalInserted += insertedCount;
-                        totalSkipped += skippedCount;
-
-                        if (result.upsertedIds) {
-                          Object.values(result.upsertedIds).forEach(
-                            (_: any, i: number) => {
-                              if (insertedTicketNos.length < 100)
-                                insertedTicketNos.push(chunk[i].SupportTicketID);
-                            }
-                          );
-                        }
-
-                        if (global.gc) global.gc();
-                      })
-                      .catch((err: any) => {
-                        console.error('Bulk write error:', err);
-                      });
+                { type: QueryTypes.SELECT },
+              )
+              .then((rows: any[]) => {
+                if (!rows.length)
+                  return Promise.resolve({
+                    totalInserted,
+                    totalSkipped,
+                    insertedTicketNos,
                   });
-                }, Promise.resolve())
-                .then(() => {
-                  offset += MYSQL_BATCH_SIZE;
-                  return processBatch();
-                });
-            });
-        };
 
-        return processBatch();
-      })
-      .then(() => {
-        resolve('Support ticket sync completed successfully.');
-      })
-      .catch((err: any) => {
-        console.error('Error during support ticket sync:', err);
-        reject(err);
-      });
-  });
-}
+                return rows
+                  .reduce((chunkPromise: Promise<any>, _: any, idx: number) => {
+                    if (idx % CHUNK_SIZE !== 0) return chunkPromise;
 
+                    const chunk = rows.slice(idx, idx + CHUNK_SIZE);
 
+                    return chunkPromise.then(() => {
+                      const ops = chunk.map((record: any) => {
+                        if ('id' in record) delete record.id;
+                        return {
+                          updateOne: {
+                            filter: { SupportTicketID: record.SupportTicketID },
+                            update: { $setOnInsert: record },
+                            upsert: true,
+                          },
+                        };
+                      });
 
+                      if (!ops.length) return Promise.resolve();
 
- 
+                      return collection
+                        .bulkWrite(ops, { ordered: false })
+                        .then((result: any) => {
+                          const insertedCount = result.upsertedCount || 0;
+                          const skippedCount = ops.length - insertedCount;
+
+                          totalInserted += insertedCount;
+                          totalSkipped += skippedCount;
+
+                          if (result.upsertedIds) {
+                            Object.values(result.upsertedIds).forEach(
+                              (_: any, i: number) => {
+                                if (insertedTicketNos.length < 100)
+                                  insertedTicketNos.push(
+                                    chunk[i].SupportTicketID,
+                                  );
+                              },
+                            );
+                          }
+
+                          if (global.gc) global.gc();
+                        })
+                        .catch((err: any) => {
+                          console.error('Bulk write error:', err);
+                        });
+                    });
+                  }, Promise.resolve())
+                  .then(() => {
+                    offset += MYSQL_BATCH_SIZE;
+                    return processBatch();
+                  });
+              });
+          };
+
+          return processBatch();
+        })
+        .then(() => {
+          resolve('Support ticket sync completed successfully.');
+        })
+        .catch((err: any) => {
+          console.error('Error during support ticket sync:', err);
+          reject(err);
+        });
+    });
+  }
+
   async supportTicketSyncingUpdateForTicketListing(): Promise<string> {
-  const MYSQL_BATCH_SIZE = 100000;
-  const CHUNK_SIZE = 1000;
+    const MYSQL_BATCH_SIZE = 100000;
+    const CHUNK_SIZE = 1000;
 
-  return new Promise(async (resolve, reject) => {
-    try {
-      const collection: Collection<any> = this.db.collection('SLA_Ticket_listing');
+    return new Promise(async (resolve, reject) => {
+      try {
+        const collection: Collection<any> =
+          this.db.collection('SLA_Ticket_listing');
 
-      // Count rows in MySQL
-      const [countResult]: any = await this.sequelize.query(`
+        // Count rows in MySQL
+        const [countResult]: any = await this.sequelize.query(
+          `
          SELECT COUNT(*) as totalCount
 FROM mergeticketlisting 
           WHERE DATE(StatusUpdateTime) 
     BETWEEN DATE(CURDATE() - INTERVAL 1 DAY) 
     AND DATE(CURDATE() + INTERVAL 1 DAY)
-      `, { type: QueryTypes.SELECT });
+      `,
+          { type: QueryTypes.SELECT },
+        );
 
-      const totalRows: number = countResult?.totalCount || 0;
-      console.log(`📦 Total rows to sync: ${totalRows}`);
+        const totalRows: number = countResult?.totalCount || 0;
+        console.log(`📦 Total rows to sync: ${totalRows}`);
 
-      if (totalRows === 0) {
-        console.log('✅ No rows to sync today.');
-        return resolve('No rows to sync.');
-      }
+        if (totalRows === 0) {
+          console.log('✅ No rows to sync today.');
+          return resolve('No rows to sync.');
+        }
 
-      let offset = 0;
-      let totalUpdated = 0;
-      let totalMissing = 0;
+        let offset = 0;
+        let totalUpdated = 0;
+        let totalMissing = 0;
 
-      const processBatch = async (): Promise<void> => {
-        if (offset >= totalRows) return;
-        console.log("➡️ Processing batch with offset:", offset);
+        const processBatch = async (): Promise<void> => {
+          if (offset >= totalRows) return;
+          console.log('➡️ Processing batch with offset:', offset);
 
-        const rows: any[] = await this.sequelize.query(`
+          const rows: any[] = await this.sequelize.query(
+            `
           SELECT 
     InsertDateTime, 
     StatusUpdateTime, 
@@ -518,54 +542,56 @@ WHERE DATE(StatusUpdateTime)
     BETWEEN DATE(CURDATE() - INTERVAL 1 DAY) 
     AND DATE(CURDATE() + INTERVAL 1 DAY)
           LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
-        `, { type: QueryTypes.SELECT });
+        `,
+            { type: QueryTypes.SELECT },
+          );
 
-        console.log(`✅ Rows fetched in this batch: ${rows.length}`);
+          console.log(`✅ Rows fetched in this batch: ${rows.length}`);
 
-        if (!rows.length) return;
+          if (!rows.length) return;
 
-        for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-          const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
+          for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+            const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
 
-          for (const record of chunk) {
-            const result = await collection.findOneAndUpdate(
-              { SupportTicketID: record.SupportTicketID },
-              {
-                $set: {
-                  InsertDateTime: record.InsertDateTime,
-                  StatusUpdateTime: record.StatusUpdateTime,
-                  TicketStatus: record.TicketStatus,
-                  TicketStatusID: record.TicketStatusID,
-                  TicketReOpenDate: record.TicketReOpenDate,
-                  TicketNCIPDocketNo: record.TicketNCIPDocketNo,
-                  SupportTicketNo: record.SupportTicketNo
-                }
-              },
-              { returnDocument: 'after' }
-            );
-            console.log(result)
+            for (const record of chunk) {
+              const result = await collection.findOneAndUpdate(
+                { SupportTicketID: record.SupportTicketID },
+                {
+                  $set: {
+                    InsertDateTime: record.InsertDateTime,
+                    StatusUpdateTime: record.StatusUpdateTime,
+                    TicketStatus: record.TicketStatus,
+                    TicketStatusID: record.TicketStatusID,
+                    TicketReOpenDate: record.TicketReOpenDate,
+                    TicketNCIPDocketNo: record.TicketNCIPDocketNo,
+                    SupportTicketNo: record.SupportTicketNo,
+                  },
+                },
+                { returnDocument: 'after' },
+              );
+              console.log(result);
 
-            if (result) totalUpdated++;
-            else totalMissing++;
+              if (result) totalUpdated++;
+              else totalMissing++;
+            }
+
+            if (global.gc) global.gc();
           }
 
-          if (global.gc) global.gc();
-        }
+          offset += MYSQL_BATCH_SIZE;
+          console.log(`✅ Processed offset: ${offset}/${totalRows}`);
+          await processBatch();
+        };
 
-        offset += MYSQL_BATCH_SIZE;
-        console.log(`✅ Processed offset: ${offset}/${totalRows}`);
         await processBatch();
-      };
 
-      await processBatch();
+        console.log('🎉 Support ticket listing sync completed.');
+        console.log(`🟢 Total Updated: ${totalUpdated}`);
+        console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
 
-      console.log('🎉 Support ticket listing sync completed.');
-      console.log(`🟢 Total Updated: ${totalUpdated}`);
-      console.log(`🔴 Total Missing (not found in MongoDB): ${totalMissing}`);
-
-      const to = ['pmfbysystems@gmail.com'];
-      const subject = 'Support Ticket listing Data Update Completed';
-      const text = `
+        const to = ['pmfbysystems@gmail.com'];
+        const subject = 'Support Ticket listing Data Update Completed';
+        const text = `
 Hello,
 
 The Support Ticket listing data update process has completed.
@@ -581,7 +607,7 @@ Total Missing (not updated): ${totalMissing}
 Regards,
 Your Automation System
       `;
-      const html = `
+        const html = `
 <p>Hello,</p>
 <p><strong>The Support Ticket listing data update process has completed.</strong></p>
 <p><strong>Criteria:</strong></p>
@@ -595,146 +621,156 @@ Your Automation System
 <p>Regards,<br/>Your Automation System</p>
       `;
 
-      await this.mailService.sendMail({ to, subject, text, html });
+        await this.mailService.sendMail({ to, subject, text, html });
 
-      resolve('✅ Support ticket sync completed successfully.');
-
-    } catch (err: any) {
-      console.error('❌ Error during supportTicketSyncing:', err);
-      reject(err);
-    }
-  });
-}
-
-
-  async syncTicketComments(): Promise<string> {
-  if (this.isTicketCommentSyncRunning) {
-    return 'Ticket comment journey sync is already running.';
+        resolve('✅ Support ticket sync completed successfully.');
+      } catch (err: any) {
+        console.error('❌ Error during supportTicketSyncing:', err);
+        reject(err);
+      }
+    });
   }
 
-  this.isTicketCommentSyncRunning = true;
-  const MYSQL_BATCH_SIZE = 100000;
-  const CHUNK_SIZE = 1000;
+  async syncTicketComments(): Promise<string> {
+    if (this.isTicketCommentSyncRunning) {
+      return 'Ticket comment journey sync is already running.';
+    }
 
-  return new Promise(async (resolve, reject) => {
-    try {
-      const collection: Collection<any> = this.db.collection('ticket_comment_journey');
+    this.isTicketCommentSyncRunning = true;
+    const MYSQL_BATCH_SIZE = 100000;
+    const CHUNK_SIZE = 1000;
 
-      // Count rows in MySQL
-      const [countResult]: any = await this.sequelize.query(`
+    return new Promise(async (resolve, reject) => {
+      try {
+        const collection: Collection<any> = this.db.collection(
+          'ticket_comment_journey',
+        );
+
+        // Count rows in MySQL
+        const [countResult]: any = await this.sequelize.query(
+          `
          SELECT COUNT(*) as totalCount FROM krishi_rakshak_pro.krph_ticketjourney
-      `, { type: QueryTypes.SELECT });
+      `,
+          { type: QueryTypes.SELECT },
+        );
 
-      const totalRows: number = countResult?.totalCount || 0;
-      console.log(`📦 Total rows to sync: ${totalRows}`);
+        const totalRows: number = countResult?.totalCount || 0;
+        console.log(`📦 Total rows to sync: ${totalRows}`);
 
-      if (totalRows === 0) {
-        console.log('✅ No rows to sync today.');
-        return resolve('No rows to sync.');
-      }
-
-      let offset = 0;
-      let totalUpdated = 0;
-      let totalMissing = 0;
-
-      const processBatch = async (): Promise<void> => {
-        if (offset >= totalRows) return;
-        console.log("➡️ Processing batch with offset:", offset);
-
-        const rows: any[] = await this.sequelize.query(`
-      SELECT * FROM krishi_rakshak_pro.krph_ticketjourney LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
-        `, { type: QueryTypes.SELECT });
-
-        console.log(`✅ Rows fetched in this batch: ${rows.length}`);
-
-        if (!rows.length) return;
-
-        for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-          const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
-
-          const operations = chunk
-            .filter((record) => record.SupportTicketNo)
-            .map((record) => ({
-              updateOne: {
-                filter: { SupportTicketNo: record.SupportTicketNo },
-                update: {
-                  $set: {
-                    SupportTicketNo: record.SupportTicketNo,
-                    NCIPDocketNo: record.NCIPDocketNo,
-                    CreatedDate: record.CreatedDate,
-                    AgentName: record.AgentName,
-                    CreatedBY: record.CreatedBY,
-                    SupportTicketID: record.SupportTicketID,
-                    InprogressDate: record.InprogressDate,
-                    InprogressComment: record.InprogressComment,
-                    InprogressUpdatedBy: record.InprogressUpdatedBy,
-                    InprogressUpdatedUser: record.InprogressUpdatedUser,
-                    ResolvedDate: record.ResolvedDate,
-                    ResolvedComment: record.ResolvedComment,
-                    ResolvedUpdatedBy: record.ResolvedUpdatedBy,
-                    ResolvedUpdatedUser: record.ResolvedUpdatedUser,
-                    ReOpenDate: record.ReOpenDate,
-                    ReOpenComment: record.ReOpenComment,
-                    ReOpenUpdatedBy: record.ReOpenUpdatedBy,
-                    ReOpenUpdatedUser: record.ReOpenUpdatedUser,
-                    Inprogress1Date: record.Inprogress1Date,
-                    Inprogress1Comment: record.Inprogress1Comment,
-                    Inprogress1UpdatedBy: record.Inprogress1UpdatedBy,
-                    Inprogress1UpdatedUser: record.Inprogress1UpdatedUser,
-                    Resolved1Date: record.Resolved1Date,
-                    Resolved1Comment: record.Resolved1Comment,
-                    Resolved1UpdatedBy: record.Resolved1UpdatedBy,
-                    Resolved1UpdatedUser: record.Resolved1UpdatedUser,
-                    ReOpen1Date: record.ReOpen1Date,
-                    ReOpen1Comment: record.ReOpen1Comment,
-                    ReOpen1UpdatedBy: record.ReOpen1UpdatedBy,
-                    ReOpen1UpdatedUser: record.ReOpen1UpdatedUser,
-                    Inprogress2Date: record.Inprogress2Date,
-                    Inprogress2Comment: record.Inprogress2Comment,
-                    Inprogress2UpdatedBy: record.Inprogress2UpdatedBy,
-                    Inprogress2UpdatedUser: record.Inprogress2UpdatedUser,
-                    Resolved2Date: record.Resolved2Date,
-                    Resolved2Comment: record.Resolved2Comment,
-                    Resolved2UpdatedBy: record.Resolved2UpdatedBy,
-                    Resolved2UpdatedUser: record.Resolved2UpdatedUser,
-                    ReOpen2Date: record.ReOpen2Date,
-                    ReOpen2Comment: record.ReOpen2Comment,
-                    ReOpen2UpdatedBy: record.ReOpen2UpdatedBy,
-                    ReOpen2UpdatedUser: record.ReOpen2UpdatedUser,
-                    syncedAt: new Date(),
-                  },
-                  $setOnInsert: {
-                    insertedAt: new Date(),
-                  },
-                },
-                upsert: true,
-              },
-            }));
-
-          totalMissing += chunk.length - operations.length;
-
-          if (operations.length) {
-            const result = await collection.bulkWrite(operations, { ordered: false });
-            totalUpdated += result.modifiedCount + result.upsertedCount;
-          }
-
-          if (global.gc) global.gc();
+        if (totalRows === 0) {
+          console.log('✅ No rows to sync today.');
+          return resolve('No rows to sync.');
         }
 
-        offset += MYSQL_BATCH_SIZE;
-        console.log(`✅ Processed offset: ${offset}/${totalRows}`);
+        let offset = 0;
+        let totalUpdated = 0;
+        let totalMissing = 0;
+
+        const processBatch = async (): Promise<void> => {
+          if (offset >= totalRows) return;
+          console.log('➡️ Processing batch with offset:', offset);
+
+          const rows: any[] = await this.sequelize.query(
+            `
+      SELECT * FROM krishi_rakshak_pro.krph_ticketjourney LIMIT ${MYSQL_BATCH_SIZE} OFFSET ${offset}
+        `,
+            { type: QueryTypes.SELECT },
+          );
+
+          console.log(`✅ Rows fetched in this batch: ${rows.length}`);
+
+          if (!rows.length) return;
+
+          for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+            const chunk: any[] = rows.slice(i, i + CHUNK_SIZE);
+
+            const operations = chunk
+              .filter((record) => record.SupportTicketNo)
+              .map((record) => ({
+                updateOne: {
+                  filter: { SupportTicketNo: record.SupportTicketNo },
+                  update: {
+                    $set: {
+                      SupportTicketNo: record.SupportTicketNo,
+                      NCIPDocketNo: record.NCIPDocketNo,
+                      CreatedDate: record.CreatedDate,
+                      AgentName: record.AgentName,
+                      CreatedBY: record.CreatedBY,
+                      SupportTicketID: record.SupportTicketID,
+                      InprogressDate: record.InprogressDate,
+                      InprogressComment: record.InprogressComment,
+                      InprogressUpdatedBy: record.InprogressUpdatedBy,
+                      InprogressUpdatedUser: record.InprogressUpdatedUser,
+                      ResolvedDate: record.ResolvedDate,
+                      ResolvedComment: record.ResolvedComment,
+                      ResolvedUpdatedBy: record.ResolvedUpdatedBy,
+                      ResolvedUpdatedUser: record.ResolvedUpdatedUser,
+                      ReOpenDate: record.ReOpenDate,
+                      ReOpenComment: record.ReOpenComment,
+                      ReOpenUpdatedBy: record.ReOpenUpdatedBy,
+                      ReOpenUpdatedUser: record.ReOpenUpdatedUser,
+                      Inprogress1Date: record.Inprogress1Date,
+                      Inprogress1Comment: record.Inprogress1Comment,
+                      Inprogress1UpdatedBy: record.Inprogress1UpdatedBy,
+                      Inprogress1UpdatedUser: record.Inprogress1UpdatedUser,
+                      Resolved1Date: record.Resolved1Date,
+                      Resolved1Comment: record.Resolved1Comment,
+                      Resolved1UpdatedBy: record.Resolved1UpdatedBy,
+                      Resolved1UpdatedUser: record.Resolved1UpdatedUser,
+                      ReOpen1Date: record.ReOpen1Date,
+                      ReOpen1Comment: record.ReOpen1Comment,
+                      ReOpen1UpdatedBy: record.ReOpen1UpdatedBy,
+                      ReOpen1UpdatedUser: record.ReOpen1UpdatedUser,
+                      Inprogress2Date: record.Inprogress2Date,
+                      Inprogress2Comment: record.Inprogress2Comment,
+                      Inprogress2UpdatedBy: record.Inprogress2UpdatedBy,
+                      Inprogress2UpdatedUser: record.Inprogress2UpdatedUser,
+                      Resolved2Date: record.Resolved2Date,
+                      Resolved2Comment: record.Resolved2Comment,
+                      Resolved2UpdatedBy: record.Resolved2UpdatedBy,
+                      Resolved2UpdatedUser: record.Resolved2UpdatedUser,
+                      ReOpen2Date: record.ReOpen2Date,
+                      ReOpen2Comment: record.ReOpen2Comment,
+                      ReOpen2UpdatedBy: record.ReOpen2UpdatedBy,
+                      ReOpen2UpdatedUser: record.ReOpen2UpdatedUser,
+                      syncedAt: new Date(),
+                    },
+                    $setOnInsert: {
+                      insertedAt: new Date(),
+                    },
+                  },
+                  upsert: true,
+                },
+              }));
+
+            totalMissing += chunk.length - operations.length;
+
+            if (operations.length) {
+              const result = await collection.bulkWrite(operations, {
+                ordered: false,
+              });
+              totalUpdated += result.modifiedCount + result.upsertedCount;
+            }
+
+            if (global.gc) global.gc();
+          }
+
+          offset += MYSQL_BATCH_SIZE;
+          console.log(`✅ Processed offset: ${offset}/${totalRows}`);
+          await processBatch();
+        };
+
         await processBatch();
-      };
 
-      await processBatch();
+        console.log('🎉 Ticket comment journey sync completed.');
+        console.log(`🟢 Total Updated: ${totalUpdated}`);
+        console.log(
+          `🔴 Total Missing (without SupportTicketNo): ${totalMissing}`,
+        );
 
-      console.log('🎉 Ticket comment journey sync completed.');
-      console.log(`🟢 Total Updated: ${totalUpdated}`);
-      console.log(`🔴 Total Missing (without SupportTicketNo): ${totalMissing}`);
-
-      const to = ['pmfbysystems@gmail.com'];
-      const subject = 'Ticket Comment Journey Sync Completed';
-      const text = `
+        const to = ['pmfbysystems@gmail.com'];
+        const subject = 'Ticket Comment Journey Sync Completed';
+        const text = `
 Hello,
 
 The ticket comment journey sync process has completed.
@@ -746,7 +782,7 @@ Total Missing SupportTicketNo: ${totalMissing}
 Regards,
 Your Automation System
       `;
-      const html = `
+        const html = `
 <p>Hello,</p>
 <p><strong>The ticket comment journey sync process has completed.</strong></p>
 <p><strong>Total Rows from MySQL:</strong> ${totalRows}</p>
@@ -755,19 +791,15 @@ Your Automation System
 <p>Regards,<br/>Your Automation System</p>
       `;
 
-      await this.mailService.sendMail({ to, subject, text, html });
+        await this.mailService.sendMail({ to, subject, text, html });
 
-      resolve('✅ Support ticket sync completed successfully.');
-
-    } catch (err: any) {
-      console.error('❌ Error during supportTicketSyncing:', err);
-      reject(err);
-    } finally {
-      this.isTicketCommentSyncRunning = false;
-    }
-  });
-}
-
-
-
+        resolve('✅ Support ticket sync completed successfully.');
+      } catch (err: any) {
+        console.error('❌ Error during supportTicketSyncing:', err);
+        reject(err);
+      } finally {
+        this.isTicketCommentSyncRunning = false;
+      }
+    });
+  }
 }
