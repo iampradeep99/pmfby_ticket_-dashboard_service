@@ -213,6 +213,40 @@ export class PDFGenerationWorkerService {
     }
   }
 
+  private async recordWhatsAppPDFSend(
+    payload: any,
+    recipientMobileNo: string,
+    templateName: string,
+    apiResponse: any,
+    sentAt: Date,
+  ) {
+    const client = new MongoClient(config.mongodb);
+    try {
+      await client.connect();
+      const date = moment.utc(sentAt).utcOffset(330).format('YYYY-MM-DD');
+      await client
+        .db('krph_db')
+        .collection('KRPH_WhatsApp_PDF_Resolved_Ticket_Message_Logs')
+        .insertOne({
+          SupportTicketID: payload?.SupportTicketID,
+          SupportTicketNo: payload?.SupportTicketNo,
+          RequestorMobileNo: recipientMobileNo,
+          TemplateName: templateName,
+          TicketFileURl: payload?.TicketFileURl,
+          FileName: payload?.fileName || 'Ticket PDF',
+          MessageId: apiResponse.messages[0].id,
+          MessageStatus: apiResponse.messages[0].message_status,
+          APIResponse: apiResponse,
+          Date: date,
+          Timezone: 'Asia/Kolkata',
+          SentAt: sentAt,
+          CreatedAt: sentAt,
+        });
+    } finally {
+      await client.close();
+    }
+  }
+
   async gupshupCallForPDFSend(payload) {
     try {
       let requestorMobileNo = payload?.RequestorMobileNo;
@@ -231,9 +265,9 @@ export class PDFGenerationWorkerService {
         to: requestorMobileNo,
         type: 'template',
         template: {
-          name: 'invoice_detail',
+          name: 'krph_ticket_resolved_pdf_21oct26_updated',
           language: {
-            code: 'en_us',
+            code: 'en',
           },
           components: [
             {
@@ -245,15 +279,6 @@ export class PDFGenerationWorkerService {
                     link: `${payload?.TicketFileURl}`,
                     filename: `${payload?.fileName || 'Ticket PDF'}`,
                   },
-                },
-              ],
-            },
-            {
-              type: 'body',
-              parameters: [
-                {
-                  type: 'text',
-                  text: payload?.SupportTicketNo || 'Ticket PDF',
                 },
               ],
             },
@@ -269,6 +294,27 @@ export class PDFGenerationWorkerService {
       });
 
       console.log('Pinbot PDF send response:', response.data);
+      if (!response.data?.error && response.data?.messages?.[0]?.id) {
+        const sentAt = new Date();
+        try {
+          await this.recordWhatsAppPDFSend(
+            payload,
+            requestorMobileNo,
+            requestData.template.name,
+            response.data,
+            sentAt,
+          );
+        } catch (err) {
+          // The provider already accepted the message; a logging failure must
+          // not turn it into a failed send and cause a duplicate message.
+          console.error('Failed to save WhatsApp PDF message response:', {
+            date: moment.utc(sentAt).utcOffset(330).format('YYYY-MM-DD'),
+            templateName: requestData.template.name,
+            messageId: response.data.messages[0].id,
+            error: getErrorMessage(err),
+          });
+        }
+      }
       return response.data;
     } catch (err) {
       console.error('Pinbot PDF send error:', err);

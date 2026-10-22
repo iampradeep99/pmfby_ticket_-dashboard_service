@@ -4,7 +4,7 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const archiver = require('archiver');
 const axios = require('axios');
-import * as FormData from 'form-data';
+import FormData = require('form-data');
 import {
   generateSupportTicketEmailHTML,
   getCurrentFormattedDateTime,
@@ -13,7 +13,7 @@ import { UtilService } from '../../commonServices/utilService';
 import { RedisWrapper } from '../../commonServices/redisWrapper';
 import { MailService } from '../../mail/mail.service';
 import config from '../../environment/config';
-import * as moment from 'moment';
+import moment = require('moment');
 import { MongoClient, ObjectId, type Db } from 'mongodb';
 
 const redisWrapper = new RedisWrapper();
