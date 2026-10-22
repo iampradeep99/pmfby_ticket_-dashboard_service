@@ -57,7 +57,9 @@ describe('WhatsApp PDF message logs', () => {
 
     await expect(service.gupshupCallForPDFSend(payload)).resolves.toEqual(data);
 
-    expect(collection).toHaveBeenCalledWith('KRPH_WhatsApp_PDF_Message_Logs');
+    expect(collection).toHaveBeenCalledWith(
+      'KRPH_WhatsApp_PDF_Resolved_Ticket_Message_Logs',
+    );
     expect(insertOne).toHaveBeenCalledWith({
       SupportTicketID: 123,
       SupportTicketNo: 'TICKET-123',
