@@ -1377,8 +1377,7 @@ export class PDFGenerationWorkerService {
 
   private async dateToSpecificFormat(date: any, format = 'DD-MM-YYYY HH:mm') {
     try {
-      const normalizedDate = this.normalizeDateValue(date);
-      const convertedDate = moment(normalizedDate);
+      const convertedDate = this.parseTicketDate(date);
       return convertedDate.isValid() ? convertedDate.format(format) : '';
     } catch {
       return '';
@@ -1391,6 +1390,25 @@ export class PDFGenerationWorkerService {
     }
 
     return date;
+  }
+
+  private parseTicketDate(date: any) {
+    const value = this.normalizeDateValue(date);
+    if (typeof value === 'string') {
+      return moment(
+        value,
+        [
+          moment.ISO_8601,
+          moment.RFC_2822,
+          'YYYY-MM-DD H:mm',
+          'YYYY-MM-DD H:mm:ss',
+          'YYYY-MM-DD H:mm:ss.SSS',
+        ],
+        true,
+      );
+    }
+
+    return value == null ? moment.invalid() : moment(value);
   }
 
   private async getFirstFormattedDate(
@@ -1431,8 +1449,8 @@ export class PDFGenerationWorkerService {
 
     if (!resolvedEntry) return null;
 
-    const resolvedDate = moment(resolvedEntry.TicketHistoryDate);
-    const created = moment(createdDate);
+    const resolvedDate = this.parseTicketDate(resolvedEntry.TicketHistoryDate);
+    const created = this.parseTicketDate(createdDate);
 
     const diffDays = resolvedDate.diff(created, 'days');
 

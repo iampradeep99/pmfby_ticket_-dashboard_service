@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { MongoClient } from 'mongodb';
 import { PDFGenerationWorkerService } from './pdf-generation-worker';
+import moment = require('moment');
 
 jest.mock('../../../environment/config', () => ({
   __esModule: true,
@@ -8,6 +9,42 @@ jest.mock('../../../environment/config', () => ({
 }));
 jest.mock('../../../commonServices/logger', () => jest.fn());
 jest.mock('mongodb', () => ({ MongoClient: jest.fn() }));
+
+describe('PDF ticket date parsing', () => {
+  const service = Object.create(PDFGenerationWorkerService.prototype);
+
+  it.each([
+    ['2026-10-15 9:18', '15-10-2026 09:18'],
+    ['2026-10-15 09:18:30', '15-10-2026 09:18'],
+    ['2026-10-15 9:18:30.123', '15-10-2026 09:18'],
+    ['2026-10-15T09:18:00', '15-10-2026 09:18'],
+    [{ $date: '2026-10-15 9:18' }, '15-10-2026 09:18'],
+    [new Date(2026, 9, 15, 9, 18), '15-10-2026 09:18'],
+    ['2026-02-30 9:18', ''],
+    ['invalid date', ''],
+    [undefined, ''],
+    [null, ''],
+  ])('formats %p without native Date parsing fallback', async (input, expected) => {
+    const fallback = jest.spyOn(moment as any, 'createFromInputFallback');
+    try {
+      await expect(service.dateToSpecificFormat(input)).resolves.toBe(expected);
+      expect(fallback).not.toHaveBeenCalled();
+    } finally {
+      fallback.mockRestore();
+    }
+  });
+
+  it('calculates ageing for dates with a single-digit hour', async () => {
+    await expect(
+      service.getTicketAgeing(
+        '2026-10-15 9:18',
+        [{ TicketStatus: 4, TicketHistoryDate: '2026-10-22 9:18' }],
+        1,
+        4,
+      ),
+    ).resolves.toBe('4-7');
+  });
+});
 
 describe('WhatsApp PDF message logs', () => {
   const templateName = 'krph_ticket_resolved_pdf_21oct26_updated';
