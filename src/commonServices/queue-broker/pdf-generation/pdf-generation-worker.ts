@@ -1627,7 +1627,7 @@ export class PDFGenerationWorkerService {
           historiesHtml +=
             '' +
             '<div class="accordion" style="margin-bottom:8px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;">' +
-            '  <div class="accordion-summary" style="background:#4a90e2;color:white;padding:8px;display:flex;justify-content:space-between;align-items:center;">' +
+            '  <div class="accordion-summary" style="background:#087b43;color:white;padding:8px;display:flex;justify-content:space-between;align-items:center;">' +
             '    <div style="font-weight:bold;">Activity ' +
             (i + 2) +
             ' : ' +
@@ -1824,7 +1824,7 @@ export class PDFGenerationWorkerService {
         '      </div>' +
         '    </div>' +
         '    <div class="accordion" style="border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.12);overflow:hidden;margin-top:8px;">' +
-        '      <div class="accordion-summary" style="background:#4a90e2;color:white;padding:8px;display:flex;gap:12px;align-items:center;">' +
+        '      <div class="accordion-summary" style="background:#087b43;color:white;padding:8px;display:flex;gap:12px;align-items:center;">' +
         '        <div style="flex:1;font-weight:bold;">Activity 1 : Ticket Created</div>' +
         '        <div style="text-align:center;font-weight:bold;">' +
         createdAtFormatted +
@@ -2028,14 +2028,14 @@ export class PDFGenerationWorkerService {
       '  .ticket-status { background-color: #e6fff0; color: #007a33; border: 1px solid #007a33; border-radius: 20px; padding: 6px 14px; font-size: 14px; font-weight: 600; display: inline-block; text-align: center; margin-bottom: 8px; }' +
       '  .ticket-info { line-height: 1.8; font-size: 15px; }' +
       '  .activity { background: #fff; border-radius: 10px; margin-top: 15px; border: 1px solid #ddd; overflow: hidden; }' +
-      '  .activity-header { background-color: #2b78e4; color: white; padding: 10px 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }' +
+      '  .activity-header { background-color: #087b43; color: white; padding: 10px 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }' +
       '  .activity-content { background: #f9f9f9; padding: 15px; }' +
       '  .activity-content p { margin-bottom: 8px; }' +
       '  .right-panel { flex: 1; background: #fff; border-radius: 8px; padding: 0; width: 450px; min-height: 100%; align-self: stretch; }' +
       '  .CustomerBox { width: 100%; height: 100%; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; background: #fff; }' +
       '  .Heading { display: flex; align-items: center; justify-content: space-between; background: #f3f7fb; border-bottom: 1px solid #d1d5db; padding: 8px 10px; }' +
       '  .ReqInfo { display: flex; align-items: center; gap: 8px; width: 100%; }' +
-      '  .avatarBadge { width: 32px; height: 32px; border-radius: 50%; background: #1f7ad6; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; line-height: 1; text-transform: uppercase; flex-shrink: 0; }' +
+      '  .avatarBadge { width: 32px; height: 32px; border-radius: 50%; background: #087b43; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; line-height: 1; text-transform: uppercase; flex-shrink: 0; }' +
       '  .farmerIdentity { min-width: 0; flex: 1; }' +
       '  .farmerIdentity h3 { margin: 0 0 3px 0; font-size: 12px; line-height: 1.2; color: #111827; overflow-wrap: anywhere; }' +
       '  .farmerIdentity p { margin: 0; font-size: 10px; line-height: 1.2; color: #374151; }' +
