@@ -2447,7 +2447,10 @@ export class PDFGenerationWorkerService {
     const maskedSignature = signature
       .replace(
         /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
-        '[email masked]',
+        (email) => {
+          const [localPart, domain] = email.split('@');
+          return `${localPart[0]}****@${domain}`;
+        },
       )
       .replace(
         /(?<![\w])(?:\+?91[\s.-]?)?[6-9](?:[\s.-]?\d){9}(?!\w)/g,
