@@ -1598,7 +1598,9 @@ export class PDFGenerationWorkerService {
 
           let ticketDescription = '';
           if (v && v.TicketDescription) {
-            ticketDescription = await this.parseHtml(v.TicketDescription);
+            ticketDescription = this.maskContactDetails(
+              await this.parseHtml(v.TicketDescription),
+            );
           }
 
           let auditButton = '';
@@ -2432,6 +2434,28 @@ export class PDFGenerationWorkerService {
     }
 
     return `${'*'.repeat(account.length - 4)}${account.slice(-4)}`;
+  }
+
+  private maskContactDetails(description: string) {
+    const signatureMarker = /\bThanking\s+you\s*:/i.exec(description);
+    if (!signatureMarker) {
+      return description;
+    }
+
+    const signatureStart = signatureMarker.index + signatureMarker[0].length;
+    const signature = description.slice(signatureStart);
+    const maskedSignature = signature
+      .replace(
+        /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+        '[email masked]',
+      )
+      .replace(
+        /(?<![\w])(?:\+?91[\s.-]?)?[6-9](?:[\s.-]?\d){9}(?!\w)/g,
+        (phoneNumber) =>
+          `${'*'.repeat(10)}${phoneNumber.replace(/\D/g, '').slice(-4)}`,
+      );
+
+    return description.slice(0, signatureStart) + maskedSignature;
   }
 
   private escapeHtml(value: any) {
