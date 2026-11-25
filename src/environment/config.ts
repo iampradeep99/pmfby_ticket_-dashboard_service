@@ -1,4 +1,4 @@
-import * as dotenv from "dotenv";
+import * as dotenv from 'dotenv';
 dotenv.config();
 
 interface DBConfig {
@@ -26,11 +26,11 @@ interface GupshupConfig {
 }
 
 interface PmfbyLogin {
-  login_api_url: string,
-  deviceType: string,
-  otp: string,
-  password: string,
-  mobile: string
+  login_api_url: string;
+  deviceType: string;
+  otp: string;
+  password: string;
+  mobile: string;
 }
 
 interface Config {
@@ -47,7 +47,7 @@ interface Config {
   pmfbyConfig: PmfbyLogin;
 }
 
-const env = process.env.NODE_ENV || "uat";
+const env = process.env.NODE_ENV || 'uat';
 
 const config: { [key: string]: Config } = {
   local: {
@@ -58,12 +58,12 @@ const config: { [key: string]: Config } = {
       port: Number(process.env.LOCAL_DB_PORT),
       user: process.env.LOCAL_DB_USER!,
       password: process.env.LOCAL_DB_PASS!,
-      database: process.env.LOCAL_DB_NAME!
+      database: process.env.LOCAL_DB_NAME!,
     },
     rabbitmq: process.env.LOCAL_RABBIT!,
     mail: {
       user: process.env.LOCAL_MAIL_USER!,
-      password: process.env.LOCAL_MAIL_PASS!
+      password: process.env.LOCAL_MAIL_PASS!,
     },
     gcpUpload: process.env.LOCAL_GCP_UPLOAD!,
     pmfbyRoleURL: process.env.PMFBY_ROLE_URL!,
@@ -84,9 +84,8 @@ const config: { [key: string]: Config } = {
       deviceType: process.env.PM_API_DEVICE_TYPE!,
       otp: process.env.PM_API_DEVICE_OTP!,
       password: process.env.PM_API_DEVICE_PASSWORD!,
-      mobile: process.env.PM_API_DEVICE_MOBILE
-    }
-
+      mobile: process.env.PM_API_DEVICE_MOBILE,
+    },
   },
   uat: {
     mongodb: process.env.UAT_MONGO!,
@@ -96,12 +95,12 @@ const config: { [key: string]: Config } = {
       port: Number(process.env.UAT_DB_PORT),
       user: process.env.UAT_DB_USER!,
       password: process.env.UAT_DB_PASS!,
-      database: process.env.UAT_DB_NAME!
+      database: process.env.UAT_DB_NAME!,
     },
     rabbitmq: process.env.UAT_RABBIT!,
     mail: {
       user: process.env.UAT_MAIL_USER!,
-      password: process.env.UAT_MAIL_PASS!
+      password: process.env.UAT_MAIL_PASS!,
     },
     gcpUpload: process.env.UAT_GCP_UPLOAD!,
     pmfbyRoleURL: process.env.PMFBY_ROLE_URL!,
@@ -115,17 +114,15 @@ const config: { [key: string]: Config } = {
       msg_type: process.env.GUPSHUP_MSG_TYPE!,
       method: process.env.GUPSHUP_METHOD!,
       caption: process.env.GUPSHUP_CAPTION!,
-      gupshupAPIUrl: process.env.GUPSHUP_API_URL!
-
+      gupshupAPIUrl: process.env.GUPSHUP_API_URL!,
     },
     pmfbyConfig: {
       login_api_url: process.env.PM_API_FOR_LOGIN!,
       deviceType: process.env.PM_API_DEVICE_TYPE!,
       otp: process.env.PM_API_DEVICE_OTP!,
       password: process.env.PM_API_DEVICE_PASSWORD!,
-      mobile: process.env.PM_API_DEVICE_MOBILE
-    }
-
+      mobile: process.env.PM_API_DEVICE_MOBILE,
+    },
   },
   prod: {
     mongodb: process.env.PROD_MONGO!,
@@ -135,12 +132,12 @@ const config: { [key: string]: Config } = {
       port: Number(process.env.PROD_DB_PORT),
       user: process.env.PROD_DB_USER!,
       password: process.env.PROD_DB_PASS!,
-      database: process.env.PROD_DB_NAME!
+      database: process.env.PROD_DB_NAME!,
     },
     rabbitmq: process.env.PROD_RABBIT!,
     mail: {
       user: process.env.PROD_MAIL_USER!,
-      password: process.env.PROD_MAIL_PASS!
+      password: process.env.PROD_MAIL_PASS!,
     },
     gcpUpload: process.env.PROD_GCP_UPLOAD!,
     pmfbyRoleURL: process.env.PMFBY_ROLE_URL!,
@@ -154,19 +151,16 @@ const config: { [key: string]: Config } = {
       msg_type: process.env.GUPSHUP_MSG_TYPE!,
       method: process.env.GUPSHUP_METHOD!,
       caption: process.env.GUPSHUP_CAPTION!,
-      gupshupAPIUrl: process.env.GUPSHUP_API_URL!
-
+      gupshupAPIUrl: process.env.GUPSHUP_API_URL!,
     },
     pmfbyConfig: {
       login_api_url: process.env.PM_API_FOR_LOGIN!,
       deviceType: process.env.PM_API_DEVICE_TYPE!,
       otp: process.env.PM_API_DEVICE_OTP!,
       password: process.env.PM_API_DEVICE_PASSWORD!,
-      mobile: process.env.PM_API_DEVICE_MOBILE
-    }
-
-
-  }
+      mobile: process.env.PM_API_DEVICE_MOBILE,
+    },
+  },
 };
 
 export default config[env];

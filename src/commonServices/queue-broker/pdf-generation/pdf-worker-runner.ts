@@ -1,9 +1,7 @@
-
-
 import { Worker } from 'worker_threads';
 import * as path from 'path';
 import * as fs from 'fs';
-const Logger = require("../../../commonServices/logger");
+const Logger = require('../../../commonServices/logger');
 
 const logger = new Logger('worker-runner.log');
 
@@ -13,7 +11,10 @@ export function runWorker(payload: any, timeoutMs = 300000): Promise<any> {
 
     let settled = false;
 
-    const workerPath = path.resolve(__dirname, './pdf-generation-middleware.js');
+    const workerPath = path.resolve(
+      __dirname,
+      './pdf-generation-middleware.js',
+    );
 
     if (!fs.existsSync(workerPath)) {
       return reject(new Error('Worker file not found'));
@@ -50,10 +51,14 @@ export function runWorker(payload: any, timeoutMs = 300000): Promise<any> {
 
     worker.on('message', (msg) => {
       if (msg && msg.success === false) {
-        logger.error(`Worker returned failure: ${msg.error || 'Unknown error'}`);
+        logger.error(
+          `Worker returned failure: ${msg.error || 'Unknown error'}`,
+        );
         finalize(new Error(msg.error || 'Processing failed'), true);
       } else if (msg && msg.success === true) {
-        logger.info(`Worker completed successfully for ticket: ${msg.ticketNo}`);
+        logger.info(
+          `Worker completed successfully for ticket: ${msg.ticketNo}`,
+        );
         finalize(msg, false);
       } else {
         logger.warn(`Worker returned unexpected message format`);
@@ -79,4 +84,3 @@ export function runWorker(payload: any, timeoutMs = 300000): Promise<any> {
     });
   });
 }
-

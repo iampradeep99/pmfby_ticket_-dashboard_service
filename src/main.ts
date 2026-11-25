@@ -15,8 +15,10 @@ async function bootstrap() {
   app.setGlobalPrefix('krphdashboard');
 
   app.use('/downloads', express.static(path.join(__dirname, '../downloads')));
- app.use('/krphdashboard/assets', express.static(path.join(__dirname, '../assets')));
-
+  app.use(
+    '/krphdashboard/assets',
+    express.static(path.join(__dirname, '../assets')),
+  );
 
   app.enableCors({
     origin: '*',
@@ -29,7 +31,7 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-    })
+    }),
   );
 
   const redis = new RedisWrapper();

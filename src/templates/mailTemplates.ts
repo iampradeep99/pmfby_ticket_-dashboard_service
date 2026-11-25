@@ -1,6 +1,6 @@
 /**
  * Generates HTML email content for support ticket download.
- * 
+ *
  * @param username - Name of the user receiving the email
  * @param requestDateTime - Date & time of the support request
  * @param downloadLink - Secure link to download the report
@@ -9,7 +9,7 @@
 export function generateSupportTicketEmailHTML(
   username: string,
   requestDateTime: string,
-  downloadLink: string
+  downloadLink: string,
 ): string {
   return `
     <!DOCTYPE html>
@@ -66,7 +66,6 @@ export function generateSupportTicketEmailHTML(
     </html>
   `;
 }
-
 
 export function getCurrentFormattedDateTime(): string {
   const now = new Date();

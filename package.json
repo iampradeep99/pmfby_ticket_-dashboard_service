@@ -52,7 +52,7 @@
     "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0",
     "nodemailer": "^7.0.6",
-    "p-queue": "^9.0.1",
+    "p-queue": "^6.6.2",
     "pako": "^2.1.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -112,5 +112,3 @@
     "testEnvironment": "node"
   }
 }
-
-

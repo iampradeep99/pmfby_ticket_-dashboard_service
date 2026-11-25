@@ -17,7 +17,7 @@ import { UtilModule } from 'src/commonServices/util.module';
       signOptions: { expiresIn: '1h' },
     }),
     DatabaseModule,
-    UtilModule
+    UtilModule,
   ],
   providers: [AuthService, JwtStrategy],
   controllers: [AuthController],

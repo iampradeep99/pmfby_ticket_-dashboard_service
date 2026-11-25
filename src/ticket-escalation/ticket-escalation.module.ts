@@ -12,14 +12,14 @@ import { CronModule } from 'src/cron/cron.module';
 
 @Module({
   imports: [
-    // forwardRef(() => TicketEscalationModule), 
-      DatabaseModule,
-        RedisModule,
-        UtilModule,
-        MailModule,
-        forwardRef(() => RabbitMQModule), 
-        MysqlModule, // Use forwardRef here
-        CronModule
+    // forwardRef(() => TicketEscalationModule),
+    DatabaseModule,
+    RedisModule,
+    UtilModule,
+    MailModule,
+    forwardRef(() => RabbitMQModule),
+    MysqlModule, // Use forwardRef here
+    CronModule,
   ],
   controllers: [TicketEscalationController],
   providers: [TicketEscalationService],

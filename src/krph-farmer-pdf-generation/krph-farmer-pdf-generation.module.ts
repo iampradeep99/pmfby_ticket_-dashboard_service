@@ -10,17 +10,17 @@ import { RabbitMQModule } from 'src/commonServices/rabbitMQ/rabbitmq.module';
 import { QueueBrokerModule } from 'src/commonServices/queue-broker/queue-broker.module';
 
 @Module({
-   imports: [
-      DatabaseModule,
-      RedisModule,
-      UtilModule,
-      MailModule,
-      forwardRef(() => RabbitMQModule),
-      forwardRef(() => QueueBrokerModule),
+  imports: [
+    DatabaseModule,
+    RedisModule,
+    UtilModule,
+    MailModule,
+    forwardRef(() => RabbitMQModule),
+    forwardRef(() => QueueBrokerModule),
 
-      MysqlModule,
-    ],
+    MysqlModule,
+  ],
   providers: [KrphFarmerPdfGenerationService],
-  controllers: [KrphFarmerPdfGenerationController]
+  controllers: [KrphFarmerPdfGenerationController],
 })
 export class KrphFarmerPdfGenerationModule {}

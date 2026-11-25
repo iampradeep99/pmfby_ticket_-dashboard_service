@@ -1,10 +1,13 @@
-import { Injectable, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import * as amqp from 'amqplib';
 import config from '../../environment/config';
 
 @Injectable()
 export class NewTestBroker implements OnModuleInit, OnApplicationShutdown {
-
   private readonly RABBITMQ_URL = config.rabbitmq;
   private readonly QUEUE_NAME = 'cropLossIntimationStatusUpdate';
 
@@ -14,7 +17,7 @@ export class NewTestBroker implements OnModuleInit, OnApplicationShutdown {
   async onModuleInit() {
     console.log('---------------------------------------------');
     console.log(`[RabbitMQ] 🟡 Initialization started...`);
-    
+
     try {
       console.log(`[RabbitMQ] 🔗 Connecting to: ${this.RABBITMQ_URL}`);
       this.connection = await amqp.connect(this.RABBITMQ_URL);
@@ -24,20 +27,23 @@ export class NewTestBroker implements OnModuleInit, OnApplicationShutdown {
       this.producerChannel = await this.connection.createChannel();
       console.log(`[RabbitMQ] ✅ Channel created`);
 
-      console.log(`[RabbitMQ] 🔍 Checking/Creating Queue: "${this.QUEUE_NAME}"`);
-      await this.producerChannel.assertQueue(this.QUEUE_NAME, { durable: true });
+      console.log(
+        `[RabbitMQ] 🔍 Checking/Creating Queue: "${this.QUEUE_NAME}"`,
+      );
+      await this.producerChannel.assertQueue(this.QUEUE_NAME, {
+        durable: true,
+      });
       console.log(`[RabbitMQ] 🆗 Queue ready → "${this.QUEUE_NAME}"`);
 
       console.log(`[RabbitMQ] 🚀 Initialization complete`);
       console.log('---------------------------------------------');
-
     } catch (err) {
       console.error(`[RabbitMQ ❌ ERROR during setup]:`, err);
     }
   }
 
   async sendToQueueInfo(payload: any) {
-    console.log(payload, "yes")
+    console.log(payload, 'yes');
     console.log('\n---------------------------------------------');
     console.log(`[RabbitMQ] 📨 Preparing message...`);
 
@@ -51,8 +57,12 @@ export class NewTestBroker implements OnModuleInit, OnApplicationShutdown {
 
     const bufferMsg = Buffer.from(jsonString);
 
-    console.log(`[RabbitMQ] 📤 Sending message to queue "${this.QUEUE_NAME}"...`);
-    this.producerChannel.sendToQueue(this.QUEUE_NAME, bufferMsg, { persistent: true });
+    console.log(
+      `[RabbitMQ] 📤 Sending message to queue "${this.QUEUE_NAME}"...`,
+    );
+    this.producerChannel.sendToQueue(this.QUEUE_NAME, bufferMsg, {
+      persistent: true,
+    });
 
     console.log(`[RabbitMQ] ✅ Message successfully queued`);
     console.log('---------------------------------------------\n');
@@ -70,7 +80,6 @@ export class NewTestBroker implements OnModuleInit, OnApplicationShutdown {
       console.log(`[RabbitMQ] 🔌 Closing connection...`);
       await this.connection?.close();
       console.log(`[RabbitMQ] 🆗 Connection closed`);
-
     } catch (err) {
       console.error(`[RabbitMQ ❌ ERROR closing connection]:`, err);
     }

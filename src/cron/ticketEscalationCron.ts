@@ -243,32 +243,28 @@
 //   }
 // }
 
-
-
-
-
-import { Injectable, Inject } from "@nestjs/common";
-import { Cron, CronExpression } from "@nestjs/schedule";
-import { Db } from "mongodb";
-import { Sequelize } from "sequelize-typescript";
-import { UtilService } from "src/commonServices/utilService";
+import { Injectable, Inject } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { Db } from 'mongodb';
+import { Sequelize } from 'sequelize-typescript';
+import { UtilService } from 'src/commonServices/utilService';
 
 @Injectable()
 export class TicketEscalationCron {
-  private readonly ROLE_CONFIG_COLLECTION = "Ticke_Escalation_User_Config";
-  private readonly TICKET_ASSIGN_COLLECTION = "Ticket_Assignment";
-  private readonly SLA_AUDIT_COLLECTION = "Ticket_SLA_Audit";
+  private readonly ROLE_CONFIG_COLLECTION = 'Ticke_Escalation_User_Config';
+  private readonly TICKET_ASSIGN_COLLECTION = 'Ticket_Assignment';
+  private readonly SLA_AUDIT_COLLECTION = 'Ticket_SLA_Audit';
   private readonly MILLISECONDS_IN_A_DAY = 24 * 60 * 60 * 1000;
 
   constructor(
-    @Inject("SEQUELIZE") private readonly sequelize: Sequelize,
-    @Inject("MONGO_DB") private readonly db: Db,
-    private readonly commonService: UtilService
+    @Inject('SEQUELIZE') private readonly sequelize: Sequelize,
+    @Inject('MONGO_DB') private readonly db: Db,
+    private readonly commonService: UtilService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleCronUpdate() {
-    console.log("TicketEscalationCron started", new Date().toISOString());
+    console.log('TicketEscalationCron started', new Date().toISOString());
 
     try {
       const roleConfigMap = await this.fetchRoleConfigMap();
@@ -278,14 +274,14 @@ export class TicketEscalationCron {
       await this.processEscalations(roleConfigMap);
       await this.processAutoDispose(roleConfigMap);
 
-      console.log("TicketEscalationCron finished");
+      console.log('TicketEscalationCron finished');
     } catch (err) {
-      console.error("TicketEscalationCron error:", err);
+      console.error('TicketEscalationCron error:', err);
     }
   }
 
   getDateOnly(date: Date): string {
-    return date.toISOString().split("T")[0];
+    return date.toISOString().split('T')[0];
   }
 
   async fetchRoleConfigMap(): Promise<Map<number, any>> {
@@ -302,7 +298,7 @@ export class TicketEscalationCron {
   async syncSlaAudit(roleConfigMap: Map<number, any>) {
     const cursor = this.db
       .collection(this.TICKET_ASSIGN_COLLECTION)
-      .find({ TicketStatus: "In-Progress" });
+      .find({ TicketStatus: 'In-Progress' });
 
     while (await cursor.hasNext()) {
       const ticket = await cursor.next();
@@ -323,7 +319,7 @@ export class TicketEscalationCron {
 
       const levelDueAt = new Date(
         new Date(ticket.AssignedDate).getTime() +
-          config.AllowedDays * this.MILLISECONDS_IN_A_DAY
+          config.AllowedDays * this.MILLISECONDS_IN_A_DAY,
       );
 
       await this.db.collection(this.SLA_AUDIT_COLLECTION).insertOne({
@@ -371,12 +367,12 @@ export class TicketEscalationCron {
       if (daysPassed >= reminderDay) {
         const ticket = await this.getTicket(
           record.SupportTicketID,
-          record.assignedTo
+          record.assignedTo,
         );
         if (!ticket) continue;
 
-        this.sendReminder(ticket, record.levelDueAt).catch(err =>
-          console.error("Reminder error:", err)
+        this.sendReminder(ticket, record.levelDueAt).catch((err) =>
+          console.error('Reminder error:', err),
         );
 
         await this.db.collection(this.SLA_AUDIT_COLLECTION).updateOne(
@@ -387,11 +383,11 @@ export class TicketEscalationCron {
               lastReminderDate: today,
               updatedAt: new Date(),
             },
-          }
+          },
         );
 
         console.log(
-          `Reminder ${reminderIndex + 1} sent for ticket ${ticket.SupportTicketNo} on ${today}`
+          `Reminder ${reminderIndex + 1} sent for ticket ${ticket.SupportTicketNo} on ${today}`,
         );
       }
     }
@@ -413,24 +409,26 @@ export class TicketEscalationCron {
 
       const escalateAt = new Date(
         new Date(record.AssignedDate).getTime() +
-          config.AutoEscalateAfterDays * this.MILLISECONDS_IN_A_DAY
+          config.AutoEscalateAfterDays * this.MILLISECONDS_IN_A_DAY,
       );
 
       if (now >= escalateAt) {
         const ticket = await this.getTicket(
           record.SupportTicketID,
-          record.assignedTo
+          record.assignedTo,
         );
         if (!ticket) continue;
 
-        this.triggerEscalation(ticket).catch(err =>
-          console.error("Escalation error:", err)
+        this.triggerEscalation(ticket).catch((err) =>
+          console.error('Escalation error:', err),
         );
 
-        await this.db.collection(this.SLA_AUDIT_COLLECTION).updateOne(
-          { _id: record._id },
-          { $set: { escalatedAt: new Date(), updatedAt: new Date() } }
-        );
+        await this.db
+          .collection(this.SLA_AUDIT_COLLECTION)
+          .updateOne(
+            { _id: record._id },
+            { $set: { escalatedAt: new Date(), updatedAt: new Date() } },
+          );
       }
     }
   }
@@ -452,14 +450,16 @@ export class TicketEscalationCron {
 
       const disposeAt = new Date(
         new Date(record.AssignedDate).getTime() +
-          config.AllowedDays * this.MILLISECONDS_IN_A_DAY
+          config.AllowedDays * this.MILLISECONDS_IN_A_DAY,
       );
 
       if (now >= disposeAt) {
-        await this.db.collection(this.SLA_AUDIT_COLLECTION).updateOne(
-          { _id: record._id },
-          { $set: { autoDisposedAt: new Date(), updatedAt: new Date() } }
-        );
+        await this.db
+          .collection(this.SLA_AUDIT_COLLECTION)
+          .updateOne(
+            { _id: record._id },
+            { $set: { autoDisposedAt: new Date(), updatedAt: new Date() } },
+          );
       }
     }
   }
@@ -477,7 +477,7 @@ export class TicketEscalationCron {
 
   async sendReminder(ticket: any, dueAt: Date) {
     const payload = {
-      Name: ticket.assignToName || "User",
+      Name: ticket.assignToName || 'User',
       ticket: ticket.SupportTicketNo,
       mobileNO: ticket.AssigneeMobileNo,
     };
