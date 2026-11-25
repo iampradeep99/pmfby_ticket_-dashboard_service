@@ -2008,6 +2008,7 @@ export class TicketEscalationService {
                 as: "ticket",
                 cond: {
                   $and: [
+                    { $eq: ["$$ticket.IsAssignedTicket", 1] },
                     SupportTicketNo ? { $eq: ["$$ticket.SupportTicketNo", SupportTicketNo] } : {},
                     ApplicationNo ? { $eq: ["$$ticket.ApplicationNo", ApplicationNo] } : {},
                     TicketHeaderID ? { $eq: ["$$ticket.TicketHeaderID", TicketHeaderID] } : {},
